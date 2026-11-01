@@ -207,10 +207,39 @@ static void test_bot_runs(void) {
     EXPECT_EQ_INT(ck_node_beaten(G, ck_world_node(&G->world, "bonus")), 1);
 }
 
+// Left alone, the story runs its songs in order, thunders during the storm and ends on the title.
+static void test_intro(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    int thunder = 0, whoosh = 0, storm_at = -1, title_at = -1, frames = 0;
+    while (G->scene == SC_INTRO && frames < 60 * 20) {
+        ck_game_step(G, 0, 0);
+        frames++;
+        for (int i = 0; i < G->nsfx; i++) { thunder += G->sfx[i] == SFX_THUNDER; whoosh += G->sfx[i] == SFX_WHOOSH; }
+        if (G->song == SONG_STORM && storm_at < 0) storm_at = frames;
+        if (G->song == SONG_TITLE && title_at < 0) title_at = frames;
+    }
+    EXPECT_EQ_INT(G->scene, SC_TITLE);
+    EXPECT_EQ_INT(frames >= 911 && frames <= 913, 1);   // 15.2 s
+    EXPECT_EQ_INT(storm_at >= 269 && storm_at <= 271, 1);
+    EXPECT_EQ_INT(title_at >= 659 && title_at <= 661, 1);
+    EXPECT_EQ_INT(whoosh, 1);
+    EXPECT_EQ_INT(thunder > 0, 1);
+}
+
 static void test_flow(void) {
     ck_game *G = load_game();
     if (!G) return;
+    // the story plays first; a button only skips it after 0.4 s
+    EXPECT_EQ_INT(G->scene, SC_INTRO);
+    EXPECT_EQ_INT(G->song, SONG_LULLABY);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_INTRO);
+    for (int i = 0; i < 30; i++) ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_TITLE);
+    EXPECT_EQ_INT(G->song, SONG_TITLE);
+    ck_game_step(G, 0, 0);
     ck_game_step(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_SELECT);
     ck_game_step(G, 0, 0);
@@ -268,6 +297,7 @@ void test_clankers(void) {
     test_parse();
     test_world();
     test_level_rules();
+    test_intro();
     test_flow();
     test_bot_runs();
 }

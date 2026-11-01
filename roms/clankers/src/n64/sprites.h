@@ -65,6 +65,14 @@ enum {
     SPR_TITLE,
     SPR_SELECT_BG,
     SPR_JET_SKY,
+    SPR_INTRO_NIGHT,
+    SPR_INTRO_STORM,
+    SPR_INTRO_DAWN,
+    SPR_INTRO_BABY,
+    SPR_INTRO_ROBOT,
+    SPR_INTRO_OSTRICH,
+    SPR_INTRO_CLOUD,
+    SPR_ZEE,
     SPR_COUNT
 };
 
@@ -128,6 +136,14 @@ static const spr_info SPR_INFO[SPR_COUNT] = {
     [SPR_TITLE] = { "rom:/title.sprite", 320, 240, 1, 1, 0, 0 },
     [SPR_SELECT_BG] = { "rom:/select_bg.sprite", 320, 240, 1, 1, 0, 0 },
     [SPR_JET_SKY] = { "rom:/jet_sky.sprite", 320, 240, 1, 1, 0, 0 },
+    [SPR_INTRO_NIGHT] = { "rom:/intro_night.sprite", 320, 240, 1, 1, 0, 0 },
+    [SPR_INTRO_STORM] = { "rom:/intro_storm.sprite", 320, 240, 1, 1, 0, 0 },
+    [SPR_INTRO_DAWN] = { "rom:/intro_dawn.sprite", 320, 240, 1, 1, 0, 0 },
+    [SPR_INTRO_BABY] = { "rom:/intro_baby.sprite", 24, 26, 8, 8, 12, 23 },
+    [SPR_INTRO_ROBOT] = { "rom:/intro_robot.sprite", 40, 64, 5, 5, 20, 57 },
+    [SPR_INTRO_OSTRICH] = { "rom:/intro_ostrich.sprite", 40, 64, 4, 4, 20, 57 },
+    [SPR_INTRO_CLOUD] = { "rom:/intro_cloud.sprite", 140, 88, 1, 1, 70, 46 },
+    [SPR_ZEE] = { "rom:/zee.sprite", 16, 16, 1, 1, 8, 12 },
 };
 
 #endif

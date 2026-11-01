@@ -85,7 +85,8 @@ It needs Node and Playwright with Chromium. It writes `assets/*.png`, `assets/rg
 
 - Rainbow power-ups tint the whole hero sheet instead of redrawing it in shifting colours.
 - Glows, sparks and puffs are tinted dots, not soft gradients.
-- The story pages before the title are skipped.
+- The story before the title cross-fades three baked pictures (night, storm, dawn) instead of
+  blending colours, so the sun fades in rather than rising, and the robot in it is always blue.
 - The map's river and chimney smoke stand still.
 - Music and sound effects come from a small software synth playing `data/songs.txt` and the
   browser's sound recipes, so they sound close to, but not exactly like, the browser.

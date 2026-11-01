@@ -106,8 +106,8 @@ bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
     if (G->prog.at >= G->world.nnodes) G->prog.at = 0;
     if (G->prog.lives < 1) G->prog.lives = 3;
     ck_map_reset(G);
-    G->scene = SC_TITLE;
-    G->song = SONG_TITLE;
+    G->scene = SC_INTRO;
+    G->song = SONG_LULLABY;
     return true;
 }
 
@@ -213,6 +213,32 @@ static void level_update(ck_game *G) {
     }
 }
 
+// ---------------------------------------------------------------------------- the story intro
+
+// Mirrors introScene in web/game.js: the songs and sounds land on the same seconds.
+static void intro_update(ck_game *G) {
+    ck_intro *I = &G->intro;
+    float t = G->t, was = t - 1.0f / 60;
+    if (was < 4.5f && t >= 4.5f) ck_play(G, SONG_STORM);
+    if (was < 11 && t >= 11) ck_play(G, SONG_TITLE);
+    if (t > 4.8f && t < 10.5f && ck_rand(G) < 0.025f) {
+        I->flash = 1;
+        I->boltLife = 10;
+        I->boltX = 120 + ck_rand(G) * 160;
+        ck_sfx(G, SFX_THUNDER);
+    }
+    if (was < 8 && t >= 8) ck_sfx(G, SFX_WHOOSH);
+    if (was < 11.6f && t >= 11.6f) ck_sfx(G, SFX_JUMP);
+    if (was < 12 && t >= 12) ck_sfx(G, SFX_BOOST);
+    if (I->flash > 0) I->flash -= 0.08f;
+    if (I->boltLife > 0) {
+        I->boltLife--;
+        // the browser redraws the zigzag at random every frame, so it crackles
+        for (int k = 0; k < CK_INTRO_BOLT; k++) I->boltDx[k] = (ck_rand(G) - 0.5f) * 18;
+    }
+    if (t > 15.2f || (t > 0.4f && (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)))) go(G, SC_TITLE);
+}
+
 void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
     G->in.prev[0] = G->in.held[0];
     G->in.prev[1] = G->in.held[1];
@@ -221,6 +247,7 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
     G->nsfx = 0;
     G->t += 1.0f / 60;
     switch (G->scene) {
+    case SC_INTRO: intro_update(G); break;
     case SC_TITLE:
         if (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SELECT); }
         break;

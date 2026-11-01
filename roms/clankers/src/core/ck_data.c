@@ -48,7 +48,7 @@ static bool keyval(const char *s, size_t n, char *key, size_t kn, char *val, siz
 
 static const char *const SONG_NAMES[SONG_COUNT] = {
     "", "title", "select", "map", "level", "level2", "level3", "boss", "bonus", "rainbow",
-    "jet", "rescue", "clear",
+    "jet", "rescue", "clear", "lullaby", "storm",
 };
 
 int ck_song_by_name(const char *name) {
