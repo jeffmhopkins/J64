@@ -8,7 +8,12 @@
 #
 # Sources: every .c file under the ROM's src/, plus common/src/ (shared code).
 # Assets:  files under the ROM's assets/ are converted into its filesystem/ and
-#          packed into a DFS image when the ROM has an assets/ folder.
+#          packed into a DFS image (the ROM reads them as rom:/<name>):
+#            assets/*.png         -> <name>.sprite (mksprite picks the pixel format)
+#            assets/rgba16/*.png  -> <name>.sprite packed as RGBA16 (big pictures, less memory)
+#          Optional, set before the include:
+#            ROM_DATA    := data       folders copied as they are (rom:/data/...)
+#            ASSET_EXTRA := filesystem/x.font64 ...   more outputs, with rules in the ROM's Makefile
 
 ifeq ($(N64_INST),)
   $(error N64_INST is not set: build through the repo-root Makefile or tools/dev.sh)
@@ -33,9 +38,13 @@ COMMON_FILES := $(shell find $(COMMON)/src -name '*.c' 2>/dev/null)
 OBJS := $(addprefix $(BUILD_DIR)/,$(SRC_FILES:.c=.o)) \
         $(patsubst $(COMMON)/src/%.c,$(BUILD_DIR)/common/%.o,$(COMMON_FILES))
 
-# Assets (optional): assets/*.png -> filesystem/*.sprite, packed into the ROM.
-ASSET_PNGS := $(wildcard assets/*.png)
-ASSET_OUT  := $(patsubst assets/%.png,filesystem/%.sprite,$(ASSET_PNGS))
+# Assets (optional), packed into the ROM's filesystem.
+ASSET_PNGS   := $(wildcard assets/*.png)
+ASSET_PNGS16 := $(wildcard assets/rgba16/*.png)
+DATA_FILES   := $(foreach d,$(ROM_DATA),$(shell find $(d) -type f ! -name '*.md'))
+ASSET_OUT    := $(patsubst assets/%.png,filesystem/%.sprite,$(ASSET_PNGS)) \
+                $(patsubst assets/rgba16/%.png,filesystem/%.sprite,$(ASSET_PNGS16)) \
+                $(addprefix filesystem/,$(DATA_FILES)) $(ASSET_EXTRA)
 
 all: $(ROMNAME).z64
 .PHONY: all
@@ -47,11 +56,21 @@ $(BUILD_DIR)/common/%.o: $(COMMON)/src/%.c
 
 $(BUILD_DIR)/$(ROMNAME).elf: $(OBJS)
 
-ifneq ($(ASSET_PNGS),)
+ifneq ($(strip $(ASSET_OUT)),)
 filesystem/%.sprite: assets/%.png
 	@mkdir -p $(dir $@)
 	@echo "    [SPRITE] $@"
 	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) -o $(dir $@) "$<"
+
+filesystem/%.sprite: assets/rgba16/%.png
+	@mkdir -p $(dir $@)
+	@echo "    [SPRITE] $@ (RGBA16)"
+	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) --format RGBA16 -o $(dir $@) "$<"
+
+$(addprefix filesystem/,$(DATA_FILES)): filesystem/%: %
+	@mkdir -p $(dir $@)
+	@echo "    [DATA] $@"
+	cp "$<" "$@"
 
 $(BUILD_DIR)/$(ROMNAME).dfs: $(ASSET_OUT)
 $(ROMNAME).z64: $(BUILD_DIR)/$(ROMNAME).dfs

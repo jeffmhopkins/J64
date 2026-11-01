@@ -1,6 +1,6 @@
 # Clankers data
 
-> Levels and world maps as plain text. The browser build and (later) the N64 build both read
+> Levels, world maps and songs as plain text. The browser build and the N64 build both read
 > these files, so they are the one place to change a level.
 
 <a id="levels"></a>
@@ -39,3 +39,14 @@ colour as hex), `hatch` (side zone id), `par` (seconds to beat for the speedy st
 
 `world.txt` in each world folder lists the map's nodes, roads and scenery. See the comments in
 [w1/world.txt](w1/world.txt).
+
+<a id="songs"></a>
+## Songs
+
+`songs.txt` holds the music for the N64 build. A song is a `song <name> bpm=<n> [loop]` line,
+then one line per track: the wave (`square`, `triangle`, `sawtooth`, `sine` or `drum`), its
+volume, and its notes. The comment at the top of the file explains the note syntax.
+
+> [!NOTE]
+> The browser build still plays the songs written in `web/game.js`. Change both until the
+> browser reads this file too.
