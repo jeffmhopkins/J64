@@ -27,6 +27,12 @@ python3 roms/clankers/web/build.py
 Open `roms/clankers/web/dist/clankers.html` in a browser. The level and world editors are
 built next to it.
 
+> [!NOTE]
+> Every push to `main` also publishes the game to GitHub Pages (`.github/workflows/pages.yml`):
+> the game at `https://jeffmhopkins.github.io/j64/`, with `level-editor.html` and
+> `world-editor.html` beside it. Pages must be set to deploy from GitHub Actions in the repo's
+> settings.
+
 <a id="data"></a>
 ## Changing levels
 

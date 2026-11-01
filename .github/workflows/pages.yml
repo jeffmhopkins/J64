@@ -1,0 +1,51 @@
+name: Pages
+
+# Publishes the browser version of Clankers to GitHub Pages on every push to main.
+# The game is index.html; the level and world editors sit next to it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the browser game and editors
+        run: |
+          python3 roms/clankers/web/build.py
+          mkdir -p site
+          cp roms/clankers/web/dist/clankers.html site/index.html
+          cp roms/clankers/web/dist/level-editor.html roms/clankers/web/dist/world-editor.html site/
+          touch site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

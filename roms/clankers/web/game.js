@@ -73,6 +73,10 @@ const SND = (() => {
     slide: () => { noise(0.35, 0.2, 0, 900, undefined, 'lowpass'); tone(300, 0.25, 'triangle', 0.1, 0, 0.6); },
     ouch: () => [523, 440, 349, 262, 196].forEach((f, i) => tone(f, 0.16, 'square', 0.16, i * 0.11)),
     pop: () => { tone(900, 0.06, 'sine', 0.25, 0, 0.5); noise(0.05, 0.15, 0, 3000); },
+    tick: () => tone(1200, 0.04, 'square', 0.1),
+    star: (k = 0) => { tone([784, 988, 1175][k], 0.18, 'triangle', 0.26); tone([1568, 1976, 2349][k], 0.12, 'square', 0.06, 0.04); },
+    record: () => [523, 659, 784, 1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.11, 'square', 0.13, i * 0.05)),
+    flag: () => [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, 'triangle', 0.22, i * 0.06)),
   };
   // --- music: tiny chiptune sequencer. Tokens are eighth notes; '-' extends, '.' rests.
   const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -127,6 +131,12 @@ const SND = (() => {
       ['square', 0.13, 'C5 E5 G5 C6-- . G5 C6--- . .'],
       ['triangle', 0.22, 'C3--- G3--- C4--- . .'],
       ['drum', 0.12, 'k . k . s . . . k s k s']] },
+    // the big one: plays when you reach the charging pad and the baby bot is saved
+    rescue: { bpm: 168, loop: false, tracks: [
+      ['square', 0.13, 'G4 C5 E5 G5 C6 . G5 C6 | E6-- D6 C6 D6 E6 G6 | F6 E6 D6 C6 D6 E6 C6 A5 | G5 C6 E6 G6 C7--- | . . . .'],
+      ['square', 0.07, 'E4 G4 C5 E5 G5 . E5 G5 | C6-- B5 A5 B5 C6 E6 | A5 G5 F5 E5 F5 G5 E5 F5 | E5 G5 C6 E6 G6--- | . . . .'],
+      ['triangle', 0.22, 'C3 . C3 . C3 . G2 . | A2 . A2 . E3 . A2 . | F2 . F2 . G2 . G2 . | C3 G3 C4 G3 C3--- | . . . .'],
+      ['drum', 0.12, 'k . s . k k s . | k . s . k k s . | k . s . k s k s | k s k s k s s s | k . . .']] },
     select: { bpm: 120, loop: true, tracks: [
       ['triangle', 0.14, 'E5 . G5 . A5 . G5 E5 | D5 . E5 . C5-- . | E5 . G5 . A5 . C6 A5 | G5 . E5 . D5-- .'],
       ['triangle', 0.18, 'C3--- G2--- | F2--- G2--- | C3--- E3--- | G2--- C3---'],
@@ -158,7 +168,7 @@ const SND = (() => {
   }
   function stopSong() { if (timer) clearInterval(timer); timer = null; cur = null; }
   function setMuted(m) { muted = m; store.set('muted', m); if (master) master.gain.value = m ? 0 : 0.55; }
-  return { resume, fx: new Proxy(fx, { get: (o, k) => () => { if (ac && o[k]) try { o[k](); } catch (e) { /* audio hiccup */ } } }), playSong, stopSong, setMuted, get muted() { return muted; }, get ready() { return !!ac; } };
+  return { resume, fx: new Proxy(fx, { get: (o, k) => (a) => { if (ac && o[k]) try { o[k](a); } catch (e) { /* audio hiccup */ } } }), playSong, stopSong, setMuted, get muted() { return muted; }, get ready() { return !!ac; } };
 })();
 
 // ----------------------------------------------------------------------------- INPUT
@@ -170,6 +180,8 @@ const KEYMAP = [
 const keys = new Set(), touch = {}, latch = new Set();   // latch: keys/buttons pressed and released between two frames still count once
 const pads = [0, 1].map(() => ({ cur: {}, prev: {} }));
 let anyInputYet = false;
+// Edge on Xbox: hand the controller to the game instead of using it as a mouse pointer
+try { if ('gamepadInputEmulation' in navigator) navigator.gamepadInputEmulation = 'gamepad'; } catch (e) { /* not on this browser */ }
 function onFirstInput() { if (!anyInputYet) { anyInputYet = true; } SND.resume(); if (scene && scene.song) SND.playSong(scene.song); }
 window.addEventListener('keydown', e => {
   keys.add(e.key); latch.add(e.key); onFirstInput();
@@ -413,7 +425,23 @@ const mapScene = {
     }
     if (!MAP.walking()) { const n = MAP.here(); if (n && prog.at !== n.id) { prog.at = n.id; saveProg(); } }
   },
-  draw() { K.g = g; MAP.frame(this.t); livesHud(4, H - 19, this.t); },
+  draw() {
+    K.g = g; MAP.frame(this.t); livesHud(4, H - 19, this.t);
+    // three stars under every level panel: finished, got everything, star time
+    const stars = prog.stars || {};
+    for (const n of WORLD.nodes) if (n.kind === 'level' && MAP.st.beaten.has(n.id)) {
+      const got = stars[n.id] || [true, false, false];
+      for (let k = 0; k < 3; k++) { const sx = n.x - 9 + k * 9, sy = n.y + 14; K.star(sx, sy, 4, '#2b2230'); K.star(sx, sy, 3.1, got[k] ? '#ffd23f' : 'rgba(255,255,255,0.35)'); }
+    }
+    const n = !MAP.walking() && MAP.here();
+    if (n && (n.kind === 'level' || n.kind === 'boss' || n.kind === 'bonus') && LEVELS[n.id]) {
+      const best = (prog.best || {})[n.id], d = LEVELS[n.id], bits = [];
+      if (d.time) bits.push('RACE ' + clock(d.time * 60));
+      if (best != null) bits.push('BEST ' + clock(best));
+      if (d.par && n.kind === 'level') bits.push('STAR TIME ' + clock(d.par * 60));
+      if (bits.length) { const s = bits.join('   '), w = s.length * 5 + 16; panel(6, 24, w, 14); text(s, 6 + w / 2, 34, 7, '#fff6d8', 'center', null); }
+    }
+  },
 };
 function finishNode(id, res) {
   // back on the map, standing on the node we played, record and pave
@@ -463,6 +491,7 @@ function battery(x, y, full, t) {
   if (full) { K.rr(x + 1.5, y + 1.5, 8, 4, 1, '#49f08a'); g.fillStyle = '#fff'; g.globalAlpha = 0.5; g.fillRect(x + 2, y + 2, 7, 1); g.globalAlpha = 1; }
   else { g.strokeStyle = '#ff6b6b'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 3, y + 1.5); g.lineTo(x + 8, y + 5.5); g.stroke(); }
 }
+const clock = f => { const sec = Math.floor(f / 60); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
 function livesHud(x, y, t) { panel(x, y, 48, 15); const n = prog.lives ?? 3; for (let k = 0; k < 3; k++) battery(x + 3 + k * 15, y + 4, k < n, t); }
 
 // ----------------------------------------------------------------------------- LEVELS (World 1)
@@ -472,7 +501,7 @@ const WORLD_FILE = DATA_FMT.parseWorld(DATA[WORLD_DIR + '/world.txt']);
 const WORLD = DATA_FMT.worldForMap(WORLD_FILE);
 function levelDef(text) {
   const { meta, rows, w } = DATA_FMT.parseLevel(text);
-  return { name: (meta.name || 'LEVEL').toUpperCase(), w, rows, song: meta.song, boss: meta.kind === 'boss', bonus: meta.kind === 'bonus', baby: parseInt(meta.baby || 'FF8FC7', 16), zone: meta.hatch };
+  return { name: (meta.name || 'LEVEL').toUpperCase(), w, rows, song: meta.song, boss: meta.kind === 'boss', bonus: meta.kind === 'bonus', baby: parseInt(meta.baby || 'FF8FC7', 16), zone: meta.hatch, par: +meta.par || 0, time: +meta.time || 0 };
 }
 const LEVELS = {};
 for (const n of WORLD_FILE.nodes) if (n.level && DATA[WORLD_DIR + '/' + n.level + '.txt']) LEVELS[n.id] = levelDef(DATA[WORLD_DIR + '/' + n.level + '.txt']);
@@ -486,9 +515,10 @@ function buildFromRows(L, def) {
     else if (c === 'o') L.bolts(x, x, y); else if (c === 'G') L.gear(x, y);
     else if (c === 'b') L.enemy('bumble', x, y + 1); else if (c === 's') L.enemy('sprocket', x, y + 1); else if (c === 'g') L.enemy('grumble', x, y + 1);
     else if (c === 'T') L.tyre(x, y + 1); else if (c === 'L') L.lever(x, y + 1); else if (c === 'v') L.sign(x, y + 1);
-    else if (c === 'P') L.pad(x, y + 1); else if (c === '@') L.start(x, y + 1);
+    else if (c === 'P') L.pad(x, y + 1); else if (c === '@') L.start(x, y + 1); else if (c === 'F') L.flag(x, y + 1);
     else if (c === 'H') { if (out) L.hatch(x, y + 1, def.zone || 'jet1', out[0], out[1] + 1); }
     else if (c === 'k') L.hook(x, y);
+    else if (c === 'C') L.crusher(x, y);
     else if (c === 'r') {   // follow the track of ~ (sideways) or | (up and down) that starts next to it
       let dx = 0, dy = 0, n = 0;
       if (rows[y][x + 1] === '~') dx = 1; else if (rows[y][x - 1] === '~') dx = -1; else if (rows[y - 1] && rows[y - 1][x] === '|') dy = -1; else if (rows[y + 1] && rows[y + 1][x] === '|') dy = 1;
@@ -510,19 +540,26 @@ function buildLevel(id, defIn) {
     plank(x0, x1, y) { for (let x = x0; x <= x1; x++) tiles[y][x] = '-'; },
     crate(x, y, c) { tiles[y][x] = 'X'; if (c) contents[x + ',' + y] = c; },
     door(x, y0, y1) { for (let y = y0; y <= y1; y++) tiles[y][x] = 'D'; },
-    bolts(x0, x1, y) { for (let x = x0; x <= x1; x++) ents.push(pickup('bolt', x * TS + 8, y * TS + 8)); },
+    bolts(x0, x1, y) { for (let x = x0; x <= x1; x++) { const b = pickup('bolt', x * TS + 8, y * TS + 8); b.orig = true; ents.push(b); } },
     gear(x, y) { const e = pickup('gear', x * TS + 8, y * TS + 8); e.id = gearN++; ents.push(e); },
     enemy(kind, x, top) { ents.push(enemy(kind, x * TS + 2, top * TS)); },
     tyre(x, top) { ents.push({ type: 'tyre', x: x * TS, y: top * TS - 9, w: 16, h: 9, sq: 0 }); },
     lever(x, top) { ents.push({ type: 'lever', x: x * TS + 3, y: top * TS - 14, w: 10, h: 14, on: false, t: 0 }); },
     hatch(x, top, zone, outX, outTop) { ents.push({ type: 'hatch', x: x * TS - 4, y: top * TS - 4, w: 24, h: 4, zone, out: { x: outX * TS + 8, y: outTop * TS } }); ents.push({ type: 'hatchOut', x: outX * TS - 4, y: outTop * TS - 4, w: 24, h: 4 }); },
     raft(x0, y0, x1, y1) { ents.push({ type: 'mover', kind: 'raft', ax: x0 * TS, ay: y0 * TS, bx: x1 * TS, by: y1 * TS, x: x0 * TS, y: y0 * TS, w: 32, h: 6, dx: 0, dy: 0, period: Math.max(2, Math.hypot(x1 - x0, y1 - y0) / 1.1) * 2 }); },
+    crusher(x, y) {
+      let gy = y + 2; while (gy < h && !SOLID[tiles[gy][x]] && !(def.rows[gy] && '#=X'.includes(def.rows[gy][x]))) gy++;
+      ents.push({ type: 'mover', kind: 'crusher', home: y * TS, low: gy * TS - 32, x: x * TS, y: y * TS, w: 32, h: 32, dx: 0, dy: 0, state: 'up', timer: 60 + x % 40, vy: 0 });
+    },
     hook(x, y) { ents.push({ type: 'mover', kind: 'hook', px: x * TS + 8, py: y * TS + 4, len: 56, x: x * TS - 8, y: y * TS + 60, w: 32, h: 6, dx: 0, dy: 0 }); },
     sign(x, top) { ents.push({ type: 'sign', x: x * TS + 2, y: top * TS - 20, w: 12, h: 20 }); },
+    flag(x, top) { ents.push({ type: 'flag', x: x * TS + 2, y: top * TS - 34, w: 12, h: 34, on: false }); },
     pad(x, top) { ents.push({ type: 'pad', x: x * TS - 4, y: top * TS - 6, w: 24, h: 6 }); },
   };
   buildFromRows(L, def);
-  return { id, def, w, h, tiles, ents, contents, start, doorT: -1, bolts: 0, got: (prog.got[id] || [false, false, false]).slice(), gotNow: [false, false, false] };
+  ents.forEach((e, i) => { e.uid = i; });
+  const boltTotal = ents.filter(e => e.orig).length + 3 * Object.values(contents).filter(c => c === 'o').length;
+  return { id, def, w, h, tiles, ents, contents, start, doorT: -1, bolts: 0, boltTotal, boltGot: 0, foeTotal: ents.filter(e => e.type === 'enemy').length, entCount: ents.length, got: (prog.got[id] || [false, false, false]).slice(), gotNow: [false, false, false] };
 }
 function pickup(kind, x, y) { return { type: kind, x: x - 5, y: y - 5, w: 10, h: 10, vx: 0, vy: 0, fly: false, delay: 0, t: Math.random() * 6 }; }
 function enemy(kind, x, groundY) {
@@ -565,11 +602,16 @@ function makePlayer(m, i, x, y) {
     safeX: x, safeY: y - 30, anim: 0, idleT: 0, cheer: false };
 }
 
-function levelScene(id, retry, defIn) {
+function levelScene(id, retry, defIn, snap) {
   const lv = buildLevel(id, defIn), def = lv.def;
+  if (snap) {   // a lost try after the checkpoint flag: carry on from there, with what was already done still done
+    lv.tiles = snap.tiles.map(r => r.slice()); lv.bolts = snap.bolts; lv.boltGot = snap.boltGot; lv.gotNow = snap.gotNow.slice(); lv.doorT = snap.doorT;
+    lv.ents = lv.ents.filter(e => !snap.gone.includes(e.uid)); for (const e of lv.ents) if (e.type === 'flag' && e.uid === snap.flag) e.on = true;
+    lv.start = [snap.x, snap.y];
+  }
   const players = activeParty().map((m, i) => makePlayer(m, i, lv.start[0], lv.start[1]));
   for (const p of players) p.inv = 90;   // a moment of safety at the start
-  const S = { song: def.song || (def.boss ? 'boss' : def.bonus ? 'bonus' : 'level'), t: 0, frame: 0, camX: 0, clearT: -1, dyingT: -1, nameT: 150, lv, players, result: null };
+  const S = { song: def.song || (def.boss ? 'boss' : def.bonus ? 'bonus' : 'level'), t: 0, frame: 0, camX: 0, clearT: -1, dyingT: -1, nameT: 150, lv, players, result: null, timeF: snap ? snap.timeF : 0, snap };
   if (prog.lives == null || prog.lives < 1) { prog.lives = 3; saveProg(); }
   particles = [];
   if (retry) S.nameT = 120;
@@ -590,6 +632,13 @@ function levelScene(id, retry, defIn) {
     for (const q of players) if (!q.bubble) { q.dead = q === p; }
     S.nameT = 0; p.dead = true; p.vy = p.y > H ? -9 : -5.5; p.vx = 0; if (p.y > H) p.y = H; S.dyingT = 0; SND.stopSong(); SND.fx.ouch();
   }
+  // race levels: the clock ran out, so everyone flops and it costs one try
+  function outOfTime() {
+    prog.lives = Math.max(0, (prog.lives ?? 3) - 1); saveProg();
+    for (const q of players) { q.dead = true; q.bubble = 0; q.vy = -5.5; q.vx = 0; q.stack = []; }
+    S.nameT = 0; S.dyingT = 0; S.timeUp = true; SND.stopSong(); SND.fx.ouch();
+  }
+  S.foesLeft = () => lv.ents.filter(e => e.type === 'enemy' && !e.dead && e.state !== 'happy').length;
   function setH(p, h) { p.y += p.h - h; p.h = h; }
   function canStand(p, h) {
     const top = p.y + p.h - h, x0 = Math.floor(p.x / TS), x1 = Math.floor((p.x + p.w - 0.01) / TS);
@@ -617,10 +666,14 @@ function levelScene(id, retry, defIn) {
     if (e.state !== 'glitchy') return; e.state = 'happy'; e.happyT = 0; e.vx = 0; SND.fx.reboot(); sparks(e.x + e.w / 2, e.y + 4, 8, '#bff6ff');
     const b = pickup('bolt', e.x + e.w / 2, e.y); b.fly = true; b.vy = -3; b.vx = (Math.random() - 0.5) * 1.5; b.delay = 10; lv.ents.push(b);
   }
+  // Grumble Crates snap shut when stomped. Touch one to kick it, or press B next to it to pick it up and B again to throw.
+  function shutCrate(e) { e.state = 'shell'; e.shellT = 0; e.vx = 0; e.kickT = 12; e.bounces = 0; SND.fx.stomp(); sparks(e.x + e.w / 2, e.y + 2, 5, '#ffe2a8'); }
+  function kickCrate(e, dir, by) { e.state = 'kicked'; e.dir = dir; e.spd = 3.2; e.vx = 3.2 * dir; e.kickT = 14; e.by = by; e.bounces = 0; SND.fx.kick(); puff(e.x + e.w / 2, e.y + e.h, 4); }
+  function wakeCrate(e) { e.state = 'glitchy'; e.vx = 0; e.vy = -2.5; e.hopT = 60; SND.fx.wobble(); puff(e.x + e.w / 2, e.y + e.h / 2, 5); }
   function breakCrate(tx, ty) {
     if (tileAt(lv, tx, ty) !== 'X') return; lv.tiles[ty][tx] = '.'; debris(tx * TS, ty * TS); SND.fx.crate();
     const c = lv.contents[tx + ',' + ty];
-    if (c === 'o') for (let k = 0; k < 3; k++) { const b = pickup('bolt', tx * TS + 8, ty * TS + 8); b.fly = true; b.vx = (k - 1) * 1.1; b.vy = -3.2; b.delay = 12; lv.ents.push(b); }
+    if (c === 'o') for (let k = 0; k < 3; k++) { const b = pickup('bolt', tx * TS + 8, ty * TS + 8); b.orig = true; b.fly = true; b.vx = (k - 1) * 1.1; b.vy = -3.2; b.delay = 12; lv.ents.push(b); }
     if (POWER[c]) { lv.ents.push({ type: 'power', kind: POWER[c], x: tx * TS + 2, y: ty * TS + 2, w: 12, h: 12, vx: 0, vy: -2.2, rise: 18, dir: 1, t: 0 }); SND.fx.sprout(); }
     if (c === 'G') { const gg = pickup('gear', tx * TS + 8, ty * TS + 8); gg.id = lv.ents.filter(e => e.type === 'gear').length + lv.gotNow.filter(Boolean).length; gg.fly = true; gg.vy = -3.5; gg.delay = 14;
       // crates hold the level's gear slot that is not otherwise placed
@@ -646,7 +699,7 @@ function levelScene(id, retry, defIn) {
   }
   function collect(e, p) {
     if (e.dead) return; e.dead = true;
-    if (e.type === 'bolt') { lv.bolts++; SND.fx.bolt(); sparks(e.x + 5, e.y + 5, 3, '#ffd23f'); }
+    if (e.type === 'bolt') { lv.bolts++; if (e.orig) lv.boltGot++; SND.fx.bolt(); sparks(e.x + 5, e.y + 5, 3, '#ffd23f'); }
     if (e.type === 'gear') { lv.gotNow[e.id] = true; SND.fx.gear(); sparks(e.x + 5, e.y + 5, 14, '#ffd23f'); }
   }
   function pressButton(e) {
@@ -658,7 +711,12 @@ function levelScene(id, retry, defIn) {
     const [bx, by] = crane.buttons[crane.hits]; lv.ents.push({ type: 'button', x: bx * TS + 1, y: by * TS - 6, w: 14, h: 6, t: 0 });
   }
   function startClear() {
-    if (S.clearT >= 0) return; S.clearT = 0; SND.playSong('clear');
+    if (S.clearT >= 0) return; S.clearT = 0; SND.playSong('rescue');
+    const kindLevel = !def.boss && !def.bonus, sweep = lv.boltGot >= lv.boltTotal && S.foesLeft() === 0;
+    const fast = def.par ? S.timeF <= def.par * 60 : !!def.time;
+    const best = (prog.best || {})[id];
+    S.result = { time: S.timeF, sweep, fast, record: best != null && S.timeF < best, first: best == null, stars: kindLevel ? [true, sweep, fast] : null,
+      had: (prog.stars || {})[id] || [false, false, false] };
     for (const p of players) { p.vx = 0; p.cheer = true; p.bubble = 0; }
     confetti(160, 20, 50);
   }
@@ -668,7 +726,11 @@ function levelScene(id, retry, defIn) {
     const before = prog.got[id] || [false, false, false];
     const now = before.map((b, k) => b || lv.gotNow[k]);
     const newG = now.filter(Boolean).length - before.filter(Boolean).length;
-    prog.got[id] = now; saveProg();
+    prog.got[id] = now;
+    prog.best = prog.best || {}; prog.stars = prog.stars || {};
+    if (S.result && (prog.best[id] == null || S.result.time < prog.best[id])) prog.best[id] = S.result.time;
+    if (S.result && S.result.stars) prog.stars[id] = S.result.stars.map((v, k) => v || S.result.had[k]);
+    saveProg();
     finishNode(id, { bolts: lv.bolts, gears: newG });
     mapScene.keep = true; go(mapScene);   // map already built and paved by finishNode
   }
@@ -685,7 +747,9 @@ function levelScene(id, retry, defIn) {
       if (S.clearT % 25 === 0) confetti(S.camX + 160, 0, 8);
       for (const p of players) { p.vy += 0.3; moveBody(lv, p); }
       S.camX += (clamp(players.reduce((a, p) => a + p.x, 0) / players.length - W / 2 + 6, 0, Math.max(0, lv.w * TS - W)) - S.camX) * 0.12;
-      if (S.clearT > 200 || (S.clearT > 60 && (anyHit('a') || anyHit('start')))) finish();
+      if (S.clearT > 330 || (S.clearT > 90 && (anyHit('a') || anyHit('start')))) finish();
+      if (S.result && S.result.stars) for (let k = 0; k < 3; k++) if (S.clearT === 70 + k * 18 && S.result.stars[k]) SND.fx.star(k);
+      if (S.result && S.result.record && S.clearT === 140) SND.fx.record();
       stepParticles(); return;
     }
     if (S.dyingT >= 0) {
@@ -696,15 +760,26 @@ function levelScene(id, retry, defIn) {
         else if (prog.lives <= 0) {
           prog.lives = 3; prog.at = id; saveProg();
           buildMap(); MAP.say('Out of tries! Have another go'); mapScene.keep = true; go(mapScene);
-        } else go(levelScene(id, true, defIn));
+        } else go(levelScene(id, true, defIn, S.snap));
       }
       stepParticles(); return;
     }
     if (anyHit('start') && S.frame > 20) { SND.fx.select(); go(pauseScene(S)); return; }
+    S.timeF++;
+    if (def.time && S.timeF >= def.time * 60) { outOfTime(); stepParticles(); return; }
+    if (def.time && S.timeF >= (def.time - 10) * 60 && S.timeF % 60 === 0) SND.fx.tick();
     // --- moving platforms first, so riders can be carried by how far they moved
     for (const m of lv.ents) if (m.type === 'mover') {
       const ox = m.x, oy = m.y, sp = little ? 1 : 1.25;
       if (m.kind === 'raft') { const k = (1 - Math.cos(S.t * sp * P * 2 / m.period)) / 2; m.x = m.ax + (m.bx - m.ax) * k; m.y = m.ay + (m.by - m.ay) * k; }
+      else if (m.kind === 'crusher') {
+        m.timer--;
+        if (m.state === 'up' && m.timer <= 0) { m.state = 'warn'; m.timer = little ? 48 : 34; }
+        else if (m.state === 'warn' && m.timer <= 0) { m.state = 'drop'; m.vy = 1; }
+        else if (m.state === 'drop') { m.vy = Math.min(m.vy + 0.7, 8); m.y += m.vy; if (m.y >= m.low) { m.y = m.low; m.state = 'down'; m.timer = 40; S.shake = 8; SND.fx.stomp(); puff(m.x + 4, m.y + 32, 4); puff(m.x + 28, m.y + 32, 4); } }
+        else if (m.state === 'down' && m.timer <= 0) m.state = 'rise';
+        else if (m.state === 'rise') { m.y -= 0.8 * sp; if (m.y <= m.home) { m.y = m.home; m.state = 'up'; m.timer = little ? 120 : 80; } }
+      }
       else { m.ang = 0.75 * Math.sin(S.t * 1.3 * sp); m.x = m.px + Math.sin(m.ang) * m.len - m.w / 2; m.y = m.py + Math.cos(m.ang) * m.len; }
       m.dx = m.x - ox; m.dy = m.y - oy;
     }
@@ -753,7 +828,14 @@ function levelScene(id, retry, defIn) {
       p.vy = Math.min(p.vy + 0.3, 6);
       if (p.vy >= 0) p.spring = false;
       if (p.actT <= 0) p.shoot = false;
-      if (hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && has(p, 'bubble')) {
+      const near = !p.carry && hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && !p.low && lv.ents.find(e => e.type === 'enemy' && e.state === 'shell' && !e.dead && overlap(e, { x: p.x - 10, y: p.y - 4, w: p.w + 20, h: p.h + 8 }));
+      if (p.carry && hit(i, 'b')) {
+        const e = p.carry; p.carry = null; e.x = p.face > 0 ? p.x + p.w + 1 : p.x - e.w - 1; e.y = Math.min(e.y, p.y + p.h - e.h);
+        if (isSolid(lv, Math.floor((e.x + e.w / 2) / TS), Math.floor((e.y + e.h / 2) / TS))) e.x = p.x + p.w / 2 - e.w / 2;
+        kickCrate(e, p.face, p.slot); e.vy = held(i, 'up') ? -6.5 : -2; if (held(i, 'up')) e.spd = 1.6;
+        p.actT = 12; p.shoot = true;
+      } else if (near) { p.carry = near; near.state = 'carried'; near.vx = 0; SND.fx.grab(); p.actT = 8; p.shoot = true; }
+      else if (hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && has(p, 'bubble')) {
         if (lv.ents.filter(e => e.type === 'shot' && e.owner === p.slot).length < 2) {
           lv.ents.push({ type: 'shot', owner: p.slot, x: p.face > 0 ? p.x + p.w : p.x - 10, y: p.y + p.h * 0.3, w: 10, h: 10, vx: p.face * 2.4 + p.vx * 0.4, life: 110, t: 0 });
           p.actT = 12; p.shoot = true; SND.fx.blow();
@@ -764,6 +846,11 @@ function levelScene(id, retry, defIn) {
       const wasGround = p.ground || !!p.onMover, pvy = p.vy, prevBottom = p.y + p.h;
       moveBody(lv, p);
       p.onMover = null;
+      for (const m of lv.ents) if (m.type === 'mover' && m.kind === 'crusher' && overlap(p, m) && prevBottom > m.y + 4) {
+        const out = p.x + p.w / 2 < m.x + 16 ? m.x - p.w - 0.5 : m.x + m.w + 0.5;
+        if (m.state === 'drop' && p.y + p.h > m.y + m.h - 10) { p.x = out; if (p.inv <= 0) wobble(p, m.x + 16); else p.vx = 0; }
+        else { p.x = out; p.vx = 0; }
+      }
       if (p.vy >= 0 && !p.ground) for (const m of lv.ents) if (m.type === 'mover' && p.x + p.w > m.x + 1 && p.x < m.x + m.w - 1 && prevBottom <= m.y + 2 + Math.max(0, m.dy) && p.y + p.h >= m.y - 0.5) { p.y = m.y - p.h; p.vy = 0; p.ground = true; p.onMover = m; break; }
       if (has(p, 'mega')) {
         if (p.hitWall) { const tx = p.hitWall > 0 ? Math.floor((p.x + p.w + 1) / TS) : Math.floor((p.x - 1) / TS); for (let ty = Math.floor(p.y / TS); ty <= Math.floor((p.y + p.h - 1) / TS); ty++) breakCrate(tx, ty); }
@@ -822,11 +909,19 @@ function levelScene(id, retry, defIn) {
       } else if (e.type === 'enemy') {
         updateEnemy(e);
         if (e.state === 'bubbled') for (const p of players) if (!p.bubble && overlap(p, e)) { e.bubT = 999; if (p.vy > 0) p.vy = -4; }
+        if ((e.state === 'shell' || e.state === 'kicked') && e.kickT <= 0) for (const p of players) {
+          if (p.bubble || p.carry || !overlap(p, e)) continue;
+          const fromTop = p.vy > 0 && p.y + p.h - p.vy <= e.y + 5;
+          if (e.state === 'kicked' && fromTop) { e.state = 'shell'; e.shellT = 0; e.vx = 0; e.kickT = 10; p.vy = -4.4; SND.fx.stomp(); puff(e.x + e.w / 2, e.y + e.h, 4); }
+          else if (e.state === 'shell') { kickCrate(e, p.x + p.w / 2 < e.x + e.w / 2 ? 1 : -1, p.slot); if (fromTop) p.vy = -4.4; }
+          break;
+        }
         if (e.state === 'glitchy') for (const p of players) {
           if (p.bubble || !overlap(p, e)) continue;
           if (p.slideT > 0 || p.rainbowT > 0) { reboot(e, p); continue; }
           if (p.vy > 0 && p.y + p.h - p.vy <= e.y + 5) {
-            reboot(e, p); p.vy = held(p.slot, 'a') ? (e.kind === 'sprocket' ? -8.6 : -6.2) : (e.kind === 'sprocket' ? -7.6 : -4.4); p.spring = e.kind === 'sprocket'; p.boost = false;
+            if (e.kind === 'grumble') shutCrate(e); else reboot(e, p);
+            p.vy = held(p.slot, 'a') ? (e.kind === 'sprocket' ? -8.6 : -6.2) : (e.kind === 'sprocket' ? -7.6 : -4.4); p.spring = e.kind === 'sprocket'; p.boost = false;
           } else if (p.inv <= 0) wobble(p, e.x + e.w / 2);
         }
       } else if (e.type === 'power') {
@@ -860,6 +955,14 @@ function levelScene(id, retry, defIn) {
         if (!e.on) for (const p of players) if (overlap(p, { x: e.x, y: 0, w: e.w, h: e.y + e.h })) { e.on = true; SND.fx.lever(); openDoors(); }   // bumping it counts too
       } else if (e.type === 'button') {
         for (const p of players) if (p.vy > 0 && overlap(p, e) && p.y + p.h - p.vy <= e.y + 4) { pressButton(e); p.vy = -5; }
+      } else if (e.type === 'flag') {
+        if (!e.on) for (const p of players) if (!p.bubble && overlap(p, e)) {
+          e.on = true; SND.fx.flag(); sparks(e.x + 6, e.y + 4, 14, '#9dffc0'); S.toast = { text: 'CHECKPOINT!', t: 100 };
+          const here = new Set(lv.ents.filter(q => !q.dead).map(q => q.uid)), gone = [];
+          for (let u = 0; u < lv.entCount; u++) if (!here.has(u)) gone.push(u);
+          S.snap = { x: e.x + 6, y: e.y + e.h, flag: e.uid, timeF: S.timeF, bolts: lv.bolts, boltGot: lv.boltGot, gotNow: lv.gotNow.slice(), doorT: lv.doorT, tiles: lv.tiles.map(r => r.slice()), gone };
+          break;
+        }
       } else if (e.type === 'pad') {
         for (const p of players) if (!p.bubble && overlap(p, { x: e.x + 4, y: 0, w: e.w - 8, h: e.y + 6 })) startClear();   // the whole column above the pad counts
       }
@@ -877,6 +980,36 @@ function levelScene(id, retry, defIn) {
     e.vy = Math.min(e.vy + 0.3, 5);
     if (e.state === 'bubbled') { e.bubT++; e.y -= 0.5; e.x += Math.sin(e.bubT * 0.15) * 0.4; if (e.bubT > 70) { e.state = 'glitchy'; SND.fx.pop(); reboot(e); } return; }
     if (e.state === 'happy') { e.happyT++; e.vx = 0; if (e.happyT === 24) { e.dead = true; puff(e.x + e.w / 2, e.y + e.h / 2, 10); sparks(e.x + e.w / 2, e.y + e.h / 2, 8, '#bff6ff'); SND.fx.pop(); } return; }
+    if (e.kickT > 0) e.kickT--;
+    if (e.state === 'carried') {
+      const c = players.find(q => q.carry === e);
+      if (!c || c.bubble || c.dead || c.wob > 0 || c.low) { if (c) c.carry = null; e.state = 'shell'; e.shellT = Math.min(e.shellT, 420); e.kickT = 20; e.vy = -1; return; }
+      e.x = c.x + c.w / 2 - e.w / 2; e.y = c.y - e.h + 3; e.vy = 0; e.shellT = Math.min(e.shellT, 300); return;
+    }
+    if (e.state === 'shell') {
+      e.vx = 0; moveBody(lv, e); if (e.y > H + 30) e.dead = true;
+      if (++e.shellT > 600) wakeCrate(e);   // wiggles from 480, then pops back open
+      return;
+    }
+    if (e.state === 'kicked') {
+      if (e.ground) e.spd = 3.2; e.vx = e.spd * e.dir;
+      const pdir = e.dir; moveBody(lv, e);
+      if (e.hitWall) {
+        const tx = pdir > 0 ? Math.floor((e.x + e.w + 1) / TS) : Math.floor((e.x - 1) / TS);
+        for (let ty = Math.floor(e.y / TS); ty <= Math.floor((e.y + e.h - 1) / TS); ty++) breakCrate(tx, ty);
+        e.dir = -pdir; SND.fx.clank(); puff(pdir > 0 ? e.x + e.w : e.x, e.y + e.h / 2, 3);
+        if (++e.bounces > 6) { reboot(Object.assign(e, { state: 'glitchy' })); return; }
+      }
+      if (e.bumped) breakCrate(e.bumped[0], e.bumped[1]);
+      for (const o of lv.ents) {
+        if (o === e || o.dead || !overlap(o, e)) continue;
+        if (o.type === 'enemy' && (o.state === 'glitchy' || o.state === 'shell' || o.state === 'kicked')) { o.state = 'glitchy'; reboot(o); SND.fx.clank(); }
+        else if (o.type === 'lever' && !o.on) { o.on = true; SND.fx.lever(); openDoors(); }
+        else if (o.type === 'button') pressButton(o);
+      }
+      if (e.y > H + 30 || Math.abs(e.x - S.camX - W / 2) > W * 1.5) e.dead = true;
+      return;
+    }
     if (e.kind === 'bumble') {
       e.vx = 0.45 * sp * e.face;
       // turn at walls and ledges
@@ -961,12 +1094,23 @@ function levelScene(id, retry, defIn) {
       }
     }
   }
+  // A Grumble Crate that has been stomped shut: lid down, dizzy eyes, wiggling before it pops open again.
+  function drawShutCrate(e, x) {
+    const wig = e.state === 'shell' && e.shellT > 480 ? Math.sin(e.shellT * 1.3) * 1.2 : 0, cx = x + e.w / 2 + wig, by = e.y + e.h;
+    if (e.state === 'kicked' && e.ground) { g.globalAlpha = 0.5; g.fillStyle = '#fff6d8'; for (let k = 1; k <= 3; k++) g.fillRect(cx - e.dir * (6 + k * 4), by - 3 - k * 3, 4, 1.5); g.globalAlpha = 1; }
+    K.rr(cx - 7, by - 12, 14, 12, 2, '#c08850'); g.strokeStyle = '#8a5a30'; g.lineWidth = 1; g.strokeRect(cx - 5.5, by - 10.5, 11, 9);
+    K.rr(cx - 8, by - 14, 16, 4, 1.5, '#d9a46a'); g.fillStyle = '#8a5a30'; g.fillRect(cx - 8, by - 10.5, 16, 1);
+    g.strokeStyle = '#2a1d12'; g.lineWidth = 1.1;
+    for (const ex of [-3, 3]) { g.beginPath(); g.moveTo(cx + ex - 1.5, by - 8.5); g.lineTo(cx + ex + 1.5, by - 5.5); g.moveTo(cx + ex + 1.5, by - 8.5); g.lineTo(cx + ex - 1.5, by - 5.5); g.stroke(); }
+    if (e.state !== 'kicked') for (let k = 0; k < 2; k++) { const a = S.t * 4 + k * P; K.star(cx + Math.cos(a) * 8, by - 17 + Math.sin(a) * 2, 1.8, '#fff6a0'); }
+  }
   function drawEnts() {
     for (const e of lv.ents) {
       if (e.dead && e.type !== 'button') continue;
       const x = e.x - S.camX; if (x < -40 || x > W + 40) continue;
       if (e.type === 'bolt') { const sp = Math.cos(e.t * 5); g.save(); g.translate(x + 5, e.y + 5 + (e.fly ? 0 : Math.sin(e.t * 3) * 1)); g.scale(Math.abs(sp) * 0.8 + 0.2, 1); K.nut(0, 0, 4.2, 0, '#ffd23f'); g.restore(); }
       else if (e.type === 'gear') { const gl = 0.5 + 0.5 * Math.sin(e.t * 4); g.globalAlpha = 0.35 * gl; K.circ(x + 5, e.y + 5, 11, '#fff3a0'); g.globalAlpha = 1; K.gear(x + 5, e.y + 5 + Math.sin(e.t * 2) * 1.5, 7, 10, e.t * 1.5, '#ffd23f', '#b8860b'); }
+      else if (e.type === 'enemy' && (e.state === 'shell' || e.state === 'kicked' || e.state === 'carried')) drawShutCrate(e, x);
       else if (e.type === 'enemy') {
         const gl = e.state === 'glitchy', s = 0.085;
         const idx = { bumble: 0, sprocket: 1, grumble: 2 }[e.kind];
@@ -979,6 +1123,12 @@ function levelScene(id, retry, defIn) {
         K.rr(x, e.y, 12, 12, 5, '#e8e4f0'); K.rr(x + 1, e.y + 1, 10, 10, 4, '#3b2a5c'); powerIcon(e.kind, x + 6, e.y + 6, S.t);
       } else if (e.type === 'shot') {
         g.globalAlpha = 0.3; K.circ(x + 5, e.y + 5, 5.5, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = '#dff6ff'; g.lineWidth = 1.2; g.beginPath(); g.arc(x + 5, e.y + 5, 5.5, 0, P * 2); g.stroke(); K.circ(x + 3, e.y + 3, 1.3, '#fff');
+      } else if (e.type === 'flag') {
+        const px = x + 2, top = e.y, wave = Math.sin(S.t * 6) * 2;
+        g.fillStyle = '#5d6378'; g.fillRect(px, top, 2, e.h); K.circ(px + 1, top, 2.2, e.on ? '#ffd23f' : '#9aa0b4');
+        g.fillStyle = e.on ? '#49d17a' : '#8a8fa3'; g.beginPath(); g.moveTo(px + 2, top + 2);
+        if (e.on) { g.lineTo(px + 15, top + 6 + wave); g.lineTo(px + 2, top + 12); } else { g.lineTo(px + 6, top + 14); g.lineTo(px + 2, top + 13); }
+        g.fill(); if (e.on) K.nut(px + 7, top + 7 + wave / 2, 2.2, S.t, '#fff6d8');
       } else if (e.type === 'hatch' || e.type === 'hatchOut') {
         g.fillStyle = '#2b2833'; g.beginPath(); g.ellipse(x + 12, e.y + 3, 12, 3.5, 0, 0, P * 2); g.fill();
         g.fillStyle = e.type === 'hatch' ? '#7d8397' : '#1b1426'; g.beginPath(); g.ellipse(x + 12, e.y + 2.5, 10, 2.6, 0, 0, P * 2); g.fill();
@@ -988,6 +1138,15 @@ function levelScene(id, retry, defIn) {
           if (near || Math.sin(S.t * 4) > 0) { const ay = e.y - 16 + Math.sin(S.t * 6) * 2; g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(x + 6, ay); g.lineTo(x + 18, ay); g.lineTo(x + 12, ay + 7); g.fill(); g.strokeStyle = '#2b2230'; g.lineWidth = 1; g.stroke(); }
         }
       } else if (e.type === 'mover') {
+        if (e.kind === 'crusher') {
+          const sh = e.state === 'warn' ? Math.sin(S.frame * 1.8) * 1.5 : 0, cx = x + sh;
+          g.fillStyle = '#4a4652'; g.fillRect(cx + 13, 0, 6, e.y); g.fillStyle = '#6e6880'; g.fillRect(cx + 14, 0, 2, e.y);
+          K.rr(cx, e.y, 32, 32, 3, '#7d8397'); K.rr(cx + 2, e.y + 2, 28, 4, 1.5, '#a9b0c0');
+          g.save(); g.beginPath(); g.rect(cx, e.y + 24, 32, 8); g.clip(); for (let k = -1; k < 6; k++) { g.fillStyle = k % 2 ? '#2b2833' : (e.state === 'warn' && S.frame % 8 < 4 ? '#fff6a0' : '#ffcf3a'); g.beginPath(); g.moveTo(cx + k * 8, e.y + 32); g.lineTo(cx + k * 8 + 8, e.y + 24); g.lineTo(cx + k * 8 + 16, e.y + 24); g.lineTo(cx + k * 8 + 8, e.y + 32); g.fill(); } g.restore();
+          const mad = e.state === 'warn' || e.state === 'drop';
+          K.eye(cx + 10, e.y + 14, 7, 8, '#2b2230', '#7d8397', { angry: mad ? 1 : 0, open: e.state === 'down' ? 0.3 : 1 }); K.eye(cx + 22, e.y + 14, 7, 8, '#2b2230', '#7d8397', { angry: mad ? -1 : 0, open: e.state === 'down' ? 0.3 : 1 });
+          continue;
+        }
         if (e.kind === 'hook') {
           const px = e.px - S.camX; g.strokeStyle = '#3a3346'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(px, e.py); g.lineTo(x + e.w / 2, e.y - 10); g.stroke();
           K.circ(px, e.py, 3, '#d4892f'); K.arc(x + e.w / 2, e.y - 6, 4, P * 1.1, P * 1.9, 2, '#9aa1b0');
@@ -1107,6 +1266,13 @@ function levelScene(id, retry, defIn) {
     livesHud(W - 52, 4, S.t);
     players.forEach((p, k) => { const kinds = [...p.stack, p.rainbowT > 0 && 'rainbow', p.magnetT > 0 && 'magnet'].filter(Boolean); if (!kinds.length) return;
       const x0 = W - 56 - (k + 1) * (kinds.length * 12 + 8); panel(x0, 4, kinds.length * 12 + 4, 15); kinds.forEach((kd, j) => powerIcon(kd, x0 + 8 + j * 12, 11.5, S.t)); });
+    if (!shower && S.clearT < 0) {
+      const left = def.time ? Math.max(0, def.time * 60 - S.timeF) : 0, warn = def.time && left < 600;
+      panel(128, 4, 46, 15); K.circ(137, 11.5, 4.2, warn ? '#ff8a8a' : '#d9d2e6'); g.strokeStyle = '#2b2230'; g.lineWidth = 1; g.beginPath(); g.moveTo(137, 11.5); g.lineTo(137, 8.8); g.moveTo(137, 11.5); g.lineTo(139, 11.5); g.stroke();
+      text(clock(def.time ? left : S.timeF), 158, 16, 9, warn && Math.floor(S.t * 4) % 2 ? '#ff8a8a' : '#fff6d8', 'center', null);
+    }
+    if (def.time && S.frame < 200 && S.clearT < 0 && S.dyingT < 0) { const k = Math.min(1, S.frame / 15); panel(W / 2 - 70, 150, 140, 22, '#ffd23f'); text('RACE THE CLOCK!', W / 2, 165, 10 * k, '#2b2230', 'center', null); }
+    if (S.timeUp && S.dyingT > 10) { panel(W / 2 - 60, 60, 120, 22, '#ff8a8a'); text("TIME'S UP!", W / 2, 76, 12, '#2b2230', 'center', null); }
     if (S.toast) { g.globalAlpha = Math.min(1, S.toast.t / 20); text(S.toast.text, W / 2, 50, 13, '#ffd23f'); g.globalAlpha = 1; }
     if (!def.boss && !def.bonus) {
       panel(70, 4, 50, 15);
@@ -1123,6 +1289,18 @@ function levelScene(id, retry, defIn) {
       panel(W / 2 - 80, 60 - (1 - k) * 30, 160, 34, '#ffd23f');
       text(def.boss ? 'FIXED!' : def.bonus ? 'BONUS!' : 'RESCUED!', W / 2, 84 - (1 - k) * 30, 18, '#2b2230', 'center', null);
       if (S.clearT > 40) { const nG = lv.gotNow.filter((v, k2) => v && !(prog.got[id] || [])[k2]).length; text('+' + lv.bolts + ' bolts' + (nG ? '   +' + nG + ' golden gear' + (nG > 1 ? 's' : '') : ''), W / 2, 112, 9); }
+      const R = S.result;
+      if (R && S.clearT > 55) {
+        text('TIME ' + clock(R.time) + (def.par ? '   (star time ' + clock(def.par * 60) + ')' : ''), W / 2, 126, 8, '#fff6d8', 'center', null);
+        if (R.stars) for (let k = 0; k < 3; k++) {
+          const at = 70 + k * 18, pop = S.clearT < at ? 0 : Math.min(1, (S.clearT - at) / 8), got = R.stars[k];
+          const sx = W / 2 - 36 + k * 36, sy = 150, r = 9 * (got ? 0.6 + pop * 0.4 + (pop < 1 ? 0.3 * Math.sin(pop * P) : 0) : 0.8);
+          if (S.clearT >= at || !got) K.star(sx, sy, r + 1.5, got ? '#7a4a10' : 'rgba(27,20,38,0.6)');
+          if (got && S.clearT >= at) K.star(sx, sy, r, '#ffd23f'); else K.star(sx, sy, r - 1, 'rgba(255,255,255,0.25)');
+          text(['DONE', 'GOT IT ALL', 'SPEEDY'][k], sx, sy + 18, 6, got && S.clearT >= at ? '#fff6d8' : 'rgba(255,246,216,0.4)', 'center', null);
+        }
+        if (R.record && S.clearT > 140) { const b = 1 + 0.08 * Math.sin(S.t * 10); g.save(); g.translate(W / 2, 194); g.scale(b, b); panel(-58, -11, 116, 18, '#ff8fc7'); text('NEW RECORD!', 0, 3, 11, '#2b2230', 'center', null); g.restore(); }
+      }
     }
   }
   S.draw = function () {
@@ -1168,7 +1346,7 @@ function jetScene(parent, hatch) {
   const ps = parent.players.map((p, k) => ({ src: p, x: 50, y: 90 + k * 40, w: 12, h: p.h - 4, vy: 0, inv: 40, face: 1 }));
   const J = { song: 'jet', t: 0, scroll: -40, bolts: 0, endT: -1, nameT: 110 };
   J.update = function () {
-    J.t += 1 / 60; if (J.nameT > 0) J.nameT--;
+    J.t += 1 / 60; if (J.nameT > 0) J.nameT--; if (J.endT < 0) parent.timeF++;
     if (J.endT >= 0) { if (++J.endT > 50) parent.comeBack(hatch, J.bolts); stepParticles(); return; }
     J.scroll += z.speed * (little ? 1 : 1.3);
     for (const p of ps) {
@@ -1228,7 +1406,8 @@ function pauseScene(level) {
   return {
     song: null, t: 0,
     update() { this.t += 1 / 60; if (anyHit('start') || anyHit('a')) { SND.fx.select(); scene = level; } if (anyHit('b')) { SND.fx.select(); go(mapScene); } },
-    draw() { level.draw(); g.fillStyle = 'rgba(15,10,25,0.6)'; g.fillRect(0, 0, W, H); panel(80, 80, 160, 70); text('PAUSED', W / 2, 106, 14, '#ffd23f'); text('A: keep playing   B: back to map', W / 2, 130, 8, '#fff6d8', 'center', null); },
+    draw() { level.draw(); g.fillStyle = 'rgba(15,10,25,0.6)'; g.fillRect(0, 0, W, H); panel(80, 80, 160, 70); text('PAUSED', W / 2, 106, 14, '#ffd23f'); text('A: keep playing   B: back to map', W / 2, 130, 8, '#fff6d8', 'center', null);
+      if (level.lv && !level.lv.def.boss && !level.lv.def.bonus) text('Bolts ' + level.lv.boltGot + '/' + level.lv.boltTotal + '    Glitchies left ' + level.foesLeft(), W / 2, 144, 7, '#d9d2e6', 'center', null); },
   };
 }
 
@@ -1281,6 +1460,21 @@ window.addEventListener('message', e => {
 });
 const params = new URLSearchParams(location.search); if (window.CLANKERS_TEST) params.set('test', '1');
 if (params.has('test')) document.body.classList.add('test');
-function boot() { if (params.has('test')) { scene = { song: null, update() {}, draw() { g.fillStyle = '#15131c'; g.fillRect(0, 0, W, H); text('Waiting for a level...', W / 2, H / 2, 10); } }; } else go(introScene); requestAnimationFrame(t => { last = t; loop(t); }); }
+const startScene = {
+  song: null, t: 0,
+  update() { this.t += 1 / 60; if (anyInputYet && this.t > 0.2) { introScene.t = 0; go(introScene); } },
+  draw() {
+    const t = this.t; K.g = g; g.fillStyle = '#141a3d'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 40; i++) { const x = (i * 97) % 320, y = (i * 53) % 200; if (Math.sin(t * 2 + i) > -0.3) K.circ(x, y, ((i % 3) + 1) * 0.5, '#fff6d8'); }
+    K.robot(118, 168, 0.11, COLS[party[0].col], { t, bob: Math.sin(t * 3) * 3, armR: -150 + Math.sin(t * 6) * 25, eyes: { happy: 0.6 } });
+    K.ostrich(204, 168, 0.1, COLS[party[1].col], { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, flick: Math.sin(t * 2.6) * 6 });
+    g.fillStyle = '#3a2630'; g.fillRect(0, 168, W, 72);
+    text('CLANKERS', W / 2, 62, 26, '#ffd23f');
+    const k = 0.5 + 0.5 * Math.sin(t * 4); g.globalAlpha = 0.6 + 0.4 * k;
+    panel(W / 2 - 100, 186, 200, 26, '#ffd23f'); text('TAP OR PRESS ANY BUTTON', W / 2, 203, 10, '#2b2230', 'center', null); g.globalAlpha = 1;
+    text('turn the sound on!', W / 2, 228, 7, '#d9d2e6', 'center', null);
+  },
+};
+function boot() { if (params.has('test')) { scene = { song: null, update() {}, draw() { g.fillStyle = '#15131c'; g.fillRect(0, 0, W, H); text('Waiting for a level...', W / 2, H / 2, 10); } }; } else go(anyInputYet ? introScene : startScene); requestAnimationFrame(t => { last = t; loop(t); }); }
 (document.fonts && document.fonts.load ? document.fonts.load('10px "Titan One"').catch(() => {}) : Promise.resolve()).then(boot, boot);
 })();
