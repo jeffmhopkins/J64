@@ -2,6 +2,7 @@
 /dist/
 roms/*/build/
 roms/*/filesystem/
+roms/*/web/dist/
 tests/host/build/
 *.z64
 *.v64

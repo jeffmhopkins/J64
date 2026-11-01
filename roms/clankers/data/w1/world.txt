@@ -1,0 +1,56 @@
+# World 1 map. The map is 20 x 15 tiles; a node or prop sits at "col row".
+name: Junkyard Hills
+num: 1
+theme: junkyard
+gears: 9
+babies: FF8FC7 49F08A FFB347 8FD3FF
+boss-msg: Fixed! Path to World 2 open
+
+# node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
+node home   2 11  home   "Home garage"
+node l1     5 11  level  "Scrap Path"                 level=1-1
+node l2     5 7   level  "Tyre Bounce"                level=1-2
+node shop   2 7   shop   "Parts shop"
+node l3     9 7   level  "Crate Hill"                 level=1-3
+node bonus  9 3   bonus  "Bonus · Bolt Shower"        level=bonus gate=3
+node boss   12 11 boss   "Big Glitch · Clanky Crane"  level=boss
+node exit   17 6  exit   "To World 2 · Gear Factory"
+
+# road <from> <to> [via=<col>,<row> ...] [gate=<gears needed>]
+road home l1
+road l1 l2
+road l2 shop
+road l2 l3
+road l3 bonus gate=3
+road l3 boss via=9,11
+road boss exit via=14,11 via=14,6
+
+# scenery: feature <name> [args], prop <name> <col> <row>
+feature river col=15 bridge=6
+feature next-world col=16
+feature fence from=0 to=3 row=12
+feature windmill 4 3
+feature wanderer 7 9
+prop pile 1 2
+prop pile 3 1
+prop pile 6 4
+prop pile 11 2
+prop pile 13 4
+prop pile 11 8
+prop pile 7 9
+prop pile 3 9
+prop pile 8 13
+prop pile 12 13
+prop pile 1 13
+prop pile 13 1
+prop pile 7 2
+prop car 2 4
+prop car 11 5
+prop car 4 13
+prop tyres 7 5
+prop tyres 12 8
+prop tyres 0 9
+prop tyres 10 13
+prop barrel 18 9
+prop barrel 17 12
+prop barrel 19 12
