@@ -4,17 +4,22 @@
 > baby bots that a Big Glitch storm blew across four worlds.
 
 > [!NOTE]
-> Clankers is not a ROM yet (there is no `Makefile` here, so `make` skips it). Today it runs in
-> the browser; the N64 build comes next and will share one C core with the browser build.
+> The N64 ROM plays World 1 (Junkyard Jumble). The browser build plays every world. Both read
+> the same level files in `data/`, and the ROM's rules live in one C core (`src/core/`) that a
+> later WASM build can share.
 
 <a id="layout"></a>
 ## Layout
 
 ```
 roms/clankers/
-  data/         levels and world maps as plain text: the one place to change a level
+  data/         levels, world maps and songs as plain text: the one place to change a level
   web/          the browser build: game, map themes, drawing kit, editors
     build.py    builds web/dist/clankers.html and the editors
+  src/core/     the game's rules in plain C (no libdragon), unit tested in tests/host/
+  src/n64/      the N64 frontend: drawing with rdpq, the synth, input, EEPROM saves
+  assets/       sprite strips baked from web/lib (do not edit by hand), Titan One font
+  tools/        bake_sprites.mjs, which redraws assets/ from the browser drawing code
 ```
 
 <a id="build"></a>
@@ -33,7 +38,65 @@ built next to it.
 > `world-editor.html` beside it. Pages must be set to deploy from GitHub Actions in the repo's
 > settings.
 
+<a id="n64"></a>
+## Building and playing the ROM
+
+```sh
+make clankers                  # builds dist/clankers.z64
+make deploy ROM=clankers       # sends it to a SummerCart64
+```
+
+The ROM saves to a 4K EEPROM. On a SummerCart64 the save type comes from the ROM header, so
+there is nothing to set.
+
+| Button | In a level | On the map |
+| --- | --- | --- |
+| Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
+| A | Jump (hold to jump higher, again to boost or flap) | Enter a level |
+| B or C-left | Action: grab, throw, shoot | |
+| Start | Pause | Enter a level |
+
+In the pause menu, Start or A goes back to the level, B goes back to the map, and Z turns the
+CRT scanlines on or off. A second controller plays the ostrich.
+
+<a id="sprites"></a>
+## Redrawing the sprites
+
+The ROM's sprites are drawn by the same code as the browser build (`web/lib/`), so a change
+there shows up in both. After changing a drawing, bake the strips again and commit them:
+
+```sh
+node roms/clankers/tools/bake_sprites.mjs
+```
+
+It needs Node and Playwright with Chromium. It writes `assets/*.png`, `assets/rgba16/*.png`
+(full-screen pictures, kept at 16 bits to save memory) and `src/n64/sprites.h`.
+
+> [!IMPORTANT]
+> The baked strips are checked in, so a ROM build does not need a browser. Bake again whenever
+> `web/lib/` changes, or the ROM will draw the old pictures.
+
+<a id="hardware"></a>
+## Where the N64 differs from the browser
+
+> [!NOTE]
+> The rules are the same: the C core is a line-by-line port of the browser game, and the host
+> tests check it. These are the places the N64 draws or sounds a little differently.
+
+- Rainbow power-ups tint the whole hero sheet instead of redrawing it in shifting colours.
+- Glows, sparks and puffs are tinted dots, not soft gradients.
+- The story pages before the title are skipped.
+- The map's river and chimney smoke stand still.
+- Music and sound effects come from a small software synth playing `data/songs.txt` and the
+  browser's sound recipes, so they sound close to, but not exactly like, the browser.
+- The game always runs 60 ticks a second, so PAL consoles play at the same speed and drop a
+  frame now and then.
+- The CRT scanlines (pause menu, Z) are for LCD TVs; on a real CRT, leave them off.
+
 <a id="data"></a>
 ## Changing levels
 
-See [data/README.md](data/README.md) for the level and world file formats.
+See [data/README.md](data/README.md) for the level, world and song file formats.
+
+The font is [Titan One](https://fonts.google.com/specimen/Titan+One) by Rodrigo Fuenzalida,
+under the SIL Open Font License ([assets/OFL.txt](assets/OFL.txt)).

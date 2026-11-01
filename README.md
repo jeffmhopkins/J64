@@ -64,6 +64,7 @@ docs/                 setup, testing and release guides
 | ROM | What it is |
 | --- | --- |
 | [hello](roms/hello/) | Starter ROM: prints the build version, moves a box, logs over USB |
+| [clankers](roms/clankers/) | Co-op platformer for little kids; the ROM plays World 1, the browser build plays all four |
 
 <a id="licence"></a>
 ## Licence

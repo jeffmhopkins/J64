@@ -34,7 +34,12 @@ roms/<name>/
   Makefile    ROMNAME, N64_ROM_TITLE, and the include of mk/rom.mk
   src/        every .c file here is compiled in
   assets/     optional; PNGs become sprites in the ROM's filesystem
+              (assets/rgba16/*.png are packed as RGBA16, for big pictures)
 ```
+
+Set `ROM_DATA := <folder>` before the include to copy a folder into the ROM as it is (read it
+as `rom:/<folder>/...`), and `ASSET_EXTRA` to list more filesystem outputs that the ROM's own
+Makefile has rules for. [roms/clankers/Makefile](../roms/clankers/Makefile) does both.
 
 [mk/rom.mk](../mk/rom.mk) holds the shared rules: it compiles `src/` and `common/src/`,
 turns `assets/*.png` into sprites under `rom:/`, and bakes in `J64_VERSION`, the
