@@ -22,3 +22,25 @@ filesystem/titan$(1).font64: assets/TitanOne.ttf
 	rmdir filesystem/.font$(1)
 endef
 $(foreach s,$(FONT_SIZES),$(eval $(call font_rule,$(s))))
+
+# The self-playing test build (clankers-test.z64): the same game and filesystem, with main.c
+# compiled with CK_AUTOTEST so a scripted tour drives it and logs PASS or FAIL.
+# tools/win-test.ps1 runs it in ares.
+TEST_ROM  := $(ROMNAME)-test.z64
+TEST_OBJS := $(filter-out $(BUILD_DIR)/src/n64/main.o,$(OBJS)) $(BUILD_DIR)/autotest/main.o
+
+all: $(TEST_ROM)
+
+$(BUILD_DIR)/autotest/main.o: src/n64/main.c
+	@mkdir -p $(dir $@)
+	@echo "    [CC] $< (autotest)"
+	$(CC) -c $(CFLAGS) -DCK_AUTOTEST -o $@ $<
+
+$(BUILD_DIR)/$(ROMNAME)-test.elf: $(TEST_OBJS)
+$(TEST_ROM): N64_ROM_TITLE := "Clankers test"
+$(TEST_ROM): $(BUILD_DIR)/$(ROMNAME).dfs
+
+clean-test:
+	$(RM) $(TEST_ROM)
+clean: clean-test
+.PHONY: clean-test

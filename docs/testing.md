@@ -41,6 +41,31 @@ your `PATH`, or the usual install folders on macOS and Windows.
 > In ares, turn on **Settings › Options › Homebrew Mode**. It makes ares stricter about
 > things real hardware rejects, and shows `debugf()` output from the ROM in its log.
 
+<a id="selftest"></a>
+## Self-playing test builds
+
+`make clankers` also builds `dist/clankers-test.z64`. It's the same game, driven by a scripted
+tour (`roms/clankers/src/core/ck_autotest.c`). The tour watches the intro, goes through the title,
+player select and the map, pauses, and plays 1-1 with a bot. At each checkpoint it prints a
+`CHECK` line and holds still for a second. It ends with `PASS` or `FAIL`, and the same text
+shows on a strip at the top of the screen.
+
+The host tests run the same tour, so a tour that can't pass fails `make test` before any
+emulator is involved. The test ROM starts from a fresh save and never writes one.
+
+On Windows, `tools/win-test.ps1` runs the test ROM in ares, saves its log and a screenshot of
+the ares window at each checkpoint, and exits 0 on `PASS`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\win-test.ps1                       # CI's build of this commit
+powershell -ExecutionPolicy Bypass -File tools\win-test.ps1 -Rom dist\clankers-test.z64
+```
+
+The results land in `test-out\` (ignored by git).
+
+> [!NOTE]
+> Releases leave the `-test` ROMs out.
+
 <a id="hardware"></a>
 ## SummerCart64
 

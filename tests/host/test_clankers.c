@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ck_autotest.h"
 #include "ck_internal.h"
 #include "test.h"
 
@@ -165,22 +166,6 @@ static void test_level_rules(void) {
     EXPECT_EQ_INT(G->prog.lives, lives - 1);
 }
 
-// A simple bot: run right, jump at walls and gaps, boost at the top of the jump.
-static uint16_t bot(const ck_level *lv) {
-    const ck_player *p = &lv->players[0];
-    int tx = (int)((p->x + p->w + 6) / 16), ty = (int)((p->y + p->h + 2) / 16);
-    char ahead = tx < lv->w ? lv->tiles[ty < 15 ? ty : 14][tx] : '#';
-    char wall = tx < lv->w ? lv->tiles[(int)((p->y + p->h - 4) / 16)][tx] : '.';
-    uint16_t pad = CK_RIGHT;
-    bool gap = ahead == '.' && p->ground;
-    bool blocked = wall == '#' || wall == '=' || wall == 'X';
-    if ((gap || blocked) && p->ground) pad |= CK_A;
-    if (!p->ground && p->vy > -1) pad |= (lv->frame / 2) % 2 ? CK_A : 0;
-    if (!p->ground && p->vy < 0) pad |= CK_A;
-    if (blocked && wall == 'X' && lv->frame % 30 == 0) pad |= CK_B;
-    return pad;
-}
-
 static void test_bot_runs(void) {
     ck_game *G = load_game();
     if (!G) return;
@@ -192,7 +177,7 @@ static void test_bot_runs(void) {
         float far = 0;
         while (frames < 60 * 240 && G->scene != SC_MAP) {
             if (G->scene == SC_PAUSE) { ck_game_step(G, CK_START, 0); frames++; continue; }
-            uint16_t pad = G->scene == SC_LEVEL && G->lv.nplayers ? bot(&G->lv) : CK_RIGHT;
+            uint16_t pad = G->scene == SC_LEVEL && G->lv.nplayers ? ck_bot(&G->lv) : CK_RIGHT;
             ck_game_step(G, pad, 0);
             if (G->scene == SC_LEVEL && G->lv.players[0].x > far) far = G->lv.players[0].x;
             frames++;
@@ -205,6 +190,22 @@ static void test_bot_runs(void) {
     }
     // the bonus level always ends (the shower stops after 30 s)
     EXPECT_EQ_INT(ck_node_beaten(G, ck_world_node(&G->world, "bonus")), 1);
+}
+
+// The self-playing test ROM's tour passes, checkpoint by checkpoint, on a fresh save.
+static void test_autotest(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    ck_autotest A;
+    ck_autotest_init(&A, G);
+    int r = AT_NONE, checks = 0;
+    for (int i = 0; i < 60 * 600 && r != AT_PASS && r != AT_FAIL; i++) {
+        r = ck_autotest_step(&A, G);
+        if (r == AT_CHECK) checks++;
+    }
+    if (r != AT_PASS) fprintf(stderr, "autotest: %s\n", A.msg);
+    EXPECT_EQ_INT(r, AT_PASS);
+    EXPECT_EQ_INT(checks, 10);
 }
 
 // Left alone, the story runs its songs in order, thunders during the storm and ends on the title.
@@ -298,6 +299,7 @@ void test_clankers(void) {
     test_world();
     test_level_rules();
     test_intro();
+    test_autotest();
     test_flow();
     test_bot_runs();
 }
