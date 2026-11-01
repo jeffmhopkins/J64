@@ -36,7 +36,7 @@ static void drop(int id) {
 
 static bool is_big(int id) {
     static const int big[] = { SPR_TITLE, SPR_SELECT_BG, SPR_MAP_W1, SPR_BG_FAR, SPR_BG_FAR_BOSS, SPR_BG_MID,
-                               SPR_JET_SKY, SPR_JET_HILLS, SPR_CRANE };
+                               SPR_JET_SKY, SPR_JET_HILLS, SPR_CRANE, SPR_INTRO_NIGHT, SPR_INTRO_STORM, SPR_INTRO_DAWN };
     for (unsigned i = 0; i < sizeof big / sizeof *big; i++) if (big[i] == id) return true;
     return false;
 }
@@ -61,7 +61,7 @@ void draw_init(void) {
 
 // Free the big pictures and hero sheets the next scene does not need.
 static void free_for(const ck_game *G) {
-    int group = G->scene == SC_TITLE ? 0 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP) ? 2 : 3;
+    int group = G->scene == SC_INTRO ? 4 : G->scene == SC_TITLE ? 0 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP) ? 2 : 3;
     waited = false;
     if (group != big_group) {
         big_group = group;
@@ -188,6 +188,85 @@ static void baby(uint32_t hex, int frame, float x, float y, float scale) {
     int id = SPR_BABY_FF8FC7;
     for (int i = 0; i < SPR_COUNT; i++) if (!strcmp(SPR_INFO[i].file, name)) { id = i; break; }
     blit_o(id, frame, x, y, (bopt){ .sx = scale, .sy = scale });
+}
+
+// ---------------------------------------------------------------------------- the story intro
+
+static float clampf(float v, float a, float b) { return v < a ? a : v > b ? b : v; }
+
+// A sleepy "z" that grows and fades as it drifts up.
+static void zee(float x, float y, float size, float alpha) {
+    if (alpha <= 0) return;
+    blit_o(SPR_ZEE, 0, x, y, (bopt){ .sx = size / 12, .sy = size / 12, .tinted = true, .tint = hexc(0xD9D2E6, (int)(clampf(alpha, 0, 1) * 255)) });
+}
+
+// introScene.draw in web/game.js. The scenery is three baked pictures (night, storm, dawn)
+// cross-faded the way the browser mixes their colours.
+static void draw_intro(const ck_game *G) {
+    const ck_intro *I = &G->intro;
+    float t = G->t;
+    float dawn = clampf((t - 10.5f) / 3, 0, 1);
+    float storm = clampf((t - 4.2f) / 1.2f, 0, 1) * (1 - clampf((t - 10.2f) / 1.2f, 0, 1));
+    blit(SPR_INTRO_NIGHT, 0, 0, 0);
+    if (storm > 0) blit_o(SPR_INTRO_STORM, 0, 0, 0, (bopt){ .sx = 1, .sy = 1, .tinted = true, .tint = RGBA32(255, 255, 255, (int)(storm * 255)) });
+    if (dawn > 0) blit_o(SPR_INTRO_DAWN, 0, 0, 0, (bopt){ .sx = 1, .sy = 1, .tinted = true, .tint = RGBA32(255, 255, 255, (int)(dawn * 255)) });
+    // twinkling stars, skipping the ones the moon and the garage roof would hide
+    for (int i = 0; i < 40 && dawn < 1; i++) {
+        float x = (float)((i * 97) % 320), y = (float)((i * 53) % 120), r = (float)((i % 3) + 1) * 0.5f;
+        if ((x > 252 && x < 284 && y > 24 && y < 56) || (x > 56 && x < 184 && y > 96)) continue;
+        if (sinf(t * 2 + x) > -0.3f) shape(SPR_DOT, x, y, r, 0xFFF6D8, 1 - dawn);
+    }
+    // baby bots: asleep, then startled, then blown away
+    static const float bx[4] = { 104, 116, 128, 140 }, tx[4] = { -30, 360, 60, 300 }, ty[4] = { -40, -20, -60, -70 };
+    for (int k = 0; k < 4; k++) {
+        float fly = clampf((t - 8 - k * 0.15f) / 2.2f, 0, 1), shake = t > 5 && t < 8 ? sinf(t * 40 + k) * 1.2f : 0;
+        if (fly >= 1) continue;
+        float e = fly * fly, x = bx[k] + (tx[k] - bx[k]) * e + shake, y = 190 + (ty[k] - 190) * e - sinf(fly * PI) * 30;
+        float sc = 1 - fly * 0.5f;
+        blit_o(SPR_INTRO_BABY, (t < 4.8f ? 0 : 4) + k, x, y, (bopt){ .sx = sc, .sy = sc, .rot = -fly * 8 * (k % 2 ? 1 : -1) });
+    }
+    if (t < 4.6f)
+        for (int k = 0; k < 3; k++) { float z = fmodf(t * 0.6f + k / 3.0f, 1); zee(122 + z * 14 + k * 4, 176 - z * 26, 6 + z * 6, 1 - z); }
+    // the heroes: dozing beside the garage, then up and ready
+    bool sleepy = t < 11.4f;
+    float hop = t > 11.4f && t < 12.6f ? sinf((t - 11.4f) / 1.2f * PI) * 22 : 0;
+    int half = t > 5 && t < 10.5f;
+    int rf = sleepy ? half : (t > 12 && t < 12.6f) ? 4 : (sinf(t * 8) > 0 ? 3 : 2);
+    int of = sleepy ? half : (fabsf(sinf(t * 12)) > 0.5f ? 3 : 2);
+    blit(SPR_INTRO_ROBOT, rf, 210, 196 - hop);
+    blit(SPR_INTRO_OSTRICH, of, 266, 196 - hop * 0.8f);
+    if (t < 11 && t > 1)
+        for (int k = 0; k < 2; k++) {
+            float z = fmodf(t * 0.5f + k / 2.0f, 1);
+            zee(226 + k * 46 + z * 10, 150 - z * 20, 6 + z * 5, (1 - z) * (t < 4.6f || t > 10.5f ? 1 : 0));
+        }
+    // the Big Glitch storm cloud
+    if (storm > 0) {
+        float cx = 380 - storm * 170 + sinf(t * 1.3f) * 6, cy = 44 + sinf(t * 2) * 3, a = fminf(1, storm * 1.5f);
+        blit_o(SPR_INTRO_CLOUD, 0, cx, cy, (bopt){ .sx = 1, .sy = 1, .tinted = true, .tint = RGBA32(255, 255, 255, (int)(a * 255)) });
+        if (t > 7.6f && t < 10.5f)
+            for (int k = 0; k < 8; k++) {
+                float y = 60 + k * 16, o = fmodf(t * 300 + k * 70, 380);
+                line(340 - o, y, 310 - o, y + 2, 1, 0xDCD2FF, 0.5f * a);
+            }
+        if (I->boltLife > 0) {
+            float x = I->boltX, y = cy + 20;
+            for (int k = 0; k < CK_INTRO_BOLT && y < 196; k++) {
+                float nx = x + I->boltDx[k], ny = y + 14;
+                line(x, y, nx, ny, 2.5f, 0xFFE66B, 1);
+                x = nx; y = ny;
+            }
+        }
+    }
+    if (I->flash > 0) rect(0, 0, W, H, 0xFFFFFF, I->flash * 0.6f);
+    // captions (the text pops in once its panel is half faded in)
+    const char *cap = t < 4.5f ? "One night in Junkyard Hills..." : t < 8 ? "...a Big Glitch storm rolled in!"
+                    : t < 11 ? "Whoosh! The baby bots blew far away!" : "Time to bring them home!";
+    float ct = t < 4.5f ? t : t < 8 ? t - 4.5f : t < 11 ? t - 8 : t - 11, ca = clampf(ct * 2, 0, 1);
+    panel(30, 210, 260, 22, 0x1B1426, 0.86f * ca);
+    if (ca > 0.5f) txt(F_MED, ST_CREAM, W / 2, 225, ALIGN_CENTER, "%s", cap);
+    if (t > 14.4f) rect(0, 0, W, H, 0xFFF8E6, clampf((t - 14.4f) / 0.8f, 0, 1));
+    if ((int)(t * 2) % 2 && t > 1) txt(F_SMALL, ST_PALE, W - 8, 14, ALIGN_RIGHT, "START to skip");
 }
 
 // ---------------------------------------------------------------------------- the title and select screens
@@ -819,6 +898,7 @@ void draw_frame(const ck_game *G, bool scanlines) {
     shakeY = 0;
     rdpq_set_scissor(0, 0, W, H);
     switch (G->scene) {
+    case SC_INTRO: draw_intro(G); break;
     case SC_TITLE: draw_title(G); break;
     case SC_SELECT: draw_select(G); break;
     case SC_MAP: draw_map(G); break;

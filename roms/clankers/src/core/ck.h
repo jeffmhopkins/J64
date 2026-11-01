@@ -40,12 +40,12 @@ enum {
     SFX_CRATE, SFX_LEVER, SFX_DOOR, SFX_GRAB, SFX_KICK, SFX_BOING, SFX_BUTTON, SFX_CLANK,
     SFX_SELECT, SFX_CONFIRM, SFX_OPEN, SFX_STEP, SFX_HOP, SFX_NOPE, SFX_SPROUT, SFX_POWER,
     SFX_SHRINK, SFX_BLOW, SFX_STOMP, SFX_HATCH, SFX_OUCH, SFX_POP, SFX_TICK, SFX_STAR0,
-    SFX_STAR1, SFX_STAR2, SFX_RECORD, SFX_FLAG, SFX_SLIDE,
+    SFX_STAR1, SFX_STAR2, SFX_RECORD, SFX_FLAG, SFX_SLIDE, SFX_THUNDER, SFX_WHOOSH,
     SFX_COUNT
 };
 enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
-    SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR,
+    SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR, SONG_LULLABY, SONG_STORM,
     SONG_COUNT
 };
 int ck_song_by_name(const char *name);   // "level2" -> SONG_LEVEL2, unknown -> SONG_NONE
@@ -298,7 +298,17 @@ typedef struct {
 } ck_map;
 
 // ---------------------------------------------------------------------------- the whole game
-enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE };
+enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO };
+
+// The story before the title (G->t is its clock): the night, the Big Glitch storm, the babies
+// blown away, then dawn. Any button skips it.
+#define CK_INTRO_BOLT 12
+typedef struct {
+    float flash;               // white flash after thunder, 1 -> 0
+    int boltLife;              // frames the lightning bolt still shows (0: none)
+    float boltX;               // where it starts
+    float boltDx[CK_INTRO_BOLT]; // its zigzag, one x step per 14 px down (new every frame)
+} ck_intro;
 
 typedef struct {
     ck_world world;
@@ -315,6 +325,7 @@ typedef struct {
     ck_level lv;
     ck_jet jet;
     ck_snap snap;
+    ck_intro intro;
 
     ck_input in;
     ck_part parts[CK_MAXPARTS];

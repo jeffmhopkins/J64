@@ -281,6 +281,55 @@ function bakeAll() {
     g.fillStyle = '#8a5233'; g.fillRect(0, 224, 320, 16); g.fillStyle = '#c98b55'; g.fillRect(0, 224, 320, 3);
   });
 
+  // ---- the story intro (introScene in web/game.js). The scenery is baked at night, in the storm
+  // and at dawn, and the N64 cross-fades them; everything that moves is a sprite on top.
+  function mixHex(a, b, k) { const pa = [a >> 16, (a >> 8) & 255, a & 255], pb = [b >> 16, (b >> 8) & 255, b & 255]; return 'rgb(' + pa.map((v, i) => Math.round(v + (pb[i] - v) * k)).join(',') + ')'; }
+  const hexOf = rgb => rgb.match(/\d+/g).reduce((a, v) => a * 256 + +v, 0);
+  function introBg(g, storm, dawn) {
+    const gr = g.createLinearGradient(0, 0, 0, 240);
+    gr.addColorStop(0, mixHex(hexOf(mixHex(0x141a3d, 0x2a1440, storm)), 0x5b6fc0, dawn));
+    gr.addColorStop(0.7, mixHex(0x3b2f6b, 0xf2a37a, dawn)); gr.addColorStop(1, mixHex(0x4a3a6b, 0xffcf8a, dawn));
+    g.fillStyle = gr; g.fillRect(0, 0, 320, 240);
+    if (dawn < 1) { K.circ(268, 40, 14, '#fff1c4'); K.circ(274, 36, 12, mixHex(0x141a3d, 0x2a1440, storm)); }
+    else { const sy = 160; K.circ(30, sy, 26, 'rgba(255,240,200,0.7)'); K.gear(30, sy, 22, 12, 0, '#ffe7a3', null); K.circ(30, sy, 17, '#fff1c4'); }
+    g.fillStyle = mixHex(0x2b2140, 0x8a5f96, dawn); g.beginPath(); g.moveTo(0, 240);
+    for (let x = 0; x <= 320; x += 20) g.lineTo(x, 168 + Math.sin(x * 0.03) * 10 + Math.sin(x * 0.07) * 5); g.lineTo(320, 240); g.fill();
+    g.fillStyle = mixHex(0x3a2630, 0x8a5233, dawn); g.fillRect(0, 196, 320, 44); g.fillStyle = mixHex(0x5a3a40, 0xc98b55, dawn); g.fillRect(0, 196, 320, 4);
+    const wall = mixHex(0x4c3a63, 0xb07a9a, dawn);
+    K.rr(66, 128, 108, 68, 3, wall); g.fillStyle = mixHex(0x2e2244, 0x7d4a6a, dawn); g.beginPath(); g.moveTo(58, 132); g.lineTo(120, 98); g.lineTo(182, 132); g.fill();
+    K.gear(120, 118, 7, 8, 0, '#ffd23f', mixHex(0x2e2244, 0x7d4a6a, dawn));
+    K.rr(88, 146, 64, 50, 2, '#ffcf7a'); g.fillStyle = 'rgba(255,190,90,0.25)'; g.beginPath(); g.moveTo(88, 196); g.lineTo(152, 196); g.lineTo(172, 206); g.lineTo(68, 206); g.fill();
+    K.rr(94, 190, 52, 5, 2, '#3a8de0'); K.rr(96, 190.5, 48, 1.5, 1, '#8fd3ff');
+  }
+  picture('intro_night', 320, 240, g => introBg(g, 0, 0));
+  picture('intro_storm', 320, 240, g => introBg(g, 1, 0));
+  picture('intro_dawn', 320, 240, g => introBg(g, 0, 1));
+  // babies: 0-3 asleep, 4-7 startled, in the order pink, green, orange, blue
+  const introBabies = [0xFF8FC7, 0x49F08A, 0xFFB347, 0x8FD3FF];
+  strip('intro_baby', 24, 26, 12, 23, 8, (g, i) => {
+    const awake = i > 3, hex = introBabies[i % 4];
+    K.baby(0, 0, 0.05, hex, { t: 1, eyes: awake ? { open: 1, happy: 0 } : { open: 0.08 }, mouth: awake ? 'o' : 'smile', armL: awake ? 150 : 30, armR: awake ? -150 : -30 });
+  });
+  // robot: 0 asleep, 1 half awake, 2-3 up and waving, 4 jetting
+  strip('intro_robot', 40, 64, 20, 57, 5, (g, i) => {
+    const sleepy = i < 2, eyes = sleepy ? { open: i ? 0.45 : 0.06 } : { happy: 0.2 };
+    K.robot(0, 0, 0.13, 0x5AD1FF, { t: 1, bob: sleepy ? 6 : 0, eyes, armR: sleepy ? -20 : i === 3 ? -150 : -170, armL: sleepy ? 20 : 40, mouth: sleepy ? 'wavy' : 'smile', jet: i === 4 });
+  }, 'rgba16');
+  // ostrich: 0 asleep, 1 half awake, 2-3 up with wings down and up
+  strip('intro_ostrich', 40, 64, 20, 57, 4, (g, i) => {
+    const sleepy = i < 2, eyes = sleepy ? { open: i ? 0.45 : 0.06 } : { happy: 0.2 };
+    K.ostrich(0, 0, 0.11, 0xFFD23F, { t: 1, eyes, bob: sleepy ? 14 : 0, flap: i === 3 ? 1 : 0, beakOpen: sleepy ? 0 : 0.4 });
+  }, 'rgba16');
+  // the Big Glitch storm cloud, anchored at its middle
+  strip('intro_cloud', 140, 88, 70, 46, 1, () => {
+    for (const [dx, dy, r] of [[-46, 6, 22], [-20, -8, 28], [14, -12, 30], [44, 2, 24], [0, 14, 26], [-34, 18, 18], [32, 18, 20]]) K.circ(dx, dy, r, '#5b3f86');
+    for (const [dx, dy, r] of [[-24, -14, 16], [16, -18, 18]]) K.circ(dx, dy, r, '#7a58a8');
+    K.eye(-14, 2, 14, 16, '#1b1426', '#5b3f86', { angry: 1 }); K.eye(14, 2, 14, 16, '#1b1426', '#5b3f86', { angry: -1 });
+    K.mouth('zig', 0, 16, 10, 2, '#1b1426');
+  });
+  // a white sleepy "z" the N64 tints and sizes
+  strip('zee', 16, 16, 8, 12, 1, g => text(g, 'z', 0, 0, 12, '#ffffff', null));
+
   function powerIcon(g, kind, x, y, t) {
     if (kind === 'mega') { K.rr(x - 3.5, y - 4.5, 7, 10, 1.5, '#2b2833'); K.rr(x - 1.5, y - 6, 3, 2, 0.5, '#2b2833'); K.rr(x - 2.2, y - 3.2, 4.4, 7.4, 1, '#49f08a');
       g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(x + 0.8, y - 3); g.lineTo(x - 1.6, y + 0.8); g.lineTo(x, y + 0.8); g.lineTo(x - 0.8, y + 3.6); g.lineTo(x + 1.8, y - 0.4); g.lineTo(x + 0.2, y - 0.4); g.fill(); }
