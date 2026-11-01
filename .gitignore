@@ -16,3 +16,6 @@ tests/host/build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Results of tools/win-test.ps1
+test-out/

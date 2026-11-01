@@ -24,6 +24,7 @@ jobs:
 
       - name: Name ROMs after the release
         run: |
+          rm -f dist/*-test.z64   # self-playing test builds are for CI and win-test.ps1, not releases
           for f in dist/*.z64; do
             mv "$f" "dist/$(basename "$f" .z64)-${GITHUB_REF_NAME}.z64"
           done

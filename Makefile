@@ -23,6 +23,7 @@ $(ROMS):
 	$(DEV) make --no-print-directory -C roms/$@
 	@mkdir -p dist
 	cp roms/$@/$@.z64 dist/$@.z64
+	@if [ -f roms/$@/$@-test.z64 ]; then cp roms/$@/$@-test.z64 dist/$@-test.z64; fi
 .PHONY: $(ROMS)
 
 test:

@@ -914,3 +914,9 @@ void draw_frame(const ck_game *G, bool scanlines) {
         for (int y = 1; y < H; y += 2) rdpq_fill_rectangle(0, y, W, y + 1);
     }
 }
+
+void draw_overlay(const char *text) {
+    mode = M_NONE;
+    rect(0, 0, W, 12, 0x000000, 0.7f);
+    txt(F_SMALL, ST_YELLOW, 4, 9, ALIGN_LEFT, "%s", text);
+}
