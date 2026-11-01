@@ -22,7 +22,8 @@ the row just above the ground they stand on.
 | `T` | tyre spring | `v` | "press down" sign |
 | `H` | hatch into the side zone named by `hatch:` | `h` | where the hatch drops you back |
 | `b` | Bumblebot (walks) | `s` | Boing Sprocket (hops) |
-| `g` | Grumble Crate (follows you) | | |
+| `g` | Grumble Crate (follows you) | `k` | swinging hook platform (hangs from this tile) |
+| `r` | raft: a 2-tile platform that rides its track | `~` `|` | raft track, sideways or up and down, starting next to the `r` |
 
 Header keys: `name`, `kind` (`level`, `boss` or `bonus`), `song`, `baby` (the baby bot's
 colour as hex), `hatch` (side zone id), `boss` (boss type).

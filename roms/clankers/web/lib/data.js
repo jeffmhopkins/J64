@@ -7,7 +7,7 @@ const DATA_FMT = (() => {
     ['.', 'Empty'], ['#', 'Ground'], ['=', 'Girder'], ['-', 'Plank'], ['X', 'Crate'], ['?', 'Gear crate'], ['$', 'Bolt crate'],
     ['1', 'Mega Battery crate'], ['2', 'Rainbow crate'], ['3', 'Bubble crate'], ['4', 'Magnet crate'], ['D', 'Door'], ['L', 'Lever'],
     ['o', 'Bolt'], ['G', 'Golden gear'], ['b', 'Bumblebot'], ['s', 'Boing Sprocket'], ['g', 'Grumble Crate'], ['T', 'Tyre spring'],
-    ['v', 'Down sign'], ['H', 'Hatch in'], ['h', 'Hatch out'], ['@', 'Start'], ['P', 'Charging pad'],
+    ['v', 'Down sign'], ['r', 'Raft (rides its track)'], ['~', 'Raft track, sideways'], ['|', 'Raft track, up and down'], ['k', 'Swinging hook'], ['H', 'Hatch in'], ['h', 'Hatch out'], ['@', 'Start'], ['P', 'Charging pad'],
   ];
   const KNOWN = new Set(LEGEND.map(l => l[0]));
 

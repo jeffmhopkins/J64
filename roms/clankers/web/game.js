@@ -447,7 +447,9 @@ const shopScene = {
 const POWER = { M: 'mega', R: 'rainbow', B: 'bubble', N: 'magnet' };
 const POWER_NAME = { mega: 'MEGA BATTERY!', rainbow: 'RAINBOW OVERDRIVE!', bubble: 'BUBBLE BLASTER!', magnet: 'MAGNET HELMET!' };
 const hexStr = h => '#' + h.toString(16).padStart(6, '0');
-const baseH = p => Math.round((p.hero === 'robot' ? 26 : 30) * (p.power === 'mega' ? 1.5 : 1));
+const has = (p, k) => !!(p.stack && p.stack.includes(k));
+const baseH = p => Math.round((p.hero === 'robot' ? 26 : 30) * (has(p, 'mega') ? 1.5 : 1));
+let testPower = null;   // the level editor can start a play-test with a power-up
 function powerIcon(kind, x, y, t) {
   if (kind === 'mega') { K.rr(x - 3.5, y - 4.5, 7, 10, 1.5, '#2b2833'); K.rr(x - 1.5, y - 6, 3, 2, 0.5, '#2b2833'); K.rr(x - 2.2, y - 3.2, 4.4, 7.4, 1, '#49f08a');
     g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(x + 0.8, y - 3); g.lineTo(x - 1.6, y + 0.8); g.lineTo(x, y + 0.8); g.lineTo(x - 0.8, y + 3.6); g.lineTo(x + 1.8, y - 0.4); g.lineTo(x + 0.2, y - 0.4); g.fill(); }
@@ -486,6 +488,13 @@ function buildFromRows(L, def) {
     else if (c === 'T') L.tyre(x, y + 1); else if (c === 'L') L.lever(x, y + 1); else if (c === 'v') L.sign(x, y + 1);
     else if (c === 'P') L.pad(x, y + 1); else if (c === '@') L.start(x, y + 1);
     else if (c === 'H') { if (out) L.hatch(x, y + 1, def.zone || 'jet1', out[0], out[1] + 1); }
+    else if (c === 'k') L.hook(x, y);
+    else if (c === 'r') {   // follow the track of ~ (sideways) or | (up and down) that starts next to it
+      let dx = 0, dy = 0, n = 0;
+      if (rows[y][x + 1] === '~') dx = 1; else if (rows[y][x - 1] === '~') dx = -1; else if (rows[y - 1] && rows[y - 1][x] === '|') dy = -1; else if (rows[y + 1] && rows[y + 1][x] === '|') dy = 1;
+      if (dx || dy) while (true) { const r2 = rows[y + dy * (n + 1)]; const c2 = r2 && r2[x + dx * (n + 1)]; if (c2 === (dx ? '~' : '|')) n++; else break; }
+      L.raft(x, y, x + dx * n, y + dy * n);
+    }
   }));
 }
 
@@ -507,6 +516,8 @@ function buildLevel(id, defIn) {
     tyre(x, top) { ents.push({ type: 'tyre', x: x * TS, y: top * TS - 9, w: 16, h: 9, sq: 0 }); },
     lever(x, top) { ents.push({ type: 'lever', x: x * TS + 3, y: top * TS - 14, w: 10, h: 14, on: false, t: 0 }); },
     hatch(x, top, zone, outX, outTop) { ents.push({ type: 'hatch', x: x * TS - 4, y: top * TS - 4, w: 24, h: 4, zone, out: { x: outX * TS + 8, y: outTop * TS } }); ents.push({ type: 'hatchOut', x: outX * TS - 4, y: outTop * TS - 4, w: 24, h: 4 }); },
+    raft(x0, y0, x1, y1) { ents.push({ type: 'mover', kind: 'raft', ax: x0 * TS, ay: y0 * TS, bx: x1 * TS, by: y1 * TS, x: x0 * TS, y: y0 * TS, w: 32, h: 6, dx: 0, dy: 0, period: Math.max(2, Math.hypot(x1 - x0, y1 - y0) / 1.1) * 2 }); },
+    hook(x, y) { ents.push({ type: 'mover', kind: 'hook', px: x * TS + 8, py: y * TS + 4, len: 56, x: x * TS - 8, y: y * TS + 60, w: 32, h: 6, dx: 0, dy: 0 }); },
     sign(x, top) { ents.push({ type: 'sign', x: x * TS + 2, y: top * TS - 20, w: 12, h: 20 }); },
     pad(x, top) { ents.push({ type: 'pad', x: x * TS - 4, y: top * TS - 6, w: 24, h: 6 }); },
   };
@@ -548,9 +559,8 @@ function moveBody(lv, b, oneWay = true) {
 const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
 function makePlayer(m, i, x, y) {
-  if (!prog.powers) prog.powers = [null, null];
-  const power = prog.powers[m.slot] || null, h = baseH({ hero: m.hero, power });
-  return { slot: m.slot, i, hero: m.hero, hex: m.hex, power, rainbowT: 0, magnetT: 0, x: x + i * 14, y: y - h, w: 12, h,
+  const stack = testPower ? [testPower] : [], h = baseH({ hero: m.hero, stack });   // power-ups never carry over between levels
+  return { slot: m.slot, i, hero: m.hero, hex: m.hex, stack, rainbowT: 0, magnetT: 0, x: x + i * 14, y: y - h, w: 12, h,
     vx: 0, vy: 0, face: 1, ground: false, coyote: 0, boost: false, jetT: 0, flapping: false, flapT: 0, actT: 0, inv: 0, wob: 0,
     safeX: x, safeY: y - 30, anim: 0, idleT: 0, cheer: false };
 }
@@ -571,7 +581,7 @@ function levelScene(id, retry, defIn) {
 
   function loseLife(p) {
     if (p.dead || p.bubble || S.dyingT >= 0 || S.clearT >= 0) return;
-    prog.lives = Math.max(0, (prog.lives ?? 3) - 1); p.power = null; prog.powers[p.slot] = null; p.rainbowT = 0; p.magnetT = 0; saveProg();
+    prog.lives = Math.max(0, (prog.lives ?? 3) - 1); p.stack = []; p.rainbowT = 0; p.magnetT = 0; saveProg();
     const buddy = players.find(q => q !== p && !q.dead && !q.bubble);
     if (buddy && prog.lives > 0) {
       // co-op: float back to your buddy in a bubble, the level carries on
@@ -590,13 +600,14 @@ function levelScene(id, retry, defIn) {
     p.x = p.safeX; p.y = p.safeY - 4; p.vx = 0; p.vy = 0; p.inv = 60; p.boost = false;
     puff(p.x + p.w / 2, p.y + p.h, 8); SND.fx.boing();
   }
-  function setPower(p, kind) {
+  // power-ups stack: Mega and Bubble together, plus Rainbow and Magnet on their timers. A bump knocks off the newest.
+  function setStack(p, stack) {
     if (p.low) { p.low = false; p.slideT = 0; }
-    p.power = kind; prog.powers[p.slot] = kind; saveProg(); setH(p, baseH(p));
+    p.stack = stack; setH(p, baseH(p));
   }
   function wobble(p, fromX) {
     if (p.rainbowT > 0) return;
-    if (p.power) { setPower(p, null); p.inv = 110; p.wob = 14; p.vx = (p.x + p.w / 2 < fromX ? -2 : 2); p.vy = -2; SND.fx.shrink(); puff(p.x + p.w / 2, p.y + p.h / 2, 8); return; }
+    if (p.stack.length) { setStack(p, p.stack.slice(0, -1)); p.inv = 110; p.wob = 14; p.vx = (p.x + p.w / 2 < fromX ? -2 : 2); p.vy = -2; SND.fx.shrink(); puff(p.x + p.w / 2, p.y + p.h / 2, 8); return; }
     if (lv.bolts <= 0) { loseLife(p); return; }   // no bolts to drop: that bump costs a life
     p.vx = (p.x + p.w / 2 < fromX ? -2.4 : 2.4); p.vy = -2.6; p.wob = 26; p.inv = 100; SND.fx.wobble();
     const drop = Math.min(3, lv.bolts); lv.bolts -= drop;
@@ -690,6 +701,13 @@ function levelScene(id, retry, defIn) {
       stepParticles(); return;
     }
     if (anyHit('start') && S.frame > 20) { SND.fx.select(); go(pauseScene(S)); return; }
+    // --- moving platforms first, so riders can be carried by how far they moved
+    for (const m of lv.ents) if (m.type === 'mover') {
+      const ox = m.x, oy = m.y, sp = little ? 1 : 1.25;
+      if (m.kind === 'raft') { const k = (1 - Math.cos(S.t * sp * P * 2 / m.period)) / 2; m.x = m.ax + (m.bx - m.ax) * k; m.y = m.ay + (m.by - m.ay) * k; }
+      else { m.ang = 0.75 * Math.sin(S.t * 1.3 * sp); m.x = m.px + Math.sin(m.ang) * m.len - m.w / 2; m.y = m.py + Math.cos(m.ang) * m.len; }
+      m.dx = m.x - ox; m.dy = m.y - oy;
+    }
     // --- players
     for (const p of players) {
       if (p.bubble) {
@@ -717,7 +735,7 @@ function levelScene(id, retry, defIn) {
       const fullH = baseH(p);
       if (held(i, 'down') && p.ground && p.wob <= 0 && !p.low) {
         if (Math.abs(p.vx) > 1.1) { p.slideT = 36; p.vx = p.face * 3.2; SND.fx.slide(); }
-        setH(p, p.power === 'mega' ? 20 : 14); p.low = true;
+        setH(p, has(p, 'mega') ? 20 : 14); p.low = true;
       }
       if (p.low) {
         if (p.slideT > 0) { p.slideT--; p.vx = p.face * Math.max(0.9, Math.abs(p.vx) * 0.975); if (S.frame % 4 === 0) puff(p.x + p.w / 2 - p.face * 6, p.y + p.h, 1); }
@@ -735,16 +753,19 @@ function levelScene(id, retry, defIn) {
       p.vy = Math.min(p.vy + 0.3, 6);
       if (p.vy >= 0) p.spring = false;
       if (p.actT <= 0) p.shoot = false;
-      if (hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && p.power === 'bubble') {
+      if (hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && has(p, 'bubble')) {
         if (lv.ents.filter(e => e.type === 'shot' && e.owner === p.slot).length < 2) {
           lv.ents.push({ type: 'shot', owner: p.slot, x: p.face > 0 ? p.x + p.w : p.x - 10, y: p.y + p.h * 0.3, w: 10, h: 10, vx: p.face * 2.4 + p.vx * 0.4, life: 110, t: 0 });
           p.actT = 12; p.shoot = true; SND.fx.blow();
         }
       } else if (hit(i, 'b') && p.actT <= 0 && p.wob <= 0) { p.actT = 22; (p.hero === 'robot' ? SND.fx.grab : SND.fx.kick)(); }
       if (p.actT >= 6 && p.actT <= 18 && !p.shoot) doAction(p);
-      const wasGround = p.ground, pvy = p.vy;
+      if (p.onMover) { p.x += p.onMover.dx; p.y += p.onMover.dy; }
+      const wasGround = p.ground || !!p.onMover, pvy = p.vy, prevBottom = p.y + p.h;
       moveBody(lv, p);
-      if (p.power === 'mega') {
+      p.onMover = null;
+      if (p.vy >= 0 && !p.ground) for (const m of lv.ents) if (m.type === 'mover' && p.x + p.w > m.x + 1 && p.x < m.x + m.w - 1 && prevBottom <= m.y + 2 + Math.max(0, m.dy) && p.y + p.h >= m.y - 0.5) { p.y = m.y - p.h; p.vy = 0; p.ground = true; p.onMover = m; break; }
+      if (has(p, 'mega')) {
         if (p.hitWall) { const tx = p.hitWall > 0 ? Math.floor((p.x + p.w + 1) / TS) : Math.floor((p.x - 1) / TS); for (let ty = Math.floor(p.y / TS); ty <= Math.floor((p.y + p.h - 1) / TS); ty++) breakCrate(tx, ty); }
         if (p.ground && !wasGround && pvy > 3) { S.shake = 10; SND.fx.stomp(); puff(p.x + p.w / 2, p.y + p.h, 6); }
       }
@@ -818,7 +839,7 @@ function levelScene(id, retry, defIn) {
           if (e.y > H + 20) e.dead = true;
           for (const p of players) if (!p.bubble && !e.dead && overlap(p, e)) {
             e.dead = true; SND.fx.power(); sparks(e.x + 6, e.y + 6, 14, '#fff6a0'); S.toast = { text: POWER_NAME[e.kind], t: 110 };
-            if (e.kind === 'mega' || e.kind === 'bubble') setPower(p, e.kind);
+            if (e.kind === 'mega' || e.kind === 'bubble') setStack(p, [...p.stack.filter(k => k !== e.kind), e.kind]);
             else if (e.kind === 'rainbow') { p.rainbowT = 480; SND.playSong('rainbow'); }
             else p.magnetT = 1200;
           }
@@ -966,6 +987,16 @@ function levelScene(id, retry, defIn) {
           const near = players.some(p => Math.abs(p.x + p.w / 2 - (x + S.camX + 12)) < 40);
           if (near || Math.sin(S.t * 4) > 0) { const ay = e.y - 16 + Math.sin(S.t * 6) * 2; g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(x + 6, ay); g.lineTo(x + 18, ay); g.lineTo(x + 12, ay + 7); g.fill(); g.strokeStyle = '#2b2230'; g.lineWidth = 1; g.stroke(); }
         }
+      } else if (e.type === 'mover') {
+        if (e.kind === 'hook') {
+          const px = e.px - S.camX; g.strokeStyle = '#3a3346'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(px, e.py); g.lineTo(x + e.w / 2, e.y - 10); g.stroke();
+          K.circ(px, e.py, 3, '#d4892f'); K.arc(x + e.w / 2, e.y - 6, 4, P * 1.1, P * 1.9, 2, '#9aa1b0');
+          g.strokeStyle = '#5d566a'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + e.w / 2, e.y - 10); g.lineTo(x + 3, e.y); g.moveTo(x + e.w / 2, e.y - 10); g.lineTo(x + e.w - 3, e.y); g.stroke();
+        } else {
+          g.strokeStyle = 'rgba(60,40,50,0.35)'; g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(e.ax - S.camX + 16, e.ay + 3); g.lineTo(e.bx - S.camX + 16, e.by + 3); g.stroke(); g.setLineDash([]);
+        }
+        K.rr(x, e.y, e.w, e.h, 2, '#7a8a96'); g.fillStyle = '#a9b8c2'; g.fillRect(x + 1, e.y, e.w - 2, 2); K.circ(x + 4, e.y + 3.5, 1.2, '#4a4652'); K.circ(x + e.w - 4, e.y + 3.5, 1.2, '#4a4652');
+        g.fillStyle = '#ffcf3a'; for (let k = 0; k < 3; k++) g.fillRect(x + 9 + k * 6, e.y + 2.5, 3, 2);
       } else if (e.type === 'sign') {
         g.fillStyle = '#7d5128'; g.fillRect(x + 5, e.y + 8, 2, 12); K.rr(x - 3, e.y - 2, 18, 13, 2, '#d9a46a'); g.strokeStyle = '#7d5128'; g.lineWidth = 1; g.strokeRect(x - 2.5, e.y - 1.5, 17, 12);
         g.fillStyle = '#2b2230'; g.beginPath(); g.moveTo(x + 1, e.y + 2); g.lineTo(x + 11, e.y + 2); g.lineTo(x + 6, e.y + 8.5); g.fill();
@@ -1029,7 +1060,7 @@ function levelScene(id, retry, defIn) {
       K.circ(fx - 8, cy - 9, 3, 'rgba(255,255,255,0.8)');
       return;
     }
-    const mega = p.power === 'mega' ? 1.5 : 1, hexNow = p.rainbowT > 0 ? COLS[Math.floor(S.t * 12 + p.i * 3) % COLS.length] : p.hex;
+    const mega = has(p, 'mega') ? 1.5 : 1, hexNow = p.rainbowT > 0 ? COLS[Math.floor(S.t * 12 + p.i * 3) % COLS.length] : p.hex;
     if (p.rainbowT > 0 && S.frame % 3 === 0) particles.push({ x: p.x + p.w / 2 + (Math.random() - 0.5) * 10, y: p.y + Math.random() * p.h, vx: 0, vy: -0.3, life: 20, max: 20, r: 2, col: hexStr(COLS[Math.floor(Math.random() * 8)]), kind: 'star' });
     const fx = p.x + p.w / 2 - S.camX, fy = p.y + p.h, hero = p.hero, dir = p.face, rs = 0.074 * mega, os = 0.071 * mega;
     const side = hero === 'robot' ? (o) => K.robotSide(fx, fy, rs, hexNow, Object.assign(o, { dir })) : (o) => K.ostrichSide(fx, fy, os, hexNow, Object.assign(o, { dir }));
@@ -1037,7 +1068,7 @@ function levelScene(id, retry, defIn) {
     const t = S.t + p.i * 0.7;
     // power-up auras, drawn behind the hero
     const aura = (col, r, a) => { const gr = g.createRadialGradient(fx, fy - p.h / 2, 2, fx, fy - p.h / 2, r); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.fillRect(fx - r, fy - p.h / 2 - r, r * 2, r * 2); };
-    if (p.power === 'mega') { aura('rgba(120,255,160,A)', p.h * 0.95, 0.45 + 0.2 * Math.sin(t * 6)); if (S.frame % 6 === 0) particles.push({ x: p.x + Math.random() * p.w, y: p.y + p.h * Math.random(), vx: 0, vy: -0.6, life: 22, max: 22, r: 1.8, col: '#9dffc0', kind: 'star' }); }
+    if (has(p, 'mega')) { aura('rgba(120,255,160,A)', p.h * 0.95, 0.45 + 0.2 * Math.sin(t * 6)); if (S.frame % 6 === 0) particles.push({ x: p.x + Math.random() * p.w, y: p.y + p.h * Math.random(), vx: 0, vy: -0.6, life: 22, max: 22, r: 1.8, col: '#9dffc0', kind: 'star' }); }
     if (p.rainbowT > 0) aura('rgba(' + [255, 200, 120].map((v, k) => Math.round(160 + 95 * Math.sin(t * 8 + k * 2))).join(',') + ',A)', p.h * 0.9, 0.5);
     if (p.magnetT > 0) { const k = (t * 1.2) % 1; g.globalAlpha = 0.5 * (1 - k); g.strokeStyle = '#ff6b6b'; g.lineWidth = 1.2; g.beginPath(); g.arc(fx, fy - p.h / 2, 8 + k * 22, 0, P * 2); g.stroke(); g.globalAlpha = 1; }
     if (S.clearT >= 0) { front(hero === 'robot' ? { t, armL: 150 + Math.sin(t * 9) * 20, armR: -150 - Math.sin(t * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o' } : { t, bob: Math.abs(Math.sin(t * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8 }); }
@@ -1057,22 +1088,24 @@ function levelScene(id, retry, defIn) {
     else if (Math.abs(p.vx) > 0.25) side(K.pose(hero, 'run', p.anim * 1.6 / (hero === 'robot' ? 1 : 1.1)));
     else front(hero === 'robot' ? { t, bob: Math.sin(t * 3) * 3 } : { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, flick: Math.sin(t * 2.6) * 6 });
     if (p.magnetT > 0 && (p.magnetT > 180 || Math.floor(p.magnetT / 8) % 2)) { g.save(); g.translate(fx, fy - p.h - 4); g.scale(1.3 * mega, 1.3 * mega); powerIcon('magnet', 0, 0, S.t); g.restore(); }
-    if (p.power === 'bubble' && !p.low && S.clearT < 0) {
-      // a bubble blaster in the robot's hand, a bubble wand in the ostrich's beak
-      const moving = !p.ground || Math.abs(p.vx) > 0.25 || p.actT > 0, d = moving ? dir : 1;
-      const hx = hero === 'robot' ? fx + d * (moving ? 8 : 9) : fx + d * 10, hy = hero === 'robot' ? fy - p.h * 0.42 : fy - p.h * 0.83;
-      g.save(); g.translate(hx, hy); g.scale(d, 1);
-      if (hero === 'robot') { K.rr(-3, -2.5, 9, 5, 2, '#5ad1ff'); K.rr(5, -1.8, 3, 3.6, 1, '#2b8fc0'); K.rr(-1, 1.5, 3, 4, 1, '#3a3346'); K.circ(1.5, -3, 1.3, '#ffd23f'); }
-      else { g.strokeStyle = '#ff8fc7'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, 0); g.lineTo(7, -2); g.stroke(); g.beginPath(); g.arc(9.5, -3, 2.6, 0, P * 2); g.stroke(); }
-      g.restore();
-      if (S.frame % 40 === p.i * 20) particles.push({ x: hx + S.camX + d * 8, y: hy - 2, vx: d * 0.3, vy: -0.4, life: 40, max: 40, r: 1.6, col: 'rgba(200,240,255,0.85)', kind: 'puff' });
+    if (has(p, 'bubble') && S.clearT < 0) {
+      // Bubble Blaster: three soap bubbles circle the hero
+      const cy = fy - p.h * 0.5, rx = 11 * mega, ry = p.h * 0.28, br = 3.4 * mega;
+      for (let k = 0; k < 3; k++) {
+        const a = t * 2.6 + k * P * 2 / 3, bx = fx + Math.cos(a) * rx, by = cy + Math.sin(a) * ry, front = Math.sin(a) > 0;
+        g.globalAlpha = front ? 1 : 0.55;
+        g.globalAlpha *= 0.35; K.circ(bx, by, br, '#c8f2ff'); g.globalAlpha = front ? 1 : 0.55;
+        g.strokeStyle = ['#8fd3ff', '#ff8fc7', '#c28bff'][k]; g.lineWidth = 1.1; g.beginPath(); g.arc(bx, by, br, 0, P * 2); g.stroke();
+        K.circ(bx - br * 0.35, by - br * 0.35, br * 0.28, '#ffffff');
+        g.globalAlpha = 1;
+      }
     }
     if (players.length > 1) { const lx = fx, ly = fy - p.h - (p.magnetT > 0 ? 18 : 12); g.fillStyle = p.i ? '#8fd3ff' : '#ffd23f'; g.beginPath(); g.moveTo(lx - 3, ly); g.lineTo(lx + 3, ly); g.lineTo(lx, ly + 3); g.fill(); text(String(p.slot + 1), lx, ly - 1, 7, p.i ? '#8fd3ff' : '#ffd23f'); }
   }
   function hud() {
     panel(4, 4, 62, 15); K.nut(13, 11.5, 4, S.t, '#ffd23f'); text('×' + lv.bolts, 20, 16, 9, lv.bolts ? '#fff6d8' : '#ff9a8a', 'left', null);
     livesHud(W - 52, 4, S.t);
-    players.forEach((p, k) => { const kinds = [p.power, p.rainbowT > 0 && 'rainbow', p.magnetT > 0 && 'magnet'].filter(Boolean); if (!kinds.length) return;
+    players.forEach((p, k) => { const kinds = [...p.stack, p.rainbowT > 0 && 'rainbow', p.magnetT > 0 && 'magnet'].filter(Boolean); if (!kinds.length) return;
       const x0 = W - 56 - (k + 1) * (kinds.length * 12 + 8); panel(x0, 4, kinds.length * 12 + 4, 15); kinds.forEach((kd, j) => powerIcon(kd, x0 + 8 + j * 12, 11.5, S.t)); });
     if (S.toast) { g.globalAlpha = Math.min(1, S.toast.t / 20); text(S.toast.text, W / 2, 50, 13, '#ffd23f'); g.globalAlpha = 1; }
     if (!def.boss && !def.bonus) {
@@ -1242,7 +1275,7 @@ window.addEventListener('message', e => {
   if (!d || d.type !== 'clankers:play' || typeof d.text !== 'string') return;
   try {
     if (d.party) d.party.forEach((m, i) => Object.assign(party[i], m));
-    prog.lives = 3; if (d.power !== undefined) prog.powers = [d.power || null, d.power || null];
+    prog.lives = 3; testPower = d.power || null;
     go(levelScene('test', false, levelDef(d.text))); SND.resume();
   } catch (err) { console.error(err); }
 });

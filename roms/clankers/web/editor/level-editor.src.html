@@ -146,6 +146,10 @@ const GAME_HTML = /*@GAMEHTML*/;
       if (c === 'H') { g.moveTo(x + 4, y + 2); g.lineTo(x + 12, y + 2); g.lineTo(x + 8, y + 8); } else { g.moveTo(x + 4, y + 8); g.lineTo(x + 12, y + 8); g.lineTo(x + 8, y + 2); }
       g.fill();
     }
+    else if (c === 'r') { K.rr(x, y, 16, 6, 2, '#7a8a96'); g.fillStyle = '#ffcf3a'; g.fillRect(x + 4, y + 2, 3, 2); g.fillRect(x + 10, y + 2, 3, 2); }
+    else if (c === '~') { g.strokeStyle = 'rgba(60,40,50,0.6)'; g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, y + 3); g.lineTo(x + 16, y + 3); g.stroke(); g.setLineDash([]); }
+    else if (c === '|') { g.strokeStyle = 'rgba(60,40,50,0.6)'; g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x + 8, y); g.lineTo(x + 8, y + 16); g.stroke(); g.setLineDash([]); }
+    else if (c === 'k') { K.circ(x + 8, y + 4, 3, '#d4892f'); g.strokeStyle = '#3a3346'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x + 8, y + 4); g.lineTo(x + 8, y + 12); g.stroke(); K.rr(x + 1, y + 12, 14, 4, 1.5, '#7a8a96'); }
     else if (c === '@') K.robot(x + 8, y + 16, 0.075, 0x5AD1FF, { t });
     else if (c === 'P') { K.rr(x - 2, y + 11, 20, 5, 2, '#3a8de0'); K.baby(x + 8, y + 11, 0.045, 0xFF8FC7, { t }); }
   }
