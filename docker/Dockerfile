@@ -1,19 +1,34 @@
-# J64 development image.
+# J64 development image: the N64 MIPS toolchain + our pinned libdragon.
 #
-# The official libdragon image ships only the MIPS toolchain. This image adds
-# libdragon itself, built from the pinned `libdragon/` submodule, so every
-# machine (your laptop, Codespaces, CI) builds ROMs against identical bits.
+# The toolchain comes from libdragon's official prebuilt packages
+# (https://github.com/DragonMinded/libdragon/releases/tag/toolchain-continuous-prerelease),
+# for amd64 and arm64 (Apple Silicon). libdragon itself is built from the pinned
+# `libdragon/` submodule, so every machine (your laptop, Codespaces, CI) builds
+# ROMs against identical bits.
 #
 # Build from the repo root:  docker build -f docker/Dockerfile -t j64-dev .
 # Normally tools/dev.sh builds and tags it for you.
 
-ARG TOOLCHAIN_IMAGE=ghcr.io/dragonminded/libdragon:latest
-FROM ${TOOLCHAIN_IMAGE}
+FROM ubuntu:22.04
 
-# Host-side helpers used by the Makefiles and tests.
+ARG TARGETARCH
+ARG TOOLCHAIN_RELEASE=https://github.com/DragonMinded/libdragon/releases/download/toolchain-continuous-prerelease
+
+ENV N64_INST=/opt/libdragon
+ENV PATH="${N64_INST}/bin:${PATH}"
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ccache \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates ccache curl g++ gcc git make python3 xxd \
     && rm -rf /var/lib/apt/lists/*
+
+# Install the prebuilt toolchain into $N64_INST.
+RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && curl -fsSL -o /tmp/toolchain.deb "${TOOLCHAIN_RELEASE}/gcc-toolchain-mips64-${arch}.deb" \
+    && dpkg -i /tmp/toolchain.deb \
+    && rm /tmp/toolchain.deb \
+    && mips64-elf-gcc --version | head -1
 
 # Build and install libdragon + its asset tools into $N64_INST.
 COPY libdragon /tmp/libdragon

@@ -38,10 +38,11 @@ If you cloned without submodules, run `git submodule update --init`.
 `/work` and running as your own user, so the files it creates belong to you. The top-level
 `Makefile` sends every build step through it.
 
-The image is [docker/Dockerfile](../docker/Dockerfile): the official libdragon toolchain
-image with our pinned `libdragon/` submodule built and installed on top. `dev.sh` tags the
-image by the libdragon commit and a hash of the Dockerfile, so changing either one rebuilds
-it automatically.
+The image is [docker/Dockerfile](../docker/Dockerfile): Ubuntu with libdragon's official
+prebuilt MIPS toolchain (amd64 or arm64, so Apple Silicon Macs run it natively), and our
+pinned `libdragon/` submodule built and installed on top. `dev.sh` tags the image by the
+libdragon commit and a hash of the Dockerfile, so changing either one rebuilds it
+automatically.
 
 > [!TIP]
 > Already inside the container (devcontainer, Codespaces, CI)? `dev.sh` notices and just

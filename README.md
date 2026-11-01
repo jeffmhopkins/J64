@@ -40,7 +40,7 @@ roms/<name>/          one folder per ROM: Makefile, src/, assets/
 common/               C code shared by every ROM (no libdragon, so it can be unit tested)
 tests/host/           unit tests for common/, built with the native compiler
 libdragon/            git submodule, pinned to a commit on the preview branch
-docker/Dockerfile     libdragon toolchain image + the pinned libdragon built in
+docker/Dockerfile     prebuilt N64 toolchain + the pinned libdragon built in
 .devcontainer/        VS Code / Codespaces inside the same image
 mk/rom.mk             shared build rules every ROM's Makefile includes
 tools/                dev.sh (run in container), run-ares.sh, deploy-sc64.sh

@@ -17,10 +17,10 @@
         "EditorConfig.EditorConfig"
       ],
       "settings": {
-        "C_Cpp.default.compilerPath": "/n64_toolchain/bin/mips64-elf-gcc",
+        "C_Cpp.default.compilerPath": "/opt/libdragon/bin/mips64-elf-gcc",
         "C_Cpp.default.includePath": [
           "${workspaceFolder}/common/include",
-          "/n64_toolchain/mips64-elf/include"
+          "/opt/libdragon/mips64-elf/include"
         ],
         "C_Cpp.default.defines": ["J64_VERSION=\"dev\"", "N64"]
       }
