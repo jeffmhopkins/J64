@@ -1,0 +1,278 @@
+<title>Clankers Level Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titan+One&family=Nunito:wght@500;700&display=swap">
+<style>
+  /* Layout: toolbar, then the level grid (scrolls sideways), then palette + level settings, then play-test and the text file. Single dark look on purpose, matching the game page. */
+  :root {
+    --bg: #15131c; --panel: #221f2b; --edge: #3a3646; --fg: #ece8f4; --muted: #a49db4; --accent: #ffd23f; --ok: #49d17a; --warn: #ff8a6b;
+    --display: "Titan One", "Arial Black", Impact, sans-serif; --body: "Nunito", "Trebuchet MS", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--fg); margin: 0; }
+  body { font-family: var(--body); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 40px max(16px, env(safe-area-inset-left, 0px)); }
+  main { max-width: 1200px; margin: 0 auto; display: grid; gap: 14px; }
+  h1 { font-family: var(--display); font-weight: 400; font-size: 1.3rem; margin: 0; }
+  h2 { font-family: var(--display); font-weight: 400; font-size: 1rem; margin: 0 0 8px; color: var(--accent); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .bar .grow { flex: 1; }
+  button, select, input { font: 700 0.85rem var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px; }
+  input { border-radius: 8px; padding: 5px 8px; }
+  input[type=color] { padding: 0; width: 38px; height: 30px; border-radius: 8px; }
+  button { cursor: pointer; }
+  button.on, button[aria-pressed="true"] { background: var(--accent); color: #1b1720; border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 12px; }
+  .gridwrap { overflow-x: auto; overflow-y: hidden; border-radius: 10px; background: #000; touch-action: pan-x; }
+  #grid { display: block; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+  .palette button { border-radius: 10px; padding: 4px 6px; display: flex; align-items: center; gap: 6px; font-size: 0.72rem; text-align: left; line-height: 1.1; }
+  .palette canvas { width: 32px; height: 32px; image-rendering: pixelated; flex: none; background: #8fb5e8; border-radius: 4px; }
+  .form { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
+  .form label { color: var(--muted); font-size: 0.85rem; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 220px; font: 12px/1.25 ui-monospace, Menlo, Consolas, monospace; background: #0f0d14; color: var(--fg); border: 1px solid var(--edge); border-radius: 10px; padding: 8px; white-space: pre; overflow: auto; }
+  .warn { color: var(--warn); font-size: 0.85rem; margin: 6px 0 0; }
+  .ok { color: var(--ok); font-size: 0.85rem; margin: 6px 0 0; }
+  .help { color: var(--muted); font-size: 0.85rem; line-height: 1.5; margin: 0; }
+  kbd { font: 700 0.8rem var(--body); background: var(--bg); border: 1px solid var(--edge); border-radius: 5px; padding: 0 5px; }
+  iframe { width: 100%; aspect-ratio: 4 / 3.6; border: 0; border-radius: 10px; background: #000; }
+  .playbox { display: none; } .playbox.open { display: block; }
+</style>
+
+<main>
+  <div class="bar">
+    <h1>Clankers Level Editor</h1>
+    <span class="grow"></span>
+    <select id="file" aria-label="Level file"></select>
+    <button id="newLevel">New level</button>
+  </div>
+
+  <div class="bar">
+    <button id="toolPaint" class="on">Paint</button>
+    <button id="toolErase">Erase</button>
+    <button id="toolPick">Pick</button>
+    <button id="undo">Undo</button>
+    <span class="grow"></span>
+    <label class="help" for="zoom">Zoom</label>
+    <input id="zoom" type="range" min="1" max="4" step="1" value="2" aria-label="Zoom">
+    <button id="wider">Wider +10</button>
+    <button id="narrower">Narrower −10</button>
+  </div>
+
+  <div class="gridwrap" id="gridwrap"><canvas id="grid" aria-label="Level grid. Click or drag to paint."></canvas></div>
+  <p class="help" id="status">Pick a piece below, then click or drag on the grid. Right-click (or the Erase tool) clears a tile.</p>
+
+  <div class="cols">
+    <div class="card">
+      <h2>Pieces</h2>
+      <div class="palette" id="palette"></div>
+    </div>
+    <div class="card">
+      <h2>Level settings</h2>
+      <div class="form">
+        <label for="mName">Name</label><input id="mName">
+        <label for="mKind">Kind</label><select id="mKind"><option>level</option><option>boss</option><option>bonus</option></select>
+        <label for="mSong">Music</label><select id="mSong"><option>level</option><option>level2</option><option>level3</option><option>boss</option><option>bonus</option><option>jet</option></select>
+        <label for="mBaby">Baby bot</label><input id="mBaby" type="color">
+        <label for="mHatch">Hatch zone</label><select id="mHatch"><option value="">none</option><option>jet1</option></select>
+      </div>
+      <div id="checks"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <h2 style="margin:0">Play-test</h2>
+      <span class="grow"></span>
+      <select id="ptHero" aria-label="Hero"><option value="robot">Robot</option><option value="ostrich">Robot ostrich</option></select>
+      <select id="ptPlayers" aria-label="Players"><option value="1">1 player</option><option value="2">2 players</option></select>
+      <select id="ptPower" aria-label="Start with power-up"><option value="">no power-up</option><option value="mega">Mega Battery</option><option value="bubble">Bubble Blaster</option></select>
+      <button id="play">Play this level</button>
+    </div>
+    <div class="playbox" id="playbox">
+      <p class="help">Arrows to run, <kbd>Z</kbd> jump, <kbd>X</kbd> special, <kbd>↓</kbd> crouch or hatch, <kbd>Enter</kbd> pause. Reaching the pad starts the level again. Click the game first so it hears the keys.</p>
+      <iframe id="game" title="Play-test"></iframe>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <h2 style="margin:0">Level file</h2>
+      <span class="grow"></span>
+      <button id="apply">Apply text</button>
+      <button id="copy">Copy</button>
+      <button id="download">Download</button>
+      <button id="revert">Revert to repo file</button>
+    </div>
+    <p class="help">This is the exact text for <code id="pathLabel"></code> in the J64 repo. Edits on the grid show here; edit the text and press Apply to go the other way. Drafts are kept in this browser.</p>
+    <textarea id="text" spellcheck="false" aria-label="Level file text"></textarea>
+  </div>
+</main>
+
+<script>
+/*@ENGINE*/
+const GAME_HTML = /*@GAMEHTML*/;
+(() => {
+  const K = CK, P = Math.PI, TS = 16, ROWS = DATA_FMT.ROWS;
+  const $ = id => document.getElementById(id);
+  const store = { get(k, d) { try { const v = localStorage.getItem('clankers-ed:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('clankers-ed:' + k, JSON.stringify(v)); } catch (e) { /* blocked */ } } };
+
+  // ---------- drawing one tile or piece (shared by the palette and the grid)
+  const SOLID = new Set(['#', '=', 'X', '?', '$', '1', '2', '3', '4', 'D']);
+  const BADGE = { '?': ['?', '#ffd23f'], '$': ['o', '#ffd23f'], '1': ['M', '#49f08a'], '2': ['R', '#ff8fc7'], '3': ['B', '#8fd3ff'], '4': ['N', '#ff6b6b'] };
+  function drawCell(g, c, x, y, t, above) {
+    K.g = g;
+    if (c === '#') {
+      g.fillStyle = '#8a5233'; g.fillRect(x, y, TS, TS);
+      if (above !== '#') { g.fillStyle = '#c98b55'; g.fillRect(x, y, TS, 5); g.fillStyle = '#e2aa70'; g.fillRect(x, y, TS, 1.5); }
+    } else if (c === '=') { K.rr(x, y, TS, TS, 2, '#d4892f'); g.fillStyle = '#a5651f'; g.fillRect(x, y + TS - 3, TS, 3); K.circ(x + 5, y + 8, 2, '#8a5317'); K.circ(x + 11, y + 8, 2, '#8a5317'); }
+    else if (c === '-') { g.fillStyle = '#8a5a32'; g.fillRect(x, y, TS, 5); g.fillStyle = '#b07a44'; g.fillRect(x, y, TS, 2); g.fillStyle = '#5e3a1e'; g.fillRect(x + 7, y + 5, 2, 4); }
+    else if (c === 'X' || BADGE[c]) {
+      K.rr(x + 0.5, y + 0.5, TS - 1, TS - 1, 1.5, '#b07a44'); g.strokeStyle = '#7d5128'; g.lineWidth = 1.5; g.strokeRect(x + 2, y + 2, TS - 4, TS - 4);
+      if (BADGE[c]) { g.fillStyle = BADGE[c][1]; g.fillRect(x + 1, y + 5, TS - 2, 6); g.font = '8px ' + '"Titan One", sans-serif'; g.textAlign = 'center'; g.fillStyle = '#2b2230'; g.fillText(BADGE[c][0], x + 8, y + 11); }
+      else { g.beginPath(); g.moveTo(x + 2.5, y + 2.5); g.lineTo(x + TS - 2.5, y + TS - 2.5); g.stroke(); }
+    }
+    else if (c === 'D') { K.rr(x + 1, y, TS - 2, TS, 1, '#7d8397'); g.fillStyle = '#5d6378'; g.fillRect(x + 3, y + 3, TS - 6, TS - 6); g.fillStyle = '#ffcf3a'; g.fillRect(x + 1, y, TS - 2, 3); }
+    else if (c === 'L') { K.rr(x + 2, y + 10, 12, 6, 1.5, '#5d566a'); g.save(); g.translate(x + 8, y + 12); g.rotate(-0.7); g.fillStyle = '#9aa1b0'; g.fillRect(-1, -11, 2, 11); K.circ(0, -11, 3, '#e04f4f'); g.restore(); }
+    else if (c === 'o') K.nut(x + 8, y + 8, 4.2, 0, '#ffd23f');
+    else if (c === 'G') K.gear(x + 8, y + 8, 6, 10, t, '#ffd23f', '#b8860b');
+    else if (c === 'b' || c === 's' || c === 'g') GLITCH[{ b: 0, s: 1, g: 2 }[c]].draw(g, x + 8, y + 16, 0.085, t, true);
+    else if (c === 'T') { K.rr(x, y + 7, 16, 9, 4.5, '#2b2833'); K.rr(x + 4, y + 10, 8, 3, 1.5, '#4a4652'); }
+    else if (c === 'v') { g.fillStyle = '#7d5128'; g.fillRect(x + 7, y + 8, 2, 8); K.rr(x + 1, y + 1, 14, 9, 2, '#d9a46a'); g.fillStyle = '#2b2230'; g.beginPath(); g.moveTo(x + 4, y + 3); g.lineTo(x + 12, y + 3); g.lineTo(x + 8, y + 8); g.fill(); }
+    else if (c === 'H' || c === 'h') {
+      g.fillStyle = '#2b2833'; g.beginPath(); g.ellipse(x + 8, y + 14, 8, 2.5, 0, 0, P * 2); g.fill();
+      g.fillStyle = c === 'H' ? '#7d8397' : '#1b1426'; g.beginPath(); g.ellipse(x + 8, y + 13.6, 6.5, 1.8, 0, 0, P * 2); g.fill();
+      g.fillStyle = c === 'H' ? '#ffd23f' : '#8fd3ff'; g.beginPath();
+      if (c === 'H') { g.moveTo(x + 4, y + 2); g.lineTo(x + 12, y + 2); g.lineTo(x + 8, y + 8); } else { g.moveTo(x + 4, y + 8); g.lineTo(x + 12, y + 8); g.lineTo(x + 8, y + 2); }
+      g.fill();
+    }
+    else if (c === '@') K.robot(x + 8, y + 16, 0.075, 0x5AD1FF, { t });
+    else if (c === 'P') { K.rr(x - 2, y + 11, 20, 5, 2, '#3a8de0'); K.baby(x + 8, y + 11, 0.045, 0xFF8FC7, { t }); }
+  }
+
+  // ---------- state
+  const files = Object.keys(DATA).filter(f => !f.endsWith('world.txt')).sort();
+  let path = store.get('lastFile', files[0]), lvl = null, undo = [], tool = 'paint', brush = '#', zoom = +store.get('zoom', 2);
+  function load(p, text) {
+    path = p; store.set('lastFile', p);
+    const draft = store.get('draft:' + p, null);
+    lvl = DATA_FMT.parseLevel(text != null ? text : (draft || DATA[p] || newLevelText()));
+    undo = []; syncForm(); redraw(); syncText();
+  }
+  function newLevelText() {
+    const rows = Array.from({ length: ROWS }, (_, y) => (y >= 12 ? '#'.repeat(80) : y === 11 ? '..@' + '.'.repeat(72) + 'P....' : '.'.repeat(80)));
+    return 'name: NEW LEVEL\nkind: level\nsong: level\nbaby: FF8FC7\n---\n' + rows.join('\n') + '\n';
+  }
+  function text() { return DATA_FMT.levelText(lvl.meta, lvl.rows); }
+  function save() { store.set('draft:' + path, text()); }
+
+  // ---------- palette
+  const pal = $('palette');
+  for (const [c, name] of DATA_FMT.LEGEND) {
+    if (c === '.') continue;
+    const b = document.createElement('button'); b.dataset.c = c; b.setAttribute('aria-label', name);
+    const cv = document.createElement('canvas'); cv.width = 16; cv.height = 16; b.append(cv, document.createTextNode(name));
+    drawCell(cv.getContext('2d'), c, 0, 0, 0, '.');
+    b.addEventListener('click', () => { brush = c; setTool('paint'); for (const o of pal.children) o.classList.toggle('on', o === b); });
+    pal.append(b);
+  }
+  pal.querySelector('[data-c="#"]').classList.add('on');
+  function setTool(t) { tool = t; for (const [id, n] of [['toolPaint', 'paint'], ['toolErase', 'erase'], ['toolPick', 'pick']]) $(id).classList.toggle('on', n === t); }
+  $('toolPaint').onclick = () => setTool('paint'); $('toolErase').onclick = () => setTool('erase'); $('toolPick').onclick = () => setTool('pick');
+
+  // ---------- grid
+  const cv = $('grid'), g = cv.getContext('2d');
+  let t0 = performance.now();
+  function redraw() {
+    const w = lvl.w; cv.width = w * TS; cv.height = ROWS * TS; cv.style.width = (w * TS * zoom) + 'px'; cv.style.height = (ROWS * TS * zoom) + 'px';
+    const gr = g.createLinearGradient(0, 0, 0, cv.height); gr.addColorStop(0, '#5b6fc0'); gr.addColorStop(0.7, '#9c87c9'); gr.addColorStop(1, '#f2a37a'); g.fillStyle = gr; g.fillRect(0, 0, cv.width, cv.height);
+    g.fillStyle = 'rgba(255,255,255,0.07)'; for (let x = 0; x <= w; x++) g.fillRect(x * TS, 0, 0.5, cv.height); for (let y = 0; y <= ROWS; y++) g.fillRect(0, y * TS, cv.width, 0.5);
+    g.fillStyle = 'rgba(255,255,255,0.18)'; for (let x = 0; x <= w; x += 10) { g.fillRect(x * TS, 0, 0.8, cv.height); g.font = '6px sans-serif'; g.fillText(x, x * TS + 1, 7); }
+    const t = 0;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < w; x++) { const c = lvl.rows[y][x]; if (c !== '.') drawCell(g, c, x * TS, y * TS, t, y > 0 ? lvl.rows[y - 1][x] : '.'); }
+    checks();
+  }
+  function cellAt(e) { const r = cv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * lvl.w), Math.floor((e.clientY - r.top) / r.height * ROWS)]; }
+  let painting = false, lastCell = '';
+  function apply(e, erase) {
+    const [x, y] = cellAt(e); if (x < 0 || y < 0 || x >= lvl.w || y >= ROWS) return;
+    if (x + ',' + y === lastCell) return; lastCell = x + ',' + y;
+    if (tool === 'pick') { const c = lvl.rows[y][x]; if (c !== '.') { brush = c; for (const o of pal.children) o.classList.toggle('on', o.dataset.c === c); } setTool('paint'); painting = false; return; }
+    const c = erase || tool === 'erase' ? '.' : brush;
+    if (lvl.rows[y][x] === c) return;
+    if ((c === '@' || c === 'P' || c === 'H' || c === 'h') && !erase) for (const r of lvl.rows) for (let i = 0; i < r.length; i++) if (r[i] === c) r[i] = '.';   // only one of these per level
+    lvl.rows[y][x] = c; redraw(); syncText(); save();
+  }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); undo.push(text()); if (undo.length > 80) undo.shift(); painting = true; lastCell = ''; cv.setPointerCapture(e.pointerId); apply(e, e.button === 2); });
+  cv.addEventListener('pointermove', e => { if (painting) apply(e, e.buttons === 2); else { const [x, y] = cellAt(e); if (x >= 0 && x < lvl.w && y >= 0 && y < ROWS) $('status').textContent = 'Column ' + x + ', row ' + y + ' · ' + (DATA_FMT.LEGEND.find(l => l[0] === lvl.rows[y][x]) || ['', ''])[1]; } });
+  cv.addEventListener('pointerup', () => { painting = false; });
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  $('undo').onclick = doUndo;
+  function doUndo() { const u = undo.pop(); if (u) { lvl = DATA_FMT.parseLevel(u); syncForm(); redraw(); syncText(); save(); } }
+  window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'z' && document.activeElement.tagName !== 'TEXTAREA') { e.preventDefault(); doUndo(); } });
+  $('zoom').value = zoom; $('zoom').oninput = () => { zoom = +$('zoom').value; store.set('zoom', zoom); redraw(); };
+  $('wider').onclick = () => { undo.push(text()); lvl.w += 10; lvl.rows.forEach((r, y) => { const fill = y >= 12 && r[r.length - 1] === '#' ? '#' : '.'; for (let i = 0; i < 10; i++) r.push(fill); }); redraw(); syncText(); save(); };
+  $('narrower').onclick = () => { if (lvl.w <= 20) return; undo.push(text()); lvl.w -= 10; lvl.rows.forEach(r => r.splice(lvl.w)); redraw(); syncText(); save(); };
+
+  // ---------- settings form
+  const hex = n => '#' + (n || 'FF8FC7').toString().padStart(6, '0');
+  function syncForm() {
+    $('mName').value = lvl.meta.name || ''; $('mKind').value = lvl.meta.kind || 'level'; $('mSong').value = lvl.meta.song || 'level';
+    $('mBaby').value = hex(lvl.meta.baby || 'FF8FC7'); $('mHatch').value = lvl.meta.hatch || '';
+  }
+  for (const id of ['mName', 'mKind', 'mSong', 'mBaby', 'mHatch']) $(id).addEventListener('input', () => {
+    lvl.meta.name = $('mName').value; lvl.meta.kind = $('mKind').value; lvl.meta.song = $('mSong').value;
+    lvl.meta.baby = $('mBaby').value.replace('#', '').toUpperCase(); lvl.meta.hatch = $('mHatch').value;
+    if (lvl.meta.kind === 'boss') lvl.meta.boss = lvl.meta.boss || 'crane'; else delete lvl.meta.boss;
+    syncText(); save(); checks();
+  });
+  function checks() {
+    const all = lvl.rows.flat(), n = c => all.filter(x => x === c).length, out = [];
+    if (!n('@')) out.push('No start (@) yet.');
+    if (lvl.meta.kind === 'level' && !n('P')) out.push('No charging pad (P): the level can’t be finished.');
+    if (n('H') && !n('h')) out.push('The hatch has nowhere to come back out (h).');
+    if (n('H') && !lvl.meta.hatch) out.push('Pick a hatch zone in the settings.');
+    const gears = n('G') + n('?'); if (lvl.meta.kind === 'level' && gears !== 3) out.push('Levels have 3 golden gears; this one has ' + gears + '.');
+    $('checks').innerHTML = out.length ? out.map(s => '<p class="warn">' + s + '</p>').join('') : '<p class="ok">Looks ready to play.</p>';
+  }
+
+  // ---------- text panel
+  function syncText() { $('text').value = text(); $('pathLabel').textContent = 'roms/clankers/data/' + path; }
+  $('apply').onclick = () => { undo.push(text()); lvl = DATA_FMT.parseLevel($('text').value); syncForm(); redraw(); save(); };
+  $('copy').onclick = async () => { try { await navigator.clipboard.writeText(text()); $('copy').textContent = 'Copied'; } catch (e) { $('text').select(); $('copy').textContent = 'Press Ctrl+C'; } setTimeout(() => { $('copy').textContent = 'Copy'; }, 1500); };
+  $('revert').onclick = () => { if (!DATA[path]) return; undo.push(text()); try { localStorage.removeItem('clankers-ed:draft:' + path); } catch (e) { /* blocked */ } load(path, DATA[path]); fillFiles(); };
+  $('download').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text()], { type: 'text/plain' })); a.download = path.split('/').pop(); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+
+  // ---------- files
+  function fillFiles() {
+    const sel = $('file'); sel.innerHTML = '';
+    const extra = store.get('extraFiles', []);
+    for (const f of [...files, ...extra.filter(f => !files.includes(f))]) { const o = document.createElement('option'); o.value = f; o.textContent = f + (store.get('draft:' + f, null) ? ' (edited)' : ''); sel.append(o); }
+    sel.value = path;
+  }
+  $('file').onchange = () => { load($('file').value); fillFiles(); };
+  $('newLevel').onclick = () => {
+    const world = (path.split('/')[0]) || 'w1', base = world + '/new-';
+    let k = 1; while (files.includes(base + k + '.txt') || store.get('extraFiles', []).includes(base + k + '.txt')) k++;
+    const p = base + k + '.txt'; store.set('extraFiles', [...store.get('extraFiles', []), p]);
+    load(p, newLevelText()); save(); fillFiles();
+  };
+
+  // ---------- play-test: the real game in a frame, fed this level
+  let frameReady = false, pending = null;
+  $('play').onclick = () => {
+    $('playbox').classList.add('open');
+    const msg = { type: 'clankers:play', text: text(), power: $('ptPower').value || null, party: [{ hero: $('ptHero').value, joined: true }, { hero: $('ptHero').value === 'robot' ? 'ostrich' : 'robot', joined: $('ptPlayers').value === '2' }] };
+    const f = $('game');
+    if (!frameReady) {
+      pending = msg;
+      f.onload = () => { frameReady = true; setTimeout(() => { f.contentWindow.postMessage(pending, '*'); f.focus(); }, 400); };
+      f.srcdoc = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' + GAME_HTML.replace('<script>', '<script>window.CLANKERS_TEST = 1;<\/script><script>');
+    } else { f.contentWindow.postMessage(msg, '*'); f.focus(); }
+    $('playbox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  load(files.includes(path) || store.get('extraFiles', []).includes(path) ? path : files[0]); fillFiles();
+})();
+</script>

@@ -1246,7 +1246,8 @@ window.addEventListener('message', e => {
     go(levelScene('test', false, levelDef(d.text))); SND.resume();
   } catch (err) { console.error(err); }
 });
-const params = new URLSearchParams(location.search);
+const params = new URLSearchParams(location.search); if (window.CLANKERS_TEST) params.set('test', '1');
+if (params.has('test')) document.body.classList.add('test');
 function boot() { if (params.has('test')) { scene = { song: null, update() {}, draw() { g.fillStyle = '#15131c'; g.fillRect(0, 0, W, H); text('Waiting for a level...', W / 2, H / 2, 10); } }; } else go(introScene); requestAnimationFrame(t => { last = t; loop(t); }); }
 (document.fonts && document.fonts.load ? document.fonts.load('10px "Titan One"').catch(() => {}) : Promise.resolve()).then(boot, boot);
 })();
