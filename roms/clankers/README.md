@@ -29,7 +29,7 @@ built next to it.
 
 > [!NOTE]
 > Every push to `main` also publishes the game to GitHub Pages (`.github/workflows/pages.yml`):
-> the game at `https://jeffmhopkins.github.io/j64/`, with `level-editor.html` and
+> the game at `https://jeffmhopkins.github.io/J64/`, with `level-editor.html` and
 > `world-editor.html` beside it. Pages must be set to deploy from GitHub Actions in the repo's
 > settings.
 
