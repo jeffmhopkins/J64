@@ -1,0 +1,269 @@
+<title>Clankers World Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titan+One&family=Nunito:wght@500;700&display=swap">
+<style>
+  /* Layout: toolbar, then the live map (left) beside the selection and world settings (right), then the world file text. Single dark look on purpose, matching the game page. */
+  :root {
+    --bg: #15131c; --panel: #221f2b; --edge: #3a3646; --fg: #ece8f4; --muted: #a49db4; --accent: #ffd23f; --ok: #49d17a; --warn: #ff8a6b;
+    --display: "Titan One", "Arial Black", Impact, sans-serif; --body: "Nunito", "Trebuchet MS", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--fg); margin: 0; }
+  body { font-family: var(--body); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 40px max(16px, env(safe-area-inset-left, 0px)); }
+  main { max-width: 1200px; margin: 0 auto; display: grid; gap: 14px; }
+  h1 { font-family: var(--display); font-weight: 400; font-size: 1.3rem; margin: 0; }
+  h2 { font-family: var(--display); font-weight: 400; font-size: 1rem; margin: 0 0 8px; color: var(--accent); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .bar .grow { flex: 1; }
+  button, select, input { font: 700 0.85rem var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px; }
+  input { border-radius: 8px; padding: 5px 8px; min-width: 0; }
+  button { cursor: pointer; }
+  button.on { background: var(--accent); color: #1b1720; border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 12px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 820px) { .cols { grid-template-columns: 1fr; } }
+  #map { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixelated; border-radius: 10px; background: #000; cursor: crosshair; touch-action: none; }
+  .form { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
+  .form label { color: var(--muted); font-size: 0.85rem; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace; background: #0f0d14; color: var(--fg); border: 1px solid var(--edge); border-radius: 10px; padding: 8px; white-space: pre; overflow: auto; }
+  .help { color: var(--muted); font-size: 0.85rem; line-height: 1.5; margin: 0; }
+  .warn { color: var(--warn); font-size: 0.85rem; margin: 6px 0 0; } .ok { color: var(--ok); font-size: 0.85rem; margin: 6px 0 0; }
+  .stack { display: grid; gap: 14px; }
+</style>
+
+<main>
+  <div class="bar">
+    <h1>Clankers World Editor</h1>
+    <span class="grow"></span>
+    <select id="file" aria-label="World file"></select>
+    <button id="newWorld">New world</button>
+  </div>
+  <div class="bar">
+    <button data-tool="move" class="on">Move</button>
+    <button data-tool="node">Add panel</button>
+    <button data-tool="road">Draw road</button>
+    <button data-tool="prop">Add scenery</button>
+    <button data-tool="delete">Delete</button>
+    <select id="nodeKind" aria-label="Panel kind"><option>level</option><option>bonus</option><option>boss</option><option>shop</option><option>home</option><option>exit</option></select>
+    <select id="propKind" aria-label="Scenery kind"></select>
+    <span class="grow"></span>
+    <button id="undo">Undo</button>
+    <button id="gridBtn" class="on">Grid</button>
+  </div>
+
+  <div class="cols">
+    <div class="card">
+      <canvas id="map" width="320" height="240" aria-label="World map"></canvas>
+      <p class="help" id="status">Move: drag a panel. Draw road: click one panel, then another; click empty tiles in between first to add bends. Select a road by clicking it.</p>
+    </div>
+    <div class="stack">
+      <div class="card" id="selCard">
+        <h2 id="selTitle">Nothing selected</h2>
+        <div class="form" id="selForm"></div>
+      </div>
+      <div class="card">
+        <h2>World settings</h2>
+        <div class="form">
+          <label for="wName">Name</label><input id="wName">
+          <label for="wNum">Number</label><input id="wNum" type="number" min="1" max="9">
+          <label for="wTheme">Look</label><select id="wTheme"></select>
+          <label for="wGears">Golden gears</label><input id="wGears" type="number" min="0" max="99">
+          <label for="wBoss">Boss message</label><input id="wBoss">
+        </div>
+        <div id="checks"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <h2 style="margin:0">World file</h2>
+      <span class="grow"></span>
+      <button id="apply">Apply text</button>
+      <button id="copy">Copy</button>
+      <button id="revert">Revert to repo file</button>
+    </div>
+    <p class="help">The exact text for <code id="pathLabel"></code> in the J64 repo. Drafts are kept in this browser. Each level panel names a level file; make or change those in the level editor.</p>
+    <textarea id="text" spellcheck="false" aria-label="World file text"></textarea>
+  </div>
+</main>
+
+<script>
+/*@ENGINE*/
+(() => {
+  const K = CK, P = Math.PI, T = 16, C = c => c * T + 8;
+  const $ = id => document.getElementById(id);
+  const store = { get(k, d) { try { const v = localStorage.getItem('clankers-wed:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('clankers-wed:' + k, JSON.stringify(v)); } catch (e) { /* blocked */ } } };
+  const files = Object.keys(DATA).filter(f => f.endsWith('world.txt')).sort();
+  let path = store.get('lastFile', files[0]), W = null, undo = [], tool = 'move', sel = null, showGrid = true, roadStart = null, roadVia = [], core = null;
+
+  const cv = $('map'), g = cv.getContext('2d');
+  function text() { return DATA_FMT.worldText(W); }
+  function save() { store.set('draft:' + path, text()); }
+  function push() { undo.push(text()); if (undo.length > 80) undo.shift(); }
+  function load(p, txt) {
+    path = p; store.set('lastFile', p);
+    W = DATA_FMT.parseWorld(txt != null ? txt : (store.get('draft:' + p, null) || DATA[p] || TEMPLATE()));
+    undo = []; sel = null; rebuild(); syncForm(); syncText();
+  }
+  const TEMPLATE = (n = 2) => `name: New World\nnum: ${n}\ntheme: junkyard\ngears: 9\nbabies: FF8FC7 49F08A FFB347 8FD3FF\n\nnode home 2 11 home "Home"\nnode l1 6 11 level "Level 1" level=${n}-1\nnode l2 6 6 level "Level 2" level=${n}-2\nnode l3 11 6 level "Level 3" level=${n}-3\nnode boss 11 11 boss "Big Glitch" level=boss\nnode exit 16 11 exit "To World ${n + 1}"\n\nroad home l1\nroad l1 l2\nroad l2 l3\nroad l3 boss\nroad boss exit\n`;
+
+  // the real map engine draws the map, with every panel beaten so all roads show
+  function rebuild() {
+    try {
+      const world = DATA_FMT.worldForMap(W);
+      if (!world.nodes.length) { core = null; return; }
+      world.start = { beaten: world.nodes.filter(n => ['level', 'boss', 'bonus'].includes(n.kind)).map(n => n.id), at: world.start.at || world.nodes[0].id, gears: world.gearsMax, bolts: 0 };
+      if (!world.drawGround) world.drawGround = gg => { gg.fillStyle = '#c9a77a'; gg.fillRect(0, 0, 320, 240); };
+      core = OW.core(world, g, { party: [{ hero: 'robot', hex: 0x5AD1FF }] }); core.init();
+      $('status').classList.remove('warn');
+    } catch (err) { core = null; $('status').textContent = 'Map error: ' + err.message; $('status').classList.add('warn'); }
+    checks();
+  }
+  let t0 = performance.now();
+  function frame(now) {
+    const t = (now - t0) / 1000;
+    if (core) { K.g = g; try { core.frame(t); } catch (e) { /* shown in status */ } } else { g.fillStyle = '#2a2733'; g.fillRect(0, 0, 320, 240); }
+    overlay(t);
+    requestAnimationFrame(frame);
+  }
+  function overlay(t) {
+    if (showGrid) { g.fillStyle = 'rgba(255,255,255,0.12)'; for (let x = 0; x <= 20; x++) g.fillRect(x * T, 0, 0.5, 240); for (let y = 0; y <= 15; y++) g.fillRect(0, y * T, 320, 0.5); }
+    g.font = '6px sans-serif'; g.textAlign = 'center';
+    for (const n of W.nodes) { g.fillStyle = 'rgba(20,10,30,0.7)'; g.fillRect(C(n.col) - 12, C(n.row) + 8, 24, 7); g.fillStyle = '#fff'; g.fillText(n.id, C(n.col), C(n.row) + 13.5); }
+    if (sel && sel.type === 'node') { const n = W.nodes[sel.i]; if (n) { g.strokeStyle = '#ffd23f'; g.lineWidth = 1.5; g.strokeRect(C(n.col) - 10, C(n.row) - 10, 20, 20); } }
+    if (sel && sel.type === 'road') { const r = W.roads[sel.i]; if (r) { const pts = roadPts(r); g.strokeStyle = '#ffd23f'; g.lineWidth = 2; g.setLineDash([3, 2]); g.beginPath(); pts.forEach(([x, y], k) => k ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.setLineDash([]); r.via.forEach(([c, rr]) => K.circ(C(c), C(rr), 2.5, '#ffd23f')); } }
+    if (sel && sel.type === 'prop') { const pr = W.props[sel.i]; if (pr) { g.strokeStyle = '#ffd23f'; g.lineWidth = 1; g.strokeRect(pr.col * T, pr.row * T, T, T); } }
+    if (roadStart) { const n = byId(roadStart); g.strokeStyle = '#49d17a'; g.lineWidth = 2; g.setLineDash([2, 2]); g.beginPath(); g.moveTo(C(n.col), C(n.row)); roadVia.forEach(([c, r]) => g.lineTo(C(c), C(r))); if (hover) g.lineTo(C(hover[0]), C(hover[1])); g.stroke(); g.setLineDash([]); }
+  }
+  const byId = id => W.nodes.find(n => n.id === id);
+  const roadPts = r => { const a = byId(r.a), b = byId(r.b); if (!a || !b) return []; return [[C(a.col), C(a.row)], ...r.via.map(([c, rr]) => [C(c), C(rr)]), [C(b.col), C(b.row)]]; };
+  function distSeg(px, py, [x1, y1], [x2, y2]) { const dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy || 1, k = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l)); return Math.hypot(px - x1 - k * dx, py - y1 - k * dy); }
+
+  // ---------- pointer
+  let hover = null, drag = null;
+  function at(e) { const r = cv.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 320, y = (e.clientY - r.top) / r.height * 240; return { x, y, col: Math.max(0, Math.min(19, Math.floor(x / T))), row: Math.max(0, Math.min(14, Math.floor(y / T))) }; }
+  const nodeAt = (c, r) => W.nodes.findIndex(n => n.col === c && n.row === r);
+  const propAt = (c, r) => W.props.findIndex(p => p.col === c && p.row === r);
+  function roadAt(x, y) { let best = -1, bd = 5; W.roads.forEach((r, i) => { const pts = roadPts(r); for (let k = 0; k < pts.length - 1; k++) { const d = distSeg(x, y, pts[k], pts[k + 1]); if (d < bd) { bd = d; best = i; } } }); return best; }
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault(); const p = at(e), ni = nodeAt(p.col, p.row);
+    if (tool === 'move') {
+      if (ni >= 0) { push(); sel = { type: 'node', i: ni }; drag = { i: ni }; cv.setPointerCapture(e.pointerId); }
+      else { const ri = roadAt(p.x, p.y); sel = ri >= 0 ? { type: 'road', i: ri } : (propAt(p.col, p.row) >= 0 ? { type: 'prop', i: propAt(p.col, p.row) } : null); if (sel && sel.type === 'prop') { push(); drag = { prop: sel.i }; cv.setPointerCapture(e.pointerId); } }
+    } else if (tool === 'node') {
+      if (ni >= 0) { sel = { type: 'node', i: ni }; }
+      else {
+        push(); const kind = $('nodeKind').value, pre = { level: 'l', bonus: 'bonus', boss: 'boss', shop: 'shop', home: 'home', exit: 'exit' }[kind];
+        let k = 1, id = kind === 'level' ? pre + k : pre; while (byId(id)) id = pre + (++k);
+        const lvls = W.nodes.filter(n => n.kind === 'level').length + 1, num = W.meta.num || 1;
+        W.nodes.push({ id, col: p.col, row: p.row, kind, label: { level: 'Level ' + lvls, bonus: 'Bonus', boss: 'Big Glitch', shop: 'Parts shop', home: 'Home', exit: 'To World ' + (+num + 1) }[kind], level: kind === 'level' ? num + '-' + lvls : (kind === 'boss' || kind === 'bonus') ? kind : undefined, gate: 0 });
+        sel = { type: 'node', i: W.nodes.length - 1 }; changed();
+      }
+    } else if (tool === 'road') {
+      if (ni >= 0) {
+        const id = W.nodes[ni].id;
+        if (!roadStart) { roadStart = id; roadVia = []; }
+        else if (id !== roadStart) { push(); W.roads.push({ a: roadStart, b: id, via: roadVia.slice(), gate: 0 }); sel = { type: 'road', i: W.roads.length - 1 }; roadStart = null; roadVia = []; changed(); }
+      } else if (roadStart) roadVia.push([p.col, p.row]);
+      else { const ri = roadAt(p.x, p.y); if (ri >= 0) sel = { type: 'road', i: ri }; }
+    } else if (tool === 'prop') {
+      if (propAt(p.col, p.row) >= 0) sel = { type: 'prop', i: propAt(p.col, p.row) };
+      else { push(); W.props.push({ name: $('propKind').value, col: p.col, row: p.row }); sel = { type: 'prop', i: W.props.length - 1 }; changed(); }
+    } else if (tool === 'delete') {
+      if (ni >= 0) { push(); const id = W.nodes[ni].id; W.nodes.splice(ni, 1); W.roads = W.roads.filter(r => r.a !== id && r.b !== id); sel = null; changed(); }
+      else { const ri = roadAt(p.x, p.y), pi = propAt(p.col, p.row); if (ri >= 0) { push(); W.roads.splice(ri, 1); sel = null; changed(); } else if (pi >= 0) { push(); W.props.splice(pi, 1); sel = null; changed(); } }
+    }
+    syncSel();
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = at(e); hover = [p.col, p.row];
+    $('status').textContent = 'Tile ' + p.col + ', ' + p.row + (roadStart ? ' · drawing a road from ' + roadStart + ' (click empty tiles to bend, a panel to finish, Esc to cancel)' : '');
+    if (drag && drag.i !== undefined) { const n = W.nodes[drag.i]; if ((n.col !== p.col || n.row !== p.row) && nodeAt(p.col, p.row) < 0) { n.col = p.col; n.row = p.row; changed(true); } }
+    if (drag && drag.prop !== undefined) { const pr = W.props[drag.prop]; pr.col = p.col; pr.row = p.row; changed(true); }
+  });
+  cv.addEventListener('pointerup', () => { if (drag) { drag = null; changed(); } });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { roadStart = null; roadVia = []; }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); doUndo(); }
+  });
+  let pendingRebuild = 0;
+  function changed(light) { syncText(); save(); if (light) { clearTimeout(pendingRebuild); pendingRebuild = setTimeout(rebuild, 60); } else rebuild(); syncSel(); }
+  function doUndo() { const u = undo.pop(); if (u != null) { W = DATA_FMT.parseWorld(u); sel = null; rebuild(); syncForm(); syncText(); syncSel(); save(); } }
+  $('undo').onclick = doUndo;
+  $('gridBtn').onclick = () => { showGrid = !showGrid; $('gridBtn').classList.toggle('on', showGrid); };
+  for (const b of document.querySelectorAll('[data-tool]')) b.onclick = () => { tool = b.dataset.tool; roadStart = null; roadVia = []; for (const o of document.querySelectorAll('[data-tool]')) o.classList.toggle('on', o === b); };
+
+  // ---------- selection panel
+  function field(label, value, onInput, opts) {
+    const id = 'f' + Math.random().toString(36).slice(2, 7), l = document.createElement('label'); l.htmlFor = id; l.textContent = label;
+    let el;
+    if (opts) { el = document.createElement('select'); for (const o of opts) { const op = document.createElement('option'); op.value = o; op.textContent = o || 'none'; el.append(op); } el.value = value ?? ''; }
+    else { el = document.createElement('input'); el.value = value ?? ''; }
+    el.id = id; el.addEventListener('change', () => { push(); onInput(el.value); changed(); });
+    $('selForm').append(l, el);
+  }
+  function syncSel() {
+    $('selForm').innerHTML = '';
+    if (!sel) { $('selTitle').textContent = 'Nothing selected'; return; }
+    if (sel.type === 'node') {
+      const n = W.nodes[sel.i]; if (!n) { sel = null; return syncSel(); }
+      $('selTitle').textContent = 'Panel: ' + n.id;
+      const levelFiles = Object.keys(DATA).filter(f => f.startsWith(path.split('/')[0] + '/') && !f.endsWith('world.txt')).map(f => f.split('/')[1].replace('.txt', ''));
+      field('Id', n.id, v => { const old = n.id; v = v.replace(/\s+/g, ''); if (!v || byId(v)) return; n.id = v; for (const r of W.roads) { if (r.a === old) r.a = v; if (r.b === old) r.b = v; } });
+      field('Label', n.label, v => { n.label = v.replace(/"/g, ''); });
+      field('Kind', n.kind, v => { n.kind = v; }, ['level', 'bonus', 'boss', 'shop', 'home', 'exit']);
+      if (['level', 'boss', 'bonus'].includes(n.kind)) field('Level file', n.level, v => { n.level = v || undefined; }, ['', ...new Set([...levelFiles, n.level].filter(Boolean))]);
+      field('Gears to open', n.gate || 0, v => { n.gate = Math.max(0, +v || 0); });
+    } else if (sel.type === 'road') {
+      const r = W.roads[sel.i]; if (!r) { sel = null; return syncSel(); }
+      $('selTitle').textContent = 'Road: ' + r.a + ' to ' + r.b;
+      field('Gears to open', r.gate || 0, v => { r.gate = Math.max(0, +v || 0); });
+      field('Bends (col,row …)', r.via.map(v => v.join(',')).join(' '), v => { r.via = v.split(/\s+/).filter(Boolean).map(s => s.split(',').map(Number)).filter(a => a.length === 2 && a.every(Number.isFinite)); });
+    } else if (sel.type === 'prop') {
+      const pr = W.props[sel.i]; if (!pr) { sel = null; return syncSel(); }
+      $('selTitle').textContent = 'Scenery: ' + pr.name;
+      field('Kind', pr.name, v => { pr.name = v; }, themeProps());
+    }
+  }
+  function themeProps() { try { return DATA_FMT.worldForMap(W).propKinds || []; } catch (e) { return []; } }
+
+  // ---------- world settings
+  for (const k of Object.keys(THEMES)) { const o = document.createElement('option'); o.value = o.textContent = k; $('wTheme').append(o); }
+  function syncForm() {
+    $('wName').value = W.meta.name || ''; $('wNum').value = W.meta.num || 1; $('wTheme').value = W.meta.theme || 'junkyard'; $('wGears').value = W.meta.gears || 9; $('wBoss').value = W.meta['boss-msg'] || '';
+    const pk = $('propKind'); pk.innerHTML = ''; for (const k of themeProps()) { const o = document.createElement('option'); o.value = o.textContent = k; pk.append(o); }
+  }
+  for (const [id, key] of [['wName', 'name'], ['wNum', 'num'], ['wTheme', 'theme'], ['wGears', 'gears'], ['wBoss', 'boss-msg']]) $(id).addEventListener('change', () => { push(); W.meta[key] = $(id).value; changed(); syncForm(); });
+  function checks() {
+    const out = [], kinds = W.nodes.map(n => n.kind);
+    if (!kinds.includes('home')) out.push('No home panel: the heroes need somewhere to start.');
+    if (!kinds.includes('boss')) out.push('No boss panel yet.');
+    for (const n of W.nodes) if (['level', 'boss', 'bonus'].includes(n.kind) && (!n.level || !DATA[path.split('/')[0] + '/' + n.level + '.txt'])) out.push(n.id + ' needs a level file (' + (n.level || 'none set') + ' is not in the repo yet).');
+    const reach = new Set(), q = [(W.nodes.find(n => n.kind === 'home') || W.nodes[0] || {}).id];
+    while (q.length) { const id = q.pop(); if (!id || reach.has(id)) continue; reach.add(id); for (const r of W.roads) { if (r.a === id) q.push(r.b); if (r.b === id) q.push(r.a); } }
+    for (const n of W.nodes) if (!reach.has(n.id)) out.push(n.id + ' has no road to it.');
+    $('checks').innerHTML = out.length ? out.map(s => '<p class="warn">' + s + '</p>').join('') : '<p class="ok">Every panel is reachable.</p>';
+  }
+
+  // ---------- text and files
+  function syncText() { $('text').value = text(); $('pathLabel').textContent = 'roms/clankers/data/' + path; }
+  $('apply').onclick = () => { push(); W = DATA_FMT.parseWorld($('text').value); sel = null; rebuild(); syncForm(); syncSel(); save(); };
+  $('copy').onclick = async () => { try { await navigator.clipboard.writeText(text()); $('copy').textContent = 'Copied'; } catch (e) { $('text').select(); $('copy').textContent = 'Press Ctrl+C'; } setTimeout(() => { $('copy').textContent = 'Copy'; }, 1500); };
+  $('revert').onclick = () => { if (!DATA[path]) return; push(); try { localStorage.removeItem('clankers-wed:draft:' + path); } catch (e) { /* blocked */ } load(path, DATA[path]); fillFiles(); };
+  function fillFiles() {
+    const sel2 = $('file'); sel2.innerHTML = ''; const extra = store.get('extraFiles', []);
+    for (const f of [...files, ...extra.filter(f => !files.includes(f))]) { const o = document.createElement('option'); o.value = f; o.textContent = f + (store.get('draft:' + f, null) ? ' (edited)' : ''); sel2.append(o); }
+    sel2.value = path;
+  }
+  $('file').onchange = () => { load($('file').value); fillFiles(); };
+  $('newWorld').onclick = () => {
+    const all = [...files, ...store.get('extraFiles', [])]; let n = 2; while (all.includes('w' + n + '/world.txt')) n++;
+    const p = 'w' + n + '/world.txt'; store.set('extraFiles', [...store.get('extraFiles', []), p]); load(p, TEMPLATE(n)); save(); fillFiles();
+  };
+
+  load([...files, ...store.get('extraFiles', [])].includes(path) ? path : files[0]); fillFiles(); syncSel();
+  (document.fonts && document.fonts.load ? document.fonts.load('10px "Titan One"').catch(() => {}) : Promise.resolve()).then(() => { rebuild(); requestAnimationFrame(frame); });
+})();
+</script>
