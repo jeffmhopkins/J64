@@ -1,18 +1,31 @@
 name: Release
 
-# Push a tag like v0.1.0 to build every ROM and publish a GitHub Release with
-# the .z64 files attached:  git tag v0.1.0 && git push origin v0.1.0
+# Build every ROM and publish a GitHub Release with the .z64 files attached. Either push a tag
+# (git tag v0.1.0 && git push origin v0.1.0), or run this workflow from the Actions tab with a
+# version: it tags the commit it ran on.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, such as v0.1.0 (a hyphen, as in v0.2.0-beta.1, makes a pre-release)"
+        required: true
 
 permissions:
   contents: write
+
+env:
+  VERSION: ${{ inputs.version || github.ref_name }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Check the version
+        run: |
+          case "$VERSION" in v[0-9]*) ;; *) echo "version must look like v0.1.0, got '$VERSION'"; exit 1 ;; esac
+
       - uses: actions/checkout@v7
         with:
           submodules: recursive
@@ -20,13 +33,13 @@ jobs:
 
       - uses: ./.github/actions/build
         with:
-          version: ${{ github.ref_name }}
+          version: ${{ env.VERSION }}
 
       - name: Name ROMs after the release
         run: |
           rm -f dist/*-test.z64   # self-playing test builds are for CI and win-test.ps1, not releases
           for f in dist/*.z64; do
-            mv "$f" "dist/$(basename "$f" .z64)-${GITHUB_REF_NAME}.z64"
+            mv "$f" "dist/$(basename "$f" .z64)-${VERSION}.z64"
           done
 
       - name: Publish release
@@ -34,6 +47,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           prerelease=""
-          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/*.z64 \
-            --title "J64 $GITHUB_REF_NAME" --generate-notes $prerelease
+          case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$VERSION" dist/*.z64 --target "$GITHUB_SHA" \
+            --title "J64 $VERSION" --generate-notes $prerelease

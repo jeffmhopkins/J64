@@ -20,6 +20,9 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
+Or, without pushing a tag, open **Actions › Release › Run workflow** on `main` and enter the
+version. The workflow tags the commit it ran on.
+
 [.github/workflows/release.yml](../.github/workflows/release.yml) then builds with
 `J64_VERSION` set to the tag, renames each ROM to `<name>-v0.1.0.z64`, and creates the
 release with notes generated from the merged PRs.
