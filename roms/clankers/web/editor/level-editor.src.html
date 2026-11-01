@@ -102,7 +102,6 @@
       <span class="grow"></span>
       <button id="apply">Apply text</button>
       <button id="copy">Copy</button>
-      <button id="download">Download</button>
       <button id="revert">Revert to repo file</button>
     </div>
     <p class="help">This is the exact text for <code id="pathLabel"></code> in the J64 repo. Edits on the grid show here; edit the text and press Apply to go the other way. Drafts are kept in this browser.</p>
@@ -242,7 +241,6 @@ const GAME_HTML = /*@GAMEHTML*/;
   $('apply').onclick = () => { undo.push(text()); lvl = DATA_FMT.parseLevel($('text').value); syncForm(); redraw(); save(); };
   $('copy').onclick = async () => { try { await navigator.clipboard.writeText(text()); $('copy').textContent = 'Copied'; } catch (e) { $('text').select(); $('copy').textContent = 'Press Ctrl+C'; } setTimeout(() => { $('copy').textContent = 'Copy'; }, 1500); };
   $('revert').onclick = () => { if (!DATA[path]) return; undo.push(text()); try { localStorage.removeItem('clankers-ed:draft:' + path); } catch (e) { /* blocked */ } load(path, DATA[path]); fillFiles(); };
-  $('download').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text()], { type: 'text/plain' })); a.download = path.split('/').pop(); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
 
   // ---------- files
   function fillFiles() {

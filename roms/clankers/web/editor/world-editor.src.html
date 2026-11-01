@@ -82,7 +82,6 @@
       <span class="grow"></span>
       <button id="apply">Apply text</button>
       <button id="copy">Copy</button>
-      <button id="download">Download</button>
       <button id="revert">Revert to repo file</button>
     </div>
     <p class="help">The exact text for <code id="pathLabel"></code> in the J64 repo. Drafts are kept in this browser. Each level panel names a level file; make or change those in the level editor.</p>
@@ -252,7 +251,6 @@
   function syncText() { $('text').value = text(); $('pathLabel').textContent = 'roms/clankers/data/' + path; }
   $('apply').onclick = () => { push(); W = DATA_FMT.parseWorld($('text').value); sel = null; rebuild(); syncForm(); syncSel(); save(); };
   $('copy').onclick = async () => { try { await navigator.clipboard.writeText(text()); $('copy').textContent = 'Copied'; } catch (e) { $('text').select(); $('copy').textContent = 'Press Ctrl+C'; } setTimeout(() => { $('copy').textContent = 'Copy'; }, 1500); };
-  $('download').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text()], { type: 'text/plain' })); a.download = 'world.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
   $('revert').onclick = () => { if (!DATA[path]) return; push(); try { localStorage.removeItem('clankers-wed:draft:' + path); } catch (e) { /* blocked */ } load(path, DATA[path]); fillFiles(); };
   function fillFiles() {
     const sel2 = $('file'); sel2.innerHTML = ''; const extra = store.get('extraFiles', []);
