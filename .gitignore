@@ -1,0 +1,17 @@
+# Build output
+/dist/
+roms/*/build/
+roms/*/filesystem/
+tests/host/build/
+*.z64
+*.v64
+*.n64
+*.elf
+*.dfs
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,29 @@
+{
+  // Opens J64 inside the same image tools/dev.sh and CI use.
+  // VS Code: "Dev Containers: Reopen in Container". GitHub: Code > Codespaces.
+  "name": "J64 (libdragon)",
+  "build": {
+    "dockerfile": "../docker/Dockerfile",
+    "context": ".."
+  },
+  "initializeCommand": "git submodule update --init",
+  "workspaceFolder": "/work",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.makefile-tools",
+        "EditorConfig.EditorConfig"
+      ],
+      "settings": {
+        "C_Cpp.default.compilerPath": "/opt/libdragon/bin/mips64-elf-gcc",
+        "C_Cpp.default.includePath": [
+          "${workspaceFolder}/common/include",
+          "/opt/libdragon/mips64-elf/include"
+        ],
+        "C_Cpp.default.defines": ["J64_VERSION=\"dev\"", "N64"]
+      }
+    }
+  }
+}

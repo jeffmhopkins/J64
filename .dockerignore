@@ -1,0 +1,5 @@
+# Only the libdragon submodule and docker/ are needed to build the dev image.
+*
+!libdragon
+!docker
+libdragon/.git
