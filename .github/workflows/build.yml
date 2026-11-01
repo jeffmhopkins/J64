@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0 # tags, for git describe in the ROM version
+
+      - uses: ./.github/actions/build
+
+      - name: Upload ROMs
+        uses: actions/upload-artifact@v7
+        with:
+          name: j64-roms-${{ github.sha }}
+          path: dist/*.z64
+          if-no-files-found: error
