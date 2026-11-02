@@ -7,7 +7,7 @@ const DATA_FMT = (() => {
     ['.', 'Empty'], ['#', 'Ground'], ['=', 'Girder'], ['-', 'Plank'], ['X', 'Crate'], ['?', 'Gear crate'], ['$', 'Bolt crate'],
     ['1', 'Mega Battery crate'], ['2', 'Rainbow crate'], ['3', 'Bubble crate'], ['4', 'Magnet crate'], ['D', 'Door'], ['L', 'Lever'],
     ['o', 'Bolt'], ['G', 'Golden gear'], ['b', 'Bumblebot'], ['s', 'Boing Sprocket'], ['g', 'Grumble Crate'], ['T', 'Tyre spring'],
-    ['v', 'Down sign'], ['r', 'Raft (rides its track)'], ['~', 'Raft track, sideways'], ['|', 'Raft track, up and down'], ['k', 'Swinging hook'], ['C', 'Junk compactor'], ['H', 'Hatch in'], ['h', 'Hatch out'], ['@', 'Start'], ['F', 'Checkpoint flag'], ['P', 'Charging pad'],
+    ['v', 'Down sign'], ['r', 'Raft (rides its track)'], ['~', 'Raft track, sideways'], ['|', 'Raft track, up and down'], ['k', 'Swinging hook'], ['C', 'Junk compactor'], ['>', 'Conveyor belt, right'], ['<', 'Conveyor belt, left'], ['H', 'Hatch in'], ['h', 'Hatch out'], ['@', 'Start'], ['F', 'Checkpoint flag'], ['P', 'Charging pad'],
   ];
   const KNOWN = new Set(LEGEND.map(l => l[0]));
 
@@ -32,7 +32,7 @@ const DATA_FMT = (() => {
     return { meta, rows, w };
   }
   function levelText(meta, rows) {
-    const keys = ['name', 'kind', 'song', 'baby', 'hatch', 'par', 'time', 'boss'];
+    const keys = ['name', 'kind', 'song', 'baby', 'hatch', 'par', 'time', 'boss', 'gravity'];
     const head = keys.filter(k => meta[k]).map(k => k + ': ' + meta[k]);
     for (const k of Object.keys(meta)) if (!keys.includes(k) && meta[k]) head.push(k + ': ' + meta[k]);
     return head.join('\n') + '\n---\n' + rows.map(r => r.join('')).join('\n') + '\n';

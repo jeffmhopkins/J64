@@ -22,7 +22,8 @@ def data_js():
 def engine():
     """Everything the game and the editors share, in load order."""
     themes = [read(str(p.relative_to(WEB))) for p in sorted((WEB / 'themes').glob('*.js'))]
-    return '\n'.join([read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), *themes, read('lib/title.js'), read('lib/glitchies.js')])
+    return '\n'.join([read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), *themes,
+                      read('lib/bossart.js'), read('lib/cutart.js'), read('lib/title.js'), read('lib/glitchies.js')])
 
 def game_html():
     return read('index.src.html').replace('/*@GAME*/', '\n'.join([engine(), data_js(), read('game.js')]))

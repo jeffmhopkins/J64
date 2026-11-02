@@ -73,7 +73,7 @@
       <div class="form">
         <label for="mName">Name</label><input id="mName">
         <label for="mKind">Kind</label><select id="mKind"><option>level</option><option>boss</option><option>bonus</option></select>
-        <label for="mSong">Music</label><select id="mSong"><option>level</option><option>level2</option><option>level3</option><option>boss</option><option>bonus</option><option>jet</option></select>
+        <label for="mSong">Music</label><select id="mSong"><option>level</option><option>level2</option><option>level3</option><option>factory</option><option>mountain</option><option>moon</option><option>boss</option><option>bonus</option><option>jet</option></select>
         <label for="mBaby">Baby bot</label><input id="mBaby" type="color">
         <label for="mHatch">Hatch zone</label><select id="mHatch"><option value="">none</option><option>jet1</option></select>
         <label for="mPar">Star time (s)</label><input id="mPar" type="number" min="0" step="5" placeholder="none">
@@ -120,7 +120,7 @@ const GAME_HTML = /*@GAMEHTML*/;
   const store = { get(k, d) { try { const v = localStorage.getItem('clankers-ed:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('clankers-ed:' + k, JSON.stringify(v)); } catch (e) { /* blocked */ } } };
 
   // ---------- drawing one tile or piece (shared by the palette and the grid)
-  const SOLID = new Set(['#', '=', 'X', '?', '$', '1', '2', '3', '4', 'D']);
+  const SOLID = new Set(['#', '=', 'X', '?', '$', '1', '2', '3', '4', 'D', '<', '>']);
   const BADGE = { '?': ['?', '#ffd23f'], '$': ['o', '#ffd23f'], '1': ['M', '#49f08a'], '2': ['R', '#ff8fc7'], '3': ['B', '#8fd3ff'], '4': ['N', '#ff6b6b'] };
   function drawCell(g, c, x, y, t, above) {
     K.g = g;
@@ -134,6 +134,7 @@ const GAME_HTML = /*@GAMEHTML*/;
       if (BADGE[c]) { g.fillStyle = BADGE[c][1]; g.fillRect(x + 1, y + 5, TS - 2, 6); g.font = '8px ' + '"Titan One", sans-serif'; g.textAlign = 'center'; g.fillStyle = '#2b2230'; g.fillText(BADGE[c][0], x + 8, y + 11); }
       else { g.beginPath(); g.moveTo(x + 2.5, y + 2.5); g.lineTo(x + TS - 2.5, y + TS - 2.5); g.stroke(); }
     }
+    else if (c === '<' || c === '>') { g.save(); g.translate(x, y); LEVELART.belt(g, 0); g.restore(); g.fillStyle = '#ffd23f'; g.beginPath(); const d = c === '>' ? 1 : -1; g.moveTo(x + 8 - 3 * d, y + 6); g.lineTo(x + 8 + 3 * d, y + 9); g.lineTo(x + 8 - 3 * d, y + 12); g.fill(); }
     else if (c === 'D') { K.rr(x + 1, y, TS - 2, TS, 1, '#7d8397'); g.fillStyle = '#5d6378'; g.fillRect(x + 3, y + 3, TS - 6, TS - 6); g.fillStyle = '#ffcf3a'; g.fillRect(x + 1, y, TS - 2, 3); }
     else if (c === 'L') { K.rr(x + 2, y + 10, 12, 6, 1.5, '#5d566a'); g.save(); g.translate(x + 8, y + 12); g.rotate(-0.7); g.fillStyle = '#9aa1b0'; g.fillRect(-1, -11, 2, 11); K.circ(0, -11, 3, '#e04f4f'); g.restore(); }
     else if (c === 'o') K.nut(x + 8, y + 8, 4.2, 0, '#ffd23f');
@@ -269,7 +270,7 @@ const GAME_HTML = /*@GAMEHTML*/;
   let frameReady = false, pending = null;
   $('play').onclick = () => {
     $('playbox').classList.add('open');
-    const msg = { type: 'clankers:play', text: text(), power: $('ptPower').value || null, party: [{ hero: $('ptHero').value, joined: true }, { hero: $('ptHero').value === 'robot' ? 'ostrich' : 'robot', joined: $('ptPlayers').value === '2' }] };
+    const msg = { type: 'clankers:play', world: path.split('/')[0], text: text(), power: $('ptPower').value || null, party: [{ hero: $('ptHero').value, joined: true }, { hero: $('ptHero').value === 'robot' ? 'ostrich' : 'robot', joined: $('ptPlayers').value === '2' }] };
     const f = $('game');
     if (!frameReady) {
       pending = msg;

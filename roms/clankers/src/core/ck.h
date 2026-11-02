@@ -46,6 +46,7 @@ enum {
 enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
     SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR, SONG_LULLABY, SONG_STORM,
+    SONG_MAP2, SONG_MAP3, SONG_MAP4, SONG_FACTORY, SONG_MOUNTAIN, SONG_MOON, SONG_TRAVEL, SONG_PARADE,
     SONG_COUNT
 };
 int ck_song_by_name(const char *name);   // "level2" -> SONG_LEVEL2, unknown -> SONG_NONE
@@ -92,6 +93,10 @@ void ck_music_advance(ck_music *m, float dt, void (*emit)(const ck_tone *t, void
 
 // ---------------------------------------------------------------------------- data files
 enum { CK_KIND_LEVEL, CK_KIND_BOSS, CK_KIND_BONUS };
+// The Big Glitch of each world (a boss level's "boss:"), and each world's look ("theme:").
+enum { BOSS_CRANE, BOSS_STAMPER, BOSS_BOULDER, BOSS_HAULER, CK_BOSS_COUNT };
+enum { THEME_JUNKYARD, THEME_FACTORY, THEME_MOUNTAIN, THEME_MOON, CK_THEME_COUNT };
+#define CK_WORLDS 4
 
 typedef struct {
     char name[40];
@@ -101,6 +106,8 @@ typedef struct {
     char hatch[16];           // side zone id
     int par, time;            // seconds; 0 = none
     char boss[16];
+    int bossType;             // BOSS_*
+    float grav;               // 0.3, or 0.2 on the Moon ("gravity: low")
     int w;                    // width in tiles
     char rows[CK_ROWS][CK_MAXW];
 } ck_leveldef;
@@ -133,6 +140,8 @@ typedef struct {
     char name[32];
     int num;
     char theme[16];
+    int themeId;              // THEME_*
+    int song;                 // the map's song
     int gears;
     uint32_t babies[4];
     char bossmsg[48];
@@ -162,6 +171,19 @@ typedef struct {
 } ck_prog;
 
 void ck_prog_fresh(ck_prog *p);
+
+// Everything the EEPROM holds: which world you are in, and each world's progress. A world you
+// have not been to yet has magic 0. An older save (one ck_prog with magic "CK01" at the start)
+// becomes World 1's progress.
+#define CK_SAVES_MAGIC 0x434B3032u  // "CK02"
+typedef struct {
+    uint32_t magic;
+    uint8_t world;                   // 1..CK_WORLDS
+    uint8_t pad[3];
+    ck_prog w[CK_WORLDS];
+} ck_saves;
+// Read a save from raw EEPROM bytes (at least sizeof(ck_saves)); anything unknown starts fresh.
+void ck_saves_read(ck_saves *s, const void *raw);
 
 // ---------------------------------------------------------------------------- particles
 enum { PART_PUFF, PART_STAR, PART_CONF, PART_CHUNK };
@@ -255,8 +277,18 @@ typedef struct {
     int frame, clearT, dyingT, nameT, timeF, shake, toastT;
     bool retry, timeUp;
     char toast[24];
-    bool hasCrane;
-    struct { float ang, rope, mx, my; int hits, shake, ouch; bool fixed, padShown; } crane;
+    // The Big Glitch: bounce on its three red buttons while dodging it.
+    //   crane: swings its magnet (ang, rope, mx, my)
+    //   stamper: slides along its rail (x), shakes, slams down to the floor (y is its top)
+    //   boulder: rolls along the floor (x, y centre, rot), sits dizzy after bumping a wall
+    //   hauler: flies to and fro (x, y centre), stops, then shines a beam straight down
+    bool hasBoss;
+    struct {
+        int type, hits, shake, ouch, state, timer, dir;
+        bool fixed, padShown;
+        float ang, rope, mx, my;
+        float x, y, vy, low, rot, ft;
+    } boss;
     bool hasShower;
     int showerLeft, showerDone;
     bool hasResult;
@@ -298,7 +330,38 @@ typedef struct {
 } ck_map;
 
 // ---------------------------------------------------------------------------- the whole game
-enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO };
+enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT };
+enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
+
+// The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine
+// lift, 3 the rocket to the Moon, 4 the parade home (then THE END and the title). Where everyone
+// is comes from ck_cut_cast(), so every frontend shows the same film.
+extern const float ck_cut_len[CK_WORLDS + 1];
+#define CK_CUT_GROUND 196       // where everyone stands
+#define CK_CUT_SHAFT_X 160      // film 2: the lift shaft's middle, and the top the cage rides to
+#define CK_CUT_SHAFT_TOP 64
+#define CK_CUT_PAD_X 214        // film 3: the rocket's middle
+#define CK_CUT_GATE_X 236       // film 1: the factory's roller door
+#define CK_CUT_GATE_Y 136
+#define CK_CUT_GATE_W 56
+#define CK_CUT_GATE_H 60
+typedef struct { float x, y, a; bool walk; } ck_cut_actor;   // a: how visible, 0..1
+typedef struct {
+    ck_cut_actor heroes[2], babies[16];
+    int nheroes, nbabies;
+    float gate;          // film 1: how far the door is open, 0..1
+    float cageY;         // film 2: the lift cage's floor
+    float rocketY;       // film 3: the rocket's bottom
+    float shake;         // film 3: the rocket shaking before lift-off
+    bool flame, bigFlame;
+    float floatX;        // film 4: the parade float's left end
+    const char *caption;
+    float captionA;      // fades in
+    bool gold;           // the last caption of the last film is gold
+    float black, white;  // fade from black at the start, to white at the end, 0..1
+} ck_cut_view;
+struct ck_game;
+void ck_cut_cast(const struct ck_game *G, ck_cut_view *v);
 
 // The story before the title (G->t is its clock): the night, the Big Glitch storm, the babies
 // blown away, then dawn. Any button skips it.
@@ -310,8 +373,19 @@ typedef struct {
     float boltDx[CK_INTRO_BOLT]; // its zigzag, one x step per 14 px down (new every frame)
 } ck_intro;
 
-typedef struct {
+// Reads a data file ("w2/world.txt", "w2/2-1.txt", ...) for the core. Returns malloc'd text
+// (the core frees it), or NULL if there is no such file.
+typedef char *(*ck_loader)(const char *path, void *user);
+
+typedef struct ck_game {
     ck_world world;
+    int worldNum;              // 1..CK_WORLDS
+    ck_saves saves;            // prog is copied in here by ck_game_saves()
+    ck_loader load;
+    void *loadUser;
+    int cut;                   // which film SC_CUT is showing
+    uint32_t cutBabies[16];
+    int ncutBabies;
     ck_leveldef defs[CK_MAXNODES];
     bool hasDef[CK_MAXNODES];
     ck_prog prog;
@@ -336,7 +410,16 @@ typedef struct {
     uint32_t rng;
 } ck_game;
 
-// Set up from world.txt; then add each level with ck_game_add_level().
+// Start the game: reads the save's world (and the others as you travel) through `load`.
+bool ck_game_boot(ck_game *G, ck_loader load, void *user, const ck_saves *saved);
+// Go to world n (1..CK_WORLDS), standing on its first node of kind `at` (CK_NODE_HOME or
+// CK_NODE_EXIT). False if its files are missing.
+bool ck_game_enter_world(ck_game *G, int n, int at);
+// Show the film after world k (1..CK_WORLDS); when it ends you are in world k+1 (or at the title).
+void ck_game_film(ck_game *G, int k);
+// The save with the current world's progress copied in, for the frontend to write.
+const ck_saves *ck_game_saves(ck_game *G);
+// Lower level, for tests: set up World 1 from world.txt; then add each level with ck_game_add_level().
 bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved);
 // Level text for the node whose level= is `stem`. Returns false if no node uses it.
 bool ck_game_add_level(ck_game *G, const char *stem, const char *text);

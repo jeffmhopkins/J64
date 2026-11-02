@@ -27,7 +27,7 @@ uint16_t ck_bot(const ck_level *lv) {
 }
 
 const char *ck_scene_name(int scene) {
-    static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro" };
+    static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro", "cut" };
     return scene >= 0 && scene < (int)(sizeof names / sizeof *names) ? names[scene] : "?";
 }
 
@@ -39,7 +39,8 @@ void ck_autotest_init(ck_autotest *A, const ck_game *G) {
 // The tour, one step at a time.
 enum {
     T_INTRO_NIGHT, T_INTRO_STORM, T_INTRO_BLOW, T_SKIP_INTRO, T_TITLE, T_SELECT, T_MAP, T_WALK,
-    T_AT_L1, T_LEVEL, T_PAUSE, T_RESUME, T_PLAY, T_BACK, T_DONE,
+    T_AT_L1, T_LEVEL, T_PAUSE, T_RESUME, T_PLAY, T_FILM, T_FILM_ON, T_WORLD2, T_W2_WALK, T_W2_GO,
+    T_W2_LEVEL, T_PARADE, T_PARADE_ON, T_THE_END, T_BACK, T_DONE,
 };
 
 static int check(ck_autotest *A, const char *name) {
@@ -131,6 +132,52 @@ int ck_autotest_step(ck_autotest *A, ck_game *G) {
             next(A);
             return AT_CHECK;
         }
+        break;
+    // the film into World 2, then World 2's map and first level
+    case T_FILM:
+        ck_game_film(G, 1);
+        next(A);
+        break;
+    case T_FILM_ON:
+        if (G->scene != SC_CUT) return fail(A, G, "the film did not start");
+        if (G->t >= 6) return check(A, "film 1: into the factory");
+        break;
+    case T_WORLD2:
+        if (G->scene == SC_MAP) {
+            if (G->worldNum != 2 || G->world.themeId != THEME_FACTORY) return fail(A, G, "the film did not lead to World 2");
+            return check(A, "world 2: Gear Factory");
+        }
+        if (A->stepFrames > 60 * 20) return fail(A, G, "the film never ended");
+        break;
+    case T_W2_WALK:
+        if (A->stepFrames == 2) A->pressed = CK_RIGHT;
+        if (A->stepFrames > 3 && !G->map.walking) {
+            if (ck_world_node(&G->world, "l1") != ck_map_here(G)) return fail(A, G, "the walk did not reach 2-1");
+            next(A);
+        }
+        if (A->stepFrames > 600) return fail(A, G, "the walk to 2-1 never ended");
+        break;
+    case T_W2_GO:
+        if (G->scene == SC_LEVEL) { next(A); break; }
+        if (A->stepFrames == 2) A->pressed = CK_A;
+        if (A->stepFrames > 10) return fail(A, G, "A did not start 2-1");
+        break;
+    case T_W2_LEVEL:
+        if (G->scene != SC_LEVEL) return fail(A, G, "left 2-1 while standing still");
+        if (A->stepFrames == 60) return check(A, "2-1: start");
+        break;
+    // the last film: the parade with every baby bot, then THE END and the title
+    case T_PARADE:
+        ck_game_film(G, CK_WORLDS);
+        next(A);
+        break;
+    case T_PARADE_ON:
+        if (G->scene != SC_CUT) return fail(A, G, "the parade did not start");
+        if (G->t >= 8) return check(A, "film 4: the parade");
+        break;
+    case T_THE_END:
+        if (G->scene == SC_TITLE) { next(A); break; }
+        if (A->stepFrames > 60 * 20) return fail(A, G, "the parade never ended");
         break;
     case T_BACK:
         A->step = T_DONE;

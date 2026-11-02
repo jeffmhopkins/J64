@@ -34,6 +34,10 @@ void ck_jet_start(ck_game *G, int hatch);
 bool ck_jet_update(ck_game *G);           // true when the zone is over
 void ck_level_come_back(ck_game *G);
 
+// cut.c
+void ck_cut_start(ck_game *G, int k);
+bool ck_cut_update(ck_game *G);           // true when the film is over
+
 // map.c
 void ck_map_reset(ck_game *G);
 void ck_map_update(ck_game *G, float now);

@@ -1,0 +1,27 @@
+# World 4 map. The moon theme draws its own scenery (craters, domes, the Earth in the sky).
+name: Moon Base
+num: 4
+theme: moon
+song: map4
+gears: 9
+babies: 3BF0FF FF8FC7 49F08A FFD23F
+boss-msg: Fixed! The parade is ready
+
+# node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
+node home   2 11  home   "Rocket landing pad"
+node l1     6 11  level  "Moon Bounce"                level=4-1
+node l2     6 7   level  "Airlock Doors"              level=4-2
+node shop   2 7   shop   "Parts shop"
+node l3     11 7  level  "Star Rocket"                level=4-3
+node bonus  11 11 bonus  "Bonus · Zero-G Room"        level=bonus gate=3
+node boss   15 7  boss   "Big Glitch · The Sky Hauler" level=boss
+node exit   18 10 exit   "The parade · home together!"
+
+# road <from> <to> [via=<col>,<row> ...] [gate=<gears needed>]
+road home l1
+road l1 l2
+road l2 shop
+road l2 l3
+road l3 bonus gate=3
+road l3 boss
+road boss exit via=15,10

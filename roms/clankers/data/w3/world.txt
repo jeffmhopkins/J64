@@ -1,0 +1,27 @@
+# World 3 map. The mountain theme draws its own scenery (peaks, crystals, mine rails).
+name: Magnet Mountain
+num: 3
+theme: mountain
+song: map3
+gears: 9
+babies: C28BFF 3BF0FF FF8FC7 FFB347
+boss-msg: Fixed! The rocket is fuelled
+
+# node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
+node home   2 12  home   "Mine lift"
+node l1     6 12  level  "Magnet Cave"                level=3-1
+node l2     6 8   level  "Mine Cart Run"              level=3-2
+node shop   2 8   shop   "Parts shop"
+node l3     10 8  level  "Windy Peak"                 level=3-3
+node bonus  10 12 bonus  "Bonus · Crystal Slide"      level=bonus gate=3
+node boss   14 4  boss   "Big Glitch · Rumbleboulder" level=boss
+node exit   17 4  exit   "Rocket to World 4"
+
+# road <from> <to> [via=<col>,<row> ...] [gate=<gears needed>]
+road home l1
+road l1 l2
+road l2 shop
+road l2 l3
+road l3 bonus gate=3
+road l3 boss via=14,8
+road boss exit
