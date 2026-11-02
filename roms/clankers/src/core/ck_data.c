@@ -7,7 +7,7 @@
 
 #include "ck.h"
 
-static const char KNOWN[] = ".#=-X?$1234DLoGbsgTvrk~|CHh@FP";
+static const char KNOWN[] = ".#=-X?$1234DLoGbsgTvrk~|CHh@FP<>";
 
 static void copy(char *dst, size_t n, const char *src, size_t len) {
     if (len >= n) len = n - 1;
@@ -48,8 +48,17 @@ static bool keyval(const char *s, size_t n, char *key, size_t kn, char *val, siz
 
 static const char *const SONG_NAMES[SONG_COUNT] = {
     "", "title", "select", "map", "level", "level2", "level3", "boss", "bonus", "rainbow",
-    "jet", "rescue", "clear", "lullaby", "storm",
+    "jet", "rescue", "clear", "lullaby", "storm", "map2", "map3", "map4", "factory", "mountain",
+    "moon", "travel", "parade",
 };
+
+static const char *const BOSS_NAMES[CK_BOSS_COUNT] = { "crane", "stamper", "boulder", "hauler" };
+static const char *const THEME_NAMES[CK_THEME_COUNT] = { "junkyard", "factory", "mountain", "moon" };
+static int index_of(const char *const *names, int n, const char *name) {
+    for (int i = 0; i < n; i++)
+        if (!strcmp(name, names[i])) return i;
+    return 0;
+}
 
 int ck_song_by_name(const char *name) {
     for (int i = 1; i < SONG_COUNT; i++)
@@ -60,6 +69,7 @@ int ck_song_by_name(const char *name) {
 bool ck_parse_level(const char *text, ck_leveldef *L) {
     memset(L, 0, sizeof *L);
     L->baby = 0xFF8FC7;
+    L->grav = 0.3f;
     const char *s = text;
     size_t n;
     char key[16], val[64];
@@ -80,7 +90,8 @@ bool ck_parse_level(const char *text, ck_leveldef *L) {
             else if (!strcmp(key, "hatch")) copy(L->hatch, sizeof L->hatch, val, strlen(val));
             else if (!strcmp(key, "par")) L->par = atoi(val);
             else if (!strcmp(key, "time")) L->time = atoi(val);
-            else if (!strcmp(key, "boss")) copy(L->boss, sizeof L->boss, val, strlen(val));
+            else if (!strcmp(key, "boss")) { copy(L->boss, sizeof L->boss, val, strlen(val)); L->bossType = index_of(BOSS_NAMES, CK_BOSS_COUNT, L->boss); }
+            else if (!strcmp(key, "gravity")) L->grav = !strcmp(val, "low") ? 0.2f : 0.3f;
         }
         p = next;
     }
@@ -168,6 +179,7 @@ bool ck_parse_world(const char *text, ck_world *W) {
     const uint32_t babies[4] = { 0xFF8FC7, 0x49F08A, 0xFFB347, 0x8FD3FF };
     memcpy(W->babies, babies, sizeof babies);
     strcpy(W->name, "New World");
+    W->song = SONG_MAP;
     // roads name nodes by id; resolve after every node is read
     struct { char a[12], b[12]; } pend[CK_MAXROADS];
     const char *p = text;
@@ -189,7 +201,8 @@ bool ck_parse_world(const char *text, ck_world *W) {
         if (keyval(s, len, key, sizeof key, val, sizeof val)) {
             if (!strcmp(key, "name")) copy(W->name, sizeof W->name, val, strlen(val));
             else if (!strcmp(key, "num")) W->num = atoi(val);
-            else if (!strcmp(key, "theme")) copy(W->theme, sizeof W->theme, val, strlen(val));
+            else if (!strcmp(key, "theme")) { copy(W->theme, sizeof W->theme, val, strlen(val)); W->themeId = index_of(THEME_NAMES, CK_THEME_COUNT, W->theme); }
+            else if (!strcmp(key, "song")) W->song = ck_song_by_name(val);
             else if (!strcmp(key, "gears")) W->gears = atoi(val);
             else if (!strcmp(key, "boss-msg")) copy(W->bossmsg, sizeof W->bossmsg, val, strlen(val));
             else if (!strcmp(key, "babies")) {

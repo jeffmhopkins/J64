@@ -25,10 +25,12 @@ the row just above the ground they stand on.
 | `g` | Grumble Crate (follows you; stomp it shut, then kick it, or pick it up with B and throw it) | `k` | swinging hook platform (hangs from this tile) |
 | `C` | junk compactor: a 2-tile block that slams down from here to the ground | `F` | checkpoint flag (a lost try restarts here) |
 | `r` | raft: a 2-tile platform that rides its track | `~` `|` | raft track, sideways or up and down, starting next to the `r` |
+| `>` | conveyor belt carrying you right (solid) | `<` | conveyor belt carrying you left (solid) |
 
 Header keys: `name`, `kind` (`level`, `boss` or `bonus`), `song`, `baby` (the baby bot's
 colour as hex), `hatch` (side zone id), `par` (seconds to beat for the speedy star), `time`
-(seconds on a race clock; running out costs a try), `boss` (boss type).
+(seconds on a race clock; running out costs a try), `boss` (on a boss level, which Big Glitch:
+`crane`, `stamper`, `boulder` or `hauler`), `gravity` (`low` for the Moon's floaty jumps).
 
 > [!TIP]
 > Each level's three stars are: finish it, collect every bolt and reboot every Glitchy in one go,
@@ -37,8 +39,13 @@ colour as hex), `hatch` (side zone id), `par` (seconds to beat for the speedy st
 <a id="worlds"></a>
 ## World files
 
-`world.txt` in each world folder lists the map's nodes, roads and scenery. See the comments in
-[w1/world.txt](w1/world.txt).
+`world.txt` in each world folder (`w1/` to `w4/`) lists the map's nodes, roads and scenery. See
+the comments in [w1/world.txt](w1/world.txt). Other header keys: `theme` (the look of the map
+and its levels: `junkyard`, `factory`, `mountain` or `moon`) and `song` (the map's music).
+
+> [!NOTE]
+> The World 2 to 4 levels were first written by `tools/w234_levels.py`. The `.txt` files are
+> the source now: edit them (or use the level editor), not the script.
 
 <a id="songs"></a>
 ## Songs
@@ -47,6 +54,4 @@ colour as hex), `hatch` (side zone id), `par` (seconds to beat for the speedy st
 then one line per track: the wave (`square`, `triangle`, `sawtooth`, `sine` or `drum`), its
 volume, and its notes. The comment at the top of the file explains the note syntax.
 
-> [!NOTE]
-> The browser build still plays the songs written in `web/game.js`. Change both until the
-> browser reads this file too.
+Both builds read this file, so a change here changes the music everywhere.

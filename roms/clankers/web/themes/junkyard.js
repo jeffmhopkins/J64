@@ -98,3 +98,34 @@ THEMES.junkyard = (W) => {
     },
   };
 };
+
+// Level looks (see lib/levelart.js).
+LTHEMES.junkyard = (() => {
+  const K = CK, P = Math.PI;
+  return {
+    debris: ['#b07a44', '#7d5128'],
+    far(g, boss) {
+      const gr = g.createLinearGradient(0, 0, 0, 240); gr.addColorStop(0, boss ? '#3a2a60' : '#5b6fc0'); gr.addColorStop(0.55, boss ? '#a0507a' : '#9c87c9'); gr.addColorStop(0.85, '#f2a37a'); gr.addColorStop(1, '#ffcf8a');
+      g.fillStyle = gr; g.fillRect(0, 0, 640, 240);
+      K.circ(470, 150, 34, 'rgba(255,240,200,0.6)'); K.gear(470, 150, 28, 14, 0, 'rgba(255,231,163,0.9)', null); K.circ(470, 150, 22, '#fff1c4');
+      g.fillStyle = '#8a5f96'; g.beginPath(); g.moveTo(0, 240);
+      for (let x = 0; x <= 640; x += 32) g.lineTo(x, 150 + Math.sin(x * 0.02) * 14 + Math.sin(x * 0.051) * 8);
+      g.lineTo(640, 240); g.fill();
+      g.fillStyle = '#6e4a7c'; g.fillRect(520, 70, 5, 80); g.fillRect(480, 70, 70, 5); g.fillRect(486, 75, 2, 24);
+    },
+    mid(g) {
+      g.fillStyle = '#5c3c62';
+      for (let i = 0; i < 9; i++) { const x = i * 74 + 20, w = 50 + (i * 37) % 40, h = 26 + (i * 13) % 18; g.beginPath(); g.ellipse(x, 200, w / 2, h, 0, P, 0); g.fill(); }
+      for (let i = 0; i < 9; i++) { const x = i * 74 + 34; K.circ(x, 186 - (i % 3) * 6, 5, '#4c3052'); K.gear(x + 18, 190, 6, 8, i, '#4c3052', '#5c3c62'); }
+      g.fillRect(0, 200, 640, 40);
+    },
+    tile: LEVELART.tiles({
+      ground: (g, i) => LEVELART.ground(g, i, { body: '#8a5233', speck: '#7a462a', top: '#c98b55', rim: '#e2aa70', under: '#a86c40' }, (g, k, hash) => {
+        if (k === 0) K.nut(5 + (hash % 6), 2.5, 1.8, hash, '#b8a6b6');
+        if (k === 1) K.circ(10, 3, 1.6, '#2b2833');
+      }),
+      girder(g) { K.rr(0, 0, 16, 16, 2, '#d4892f'); g.fillStyle = '#a5651f'; g.fillRect(0, 13, 16, 3); g.fillStyle = '#f0ac58'; g.fillRect(0, 0, 16, 2); K.circ(5, 8, 2, '#8a5317'); K.circ(11, 8, 2, '#8a5317'); },
+      plank(g) { g.fillStyle = '#8a5a32'; g.fillRect(0, 0, 16, 5); g.fillStyle = '#b07a44'; g.fillRect(0, 0, 16, 2); g.fillStyle = '#5e3a1e'; g.fillRect(7, 5, 2, 4); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(15, 0, 1, 5); },
+    }),
+  };
+})();

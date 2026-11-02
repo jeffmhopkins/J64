@@ -26,7 +26,7 @@ const ASSETS = path.join(ROM, 'assets');
 
 const read = p => fs.readFileSync(path.join(WEB, p), 'utf8');
 const themes = fs.readdirSync(path.join(WEB, 'themes')).filter(f => f.endsWith('.js')).sort().map(f => read('themes/' + f));
-const engine = [read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), ...themes, read('lib/title.js'), read('lib/glitchies.js')].join('\n');
+const engine = [read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), ...themes, read('lib/bossart.js'), read('lib/cutart.js'), read('lib/title.js'), read('lib/glitchies.js')].join('\n');
 const files = {};
 (function walk(dir) {
   for (const f of fs.readdirSync(dir).sort()) {
@@ -122,35 +122,12 @@ function bakeAll() {
     if (e.state !== 'kicked') for (let k = 0; k < 2; k++) { const a = t * 4 + k * P; K.star(cx + Math.cos(a) * 8, by - 17 + Math.sin(a) * 2, 1.8, '#fff6a0'); }
   }
 
-  // ---- level tiles, 16x16: 0-3 ground top, 4-7 ground inside, 8 girder, 9 plank, 10 crate,
-  //      11 crate with a prize, 12 door, 13 door with its stripe
-  strip('tiles', 16, 16, 0, 0, 14, (g, i) => {
-    const x = 0, y = 0, TS = 16, hash = [12, 1, 6, 15][i % 4] * 105;
-    if (i < 8) {
-      g.fillStyle = '#8a5233'; g.fillRect(x, y, TS, TS);
-      g.fillStyle = '#7a462a'; if (hash % 3 === 0) g.fillRect(x + (hash % 11), y + (hash % 7) + 5, 3, 2); if (hash % 5 === 0) g.fillRect(x + (hash % 9) + 3, y + 10, 2, 2);
-      if (i < 4) {
-        g.fillStyle = '#c98b55'; g.fillRect(x, y, TS, 5); g.fillStyle = '#e2aa70'; g.fillRect(x, y, TS, 1.5);
-        g.fillStyle = '#a86c40'; g.fillRect(x, y + 5, TS, 1.5);
-        if (i === 0) K.nut(x + 5 + (hash % 6), y + 2.5, 1.8, hash, '#b8a6b6');
-        if (i === 1) K.circ(x + 10, y + 3, 1.6, '#2b2833');
-      }
-    } else if (i === 8) {
-      K.rr(x, y, TS, TS, 2, '#d4892f'); g.fillStyle = '#a5651f'; g.fillRect(x, y + TS - 3, TS, 3); g.fillStyle = '#f0ac58'; g.fillRect(x, y, TS, 2);
-      K.circ(x + 5, y + 8, 2, '#8a5317'); K.circ(x + 11, y + 8, 2, '#8a5317');
-    } else if (i === 9) {
-      g.fillStyle = '#8a5a32'; g.fillRect(x, y, TS, 5); g.fillStyle = '#b07a44'; g.fillRect(x, y, TS, 2); g.fillStyle = '#5e3a1e'; g.fillRect(x + 7, y + 5, 2, 4);
-      g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x + TS - 1, y, 1, 5);
-    } else if (i < 12) {
-      K.rr(x + 0.5, y + 0.5, TS - 1, TS - 1, 1.5, '#b07a44'); g.strokeStyle = '#7d5128'; g.lineWidth = 1.5; g.strokeRect(x + 2, y + 2, TS - 4, TS - 4);
-      g.beginPath(); g.moveTo(x + 2.5, y + 2.5); g.lineTo(x + TS - 2.5, y + TS - 2.5); g.stroke();
-      g.fillStyle = '#d9a46a'; g.fillRect(x + 1, y + 1, TS - 2, 1);
-      if (i === 11) { g.fillStyle = '#ffd23f'; g.fillRect(x + 1, y + 6, TS - 2, 4); text(g, '?', x + 8, y + 12, 9, '#fff6d8', '#7d5128'); }
-    } else {
-      K.rr(x + 1, y, TS - 2, TS, 1, '#7d8397'); g.fillStyle = '#5d6378'; g.fillRect(x + 3, y + 3, TS - 6, TS - 6);
-      if (i === 13) { g.fillStyle = '#ffcf3a'; g.fillRect(x + 1, y, TS - 2, 3); }
-    }
-  });
+  // ---- level tiles, 16x16, one strip per world's look (tiles_0 junkyard, 1 factory, 2 mountain,
+  //      3 moon; the order of THEME_* in src/core/ck.h). Frames as in web/lib/levelart.js:
+  //      0-3 ground top, 4-7 ground inside, 8 girder, 9 plank, 10 crate, 11 crate with a prize,
+  //      12 door, 13 door with its stripe, 14-17 conveyor belt moving right
+  const THEME_ORDER = ['junkyard', 'factory', 'mountain', 'moon'];
+  THEME_ORDER.forEach((th, k) => strip('tiles_' + k, 16, 16, 0, 0, LEVELART.TILE_FRAMES, (g, i) => LTHEMES[th].tile(g, i)));
 
   // ---- things in a level. Anchors put (0,0) at the entity's top-left corner, like the game's boxes.
   strip('bolt', 14, 14, 7, 7, 1, () => K.nut(0, 0, 4.2, 0, '#ffd23f'));   // anchored at the centre, so it can spin
@@ -203,6 +180,12 @@ function bakeAll() {
     K.mouth(fixed ? 'smile' : 'zig', ex, ey + 6, 5, 1.5, '#2b2230');
   });
   strip('magnet', 28, 20, 14, 10, 1, g => { K.arc(0, 2, 9, P * 1.05, P * 1.95, 6, '#e04f4f'); g.fillStyle = '#e8e4f0'; g.fillRect(-12, 0, 6, 4); g.fillRect(6, 0, 6, 4); });
+  // the bosses of Worlds 2 to 4 (web/lib/bossart.js), one frame per face:
+  // 0 glitchy, 1 ouch, 2 fixed, 3 dizzy
+  strip('boss_stamper', 52, 34, 26, 2, 4, (g, i) => BOSSART.stamper(g, i));
+  strip('boss_rock', 44, 44, 22, 22, 1, g => BOSSART.boulderRock(g));
+  strip('boss_rockface', 32, 24, 16, 12, 4, (g, i) => BOSSART.boulderFace(g, i));
+  strip('boss_hauler', 80, 40, 40, 20, 4, (g, i) => BOSSART.hauler(g, i));
 
   // ---- baby bots, one strip per colour any level or world uses: 0-1 waving, 2-3 cheering
   const babies = new Set();
@@ -241,36 +224,31 @@ function bakeAll() {
     g.fillStyle = '#9fb7a0'; g.beginPath(); g.moveTo(0, 48);
     for (let x = 0; x <= 640; x += 4) g.lineTo(x, 20 + Math.sin(x * P * 2 / 213.3333) * 8); g.lineTo(640, 48); g.fill();
   }, 'rgba16');
-  // ---- map pieces drawn on top of the baked map picture
-  const world = DATA_FMT.worldForMap(DATA_FMT.parseWorld(DATA['w1/world.txt']));
-  const node = kind => world.nodes.find(n => n.kind === kind);
-  strip('map_boss', 48, 52, 24, 44, 2, (g, i) => world.drawBoss(g, { x: 0, y: 0 }, 0.4, i === 1));
+  // ---- map pieces drawn on top of the baked map picture, one per world (map_boss_1 ... map_boss_4)
+  const worlds = [1, 2, 3, 4].map(n => DATA_FMT.worldForMap(DATA_FMT.parseWorld(DATA['w' + n + '/world.txt'])));
+  const node = (world, kind) => world.nodes.find(n => n.kind === kind);
+  worlds.forEach((world, k) => strip('map_boss_' + (k + 1), 48, 52, 24, 44, 2, (g, i) => world.drawBoss(g, { x: 0, y: 0 }, 0.4, i === 1)));
   strip('map_shop', 32, 24, 16, 20, 2, (g, i) => { g.globalAlpha = i ? 0.5 : 1; K.rr(-11, -9, 22, 14, 2, '#7a5aa6'); g.fillStyle = '#5b3f86'; g.beginPath(); g.moveTo(-14, -8); g.lineTo(0, -19); g.lineTo(14, -8); g.fill(); K.rr(-4, -3, 8, 8, 1, '#2b2230'); K.gear(0, -13, 4, 8, 0, '#ffd23f', '#5b3f86'); g.globalAlpha = 1; }, 'rgba32');
-  strip('map_exit', 20, 20, 10, 10, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0));
+  worlds.forEach((world, k) => strip('map_exit_' + (k + 1), 20, 20, 10, 10, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0)));
 
   // ---- full-screen pictures (RGBA16)
   function picture(name, w, h, draw) { strip(name, w, h, 0, 0, 1, draw, 'rgba16'); }
-  function paintBg(g, boss) {
-    const gr = g.createLinearGradient(0, 0, 0, 240); gr.addColorStop(0, boss ? '#3a2a60' : '#5b6fc0'); gr.addColorStop(0.55, boss ? '#a0507a' : '#9c87c9'); gr.addColorStop(0.85, '#f2a37a'); gr.addColorStop(1, '#ffcf8a');
-    g.fillStyle = gr; g.fillRect(0, 0, 640, 240);
-    K.circ(470, 150, 34, 'rgba(255,240,200,0.6)'); K.gear(470, 150, 28, 14, 0, 'rgba(255,231,163,0.9)', null); K.circ(470, 150, 22, '#fff1c4');
-    g.fillStyle = '#8a5f96'; g.beginPath(); g.moveTo(0, 240);
-    for (let x = 0; x <= 640; x += 32) g.lineTo(x, 150 + Math.sin(x * 0.02) * 14 + Math.sin(x * 0.051) * 8);
-    g.lineTo(640, 240); g.fill();
-    g.fillStyle = '#6e4a7c'; g.fillRect(520, 70, 5, 80); g.fillRect(480, 70, 70, 5); g.fillRect(486, 75, 2, 24);
-  }
-  picture('bg_far', 640, 240, g => paintBg(g, false));
-  picture('bg_far_boss', 640, 240, g => paintBg(g, true));
-  strip('bg_mid', 640, 80, 0, -160, 1, g => {
-    g.fillStyle = '#5c3c62';
-    for (let i = 0; i < 9; i++) { const x = i * 74 + 20, w = 50 + (i * 37) % 40, h = 26 + (i * 13) % 18; g.beginPath(); g.ellipse(x, 200, w / 2, h, 0, P, 0); g.fill(); }
-    for (let i = 0; i < 9; i++) { const x = i * 74 + 34; K.circ(x, 186 - (i % 3) * 6, 5, '#4c3052'); K.gear(x + 18, 190, 6, 8, i, '#4c3052', '#5c3c62'); }
-    g.fillRect(0, 200, 640, 40);
-  }, 'rgba16');
-  picture('map_w1', 320, 240, g => {
+  // each world's level backdrop (web/lib/levelart.js): the far picture, its boss-room version,
+  // and the hills in front (only y 160..240 is kept)
+  THEME_ORDER.forEach((th, k) => picture('bg_far_' + k, 640, 240, g => LTHEMES[th].far(g, false)));
+  THEME_ORDER.forEach((th, k) => picture('bg_far_boss_' + k, 640, 240, g => LTHEMES[th].far(g, true)));
+  THEME_ORDER.forEach((th, k) => strip('bg_mid_' + k, 640, 80, 0, -160, 1, g => LTHEMES[th].mid(g), 'rgba16'));
+  worlds.forEach((world, k) => picture('map_w' + (k + 1), 320, 240, g => {
     world.drawGround(g); world.drawLive(g, 0.6);
-    const home = node('home'); if (home) world.drawHome(g, home, 0);
-  });
+    const home = node(world, 'home'); if (home) world.drawHome(g, home, 0);
+  }));
+  // ---- the films between worlds (web/lib/cutart.js): a backdrop each, and the things that move
+  [1, 2, 3, 4].forEach(k => picture('cut_bg_' + k, 320, 240, g => CUTART.bg(g, k)));
+  strip('cut_gate', CUTART.GATE.w, CUTART.GATE.h, 0, 0, 1, g => CUTART.gate(g));
+  strip('cut_cage', 48, 76, 24, 72, 2, (g, i) => CUTART.cage(g, i === 1));
+  strip('cut_rocket', 48, 100, 24, 98, 1, g => CUTART.rocket(g));
+  strip('cut_flame', 28, 48, 14, 0, 2, (g, i) => CUTART.flame(g, i));
+  strip('cut_float', 140, 84, 70, 80, 1, g => CUTART.float(g));
   picture('title', 320, 240, g => { const T = makeTitle(g, 320, 240, false); T.frame(3.5); });
   picture('select_bg', 320, 240, g => {
     const gr = g.createLinearGradient(0, 0, 0, 240); gr.addColorStop(0, '#2b2350'); gr.addColorStop(1, '#5b3f86'); g.fillStyle = gr; g.fillRect(0, 0, 320, 240);

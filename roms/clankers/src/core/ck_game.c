@@ -1,6 +1,8 @@
 // The game as a whole: scenes (title, player select, map, levels, pause), progress, particles,
 // and the sound queue. The flow from web/game.js; drawing is left to each frontend.
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ck_internal.h"
@@ -96,14 +98,9 @@ void ck_step_parts(ck_game *G) {
 
 // ---------------------------------------------------------------------------- setup
 
-bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
-    memset(G, 0, sizeof *G);
-    G->rng = 0x2545F491u;
-    if (!ck_parse_world(world_text, &G->world)) return false;
-    if (saved && saved->magic == CK_SAVE_MAGIC) G->prog = *saved;
-    else ck_prog_fresh(&G->prog);
-    // A save can come back damaged (a half-finished write, another game's EEPROM): keep every
-    // field in range so nothing indexes past an array.
+// A save can come back damaged (a half-finished write, another game's EEPROM): keep every
+// field in range so nothing indexes past an array.
+static void sanitize(ck_game *G) {
     ck_prog *P = &G->prog;
     for (int i = 0; i < 2; i++) {
         P->hero[i] = P->hero[i] == HERO_OSTRICH ? HERO_OSTRICH : HERO_ROBOT;
@@ -115,9 +112,132 @@ bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
     for (int i = 0; i < CK_MAXNODES; i++) { P->got[i] &= 7; P->stars[i] &= 7; }
     if (P->at >= G->world.nnodes) P->at = 0;
     if (P->lives < 1 || P->lives > 9) P->lives = 3;
+}
+
+_Static_assert(sizeof(ck_saves) <= 512, "the save must fit a 4K EEPROM");
+
+void ck_saves_read(ck_saves *s, const void *raw) {
+    uint32_t magic;
+    memcpy(&magic, raw, sizeof magic);
+    memset(s, 0, sizeof *s);
+    if (magic == CK_SAVES_MAGIC) memcpy(s, raw, sizeof *s);
+    else if (magic == CK_SAVE_MAGIC) memcpy(&s->w[0], raw, sizeof s->w[0]);   // a save from before Worlds 2 to 4
+    s->magic = CK_SAVES_MAGIC;
+    if (s->world < 1 || s->world > CK_WORLDS) s->world = 1;
+    for (int i = 0; i < CK_WORLDS; i++)
+        if (s->w[i].magic != CK_SAVE_MAGIC) memset(&s->w[i], 0, sizeof s->w[i]);
+}
+
+const ck_saves *ck_game_saves(ck_game *G) {
+    G->saves.magic = CK_SAVES_MAGIC;
+    G->saves.world = (uint8_t)G->worldNum;
+    G->saves.w[G->worldNum - 1] = G->prog;
+    return &G->saves;
+}
+
+bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
+    memset(G, 0, sizeof *G);
+    G->rng = 0x2545F491u;
+    G->worldNum = 1;
+    G->saves.magic = CK_SAVES_MAGIC;
+    G->saves.world = 1;
+    if (!ck_parse_world(world_text, &G->world)) return false;
+    if (saved && saved->magic == CK_SAVE_MAGIC) G->prog = *saved;
+    else ck_prog_fresh(&G->prog);
+    sanitize(G);
     ck_map_reset(G);
     G->scene = SC_INTRO;
     G->song = SONG_LULLABY;
+    return true;
+}
+
+// Read world n's map and levels through the loader. False (and nothing changed) if it has no map.
+static bool load_world(ck_game *G, int n) {
+    static ck_world w;
+    char path[48];
+    if (!G->load || n < 1 || n > CK_WORLDS) return false;
+    snprintf(path, sizeof path, "w%d/world.txt", n);
+    char *text = G->load(path, G->loadUser);
+    bool ok = text && ck_parse_world(text, &w);
+    free(text);
+    if (!ok) return false;
+    G->world = w;
+    G->worldNum = n;
+    memset(G->hasDef, 0, sizeof G->hasDef);
+    for (int i = 0; i < w.nnodes; i++) {
+        if (!w.nodes[i].level[0] || G->hasDef[i]) continue;
+        snprintf(path, sizeof path, "w%d/%s.txt", n, w.nodes[i].level);
+        char *t = G->load(path, G->loadUser);
+        if (t) ck_game_add_level(G, w.nodes[i].level, t);
+        free(t);
+    }
+    return true;
+}
+
+static bool world_exists(ck_game *G, int n) {
+    char path[32];
+    if (!G->load || n < 1 || n > CK_WORLDS) return false;
+    snprintf(path, sizeof path, "w%d/world.txt", n);
+    char *t = G->load(path, G->loadUser);
+    bool ok = t != NULL;
+    free(t);
+    return ok;
+}
+
+// Make world n's progress the current one. The heroes, the tries left and the little-kid
+// speed come along from the world you were in.
+static void use_world_prog(ck_game *G, int n, const ck_prog *from) {
+    const ck_prog *had = &G->saves.w[n - 1];
+    if (had->magic == CK_SAVE_MAGIC) G->prog = *had;
+    else ck_prog_fresh(&G->prog);
+    if (from) {
+        G->prog.lives = from->lives; G->prog.little = from->little;
+        memcpy(G->prog.hero, from->hero, 2); memcpy(G->prog.col, from->col, 2); memcpy(G->prog.joined, from->joined, 2);
+    }
+    sanitize(G);
+}
+
+bool ck_game_boot(ck_game *G, ck_loader load, void *user, const ck_saves *saved) {
+    memset(G, 0, sizeof *G);
+    G->rng = 0x2545F491u;
+    G->load = load;
+    G->loadUser = user;
+    if (saved) G->saves = *saved;
+    if (G->saves.magic != CK_SAVES_MAGIC) { memset(&G->saves, 0, sizeof G->saves); G->saves.magic = CK_SAVES_MAGIC; }
+    int n = G->saves.world >= 1 && G->saves.world <= CK_WORLDS ? G->saves.world : 1;
+    if (!load_world(G, n) && (n == 1 || !load_world(G, (n = 1)))) return false;
+    // the heroes come from whichever world was saved last
+    const ck_prog *from = NULL;
+    for (int i = 0; i < CK_WORLDS; i++) if (G->saves.w[i].magic == CK_SAVE_MAGIC) { from = &G->saves.w[i]; break; }
+    if (G->saves.w[n - 1].magic == CK_SAVE_MAGIC) from = &G->saves.w[n - 1];
+    ck_prog keep;
+    if (from) keep = *from;
+    use_world_prog(G, n, from ? &keep : NULL);
+    ck_map_reset(G);
+    G->scene = SC_INTRO;
+    G->song = SONG_LULLABY;
+    return true;
+}
+
+static void go(ck_game *G, int scene);
+
+bool ck_game_enter_world(ck_game *G, int n, int at) {
+    if (n == G->worldNum || !world_exists(G, n)) return false;
+    ck_prog was = G->prog;
+    G->saves.w[G->worldNum - 1] = was;
+    if (!load_world(G, n)) return false;
+    G->saves.world = (uint8_t)n;
+    use_world_prog(G, n, &was);
+    for (int i = 0; i < G->world.nnodes; i++)
+        if (G->world.nodes[i].kind == at) { G->prog.at = (uint8_t)i; break; }
+    ck_save(G);
+    ck_map_reset(G);
+    char msg[48];
+    snprintf(msg, sizeof msg, "%s!", G->world.name);
+    for (char *c = msg; *c; c++) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 32);
+    ck_map_say(G, msg);
+    G->keepMap = true;
+    go(G, SC_MAP);
     return true;
 }
 
@@ -139,9 +259,9 @@ static void go(ck_game *G, int scene) {
     case SC_MAP:
         if (G->keepMap) G->keepMap = false;
         else ck_map_reset(G);
-        ck_play(G, SONG_MAP);
+        ck_play(G, G->world.song ? G->world.song : SONG_MAP);
         break;
-    case SC_SHOP: ck_play(G, SONG_MAP); break;
+    case SC_SHOP: ck_play(G, G->world.song ? G->world.song : SONG_MAP); break;
     }
 }
 
@@ -188,7 +308,13 @@ static void map_update(ck_game *G) {
                 ck_level_start(G, n, false, false);
                 return;
             } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SHOP); return; }
-            else if (k == CK_NODE_EXIT) { ck_sfx(G, SFX_NOPE); ck_map_say(G, "World 2 is coming soon!"); }
+            else if (k == CK_NODE_EXIT) {
+                // through the gate to the next world, with its little film first
+                if (G->worldNum >= CK_WORLDS || world_exists(G, G->worldNum + 1)) { ck_sfx(G, SFX_CONFIRM); ck_save(G); ck_cut_start(G, G->worldNum); return; }
+                char msg[48];
+                snprintf(msg, sizeof msg, "World %d is coming soon!", G->worldNum + 1);
+                ck_sfx(G, SFX_NOPE); ck_map_say(G, msg);
+            } else if (G->worldNum > 1) { ck_sfx(G, SFX_CONFIRM); ck_game_enter_world(G, G->worldNum - 1, CK_NODE_EXIT); return; }
             else ck_map_say(G, "Home sweet home");
         }
     }
@@ -268,6 +394,13 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
         if (ANYHIT(G, CK_A) || ANYHIT(G, CK_B) || ANYHIT(G, CK_START)) { ck_sfx(G, SFX_SELECT); G->keepMap = true; go(G, SC_MAP); }
         break;
     case SC_LEVEL: level_update(G); break;
+    case SC_CUT:
+        if (ck_cut_update(G)) {
+            if (G->cut < CK_WORLDS && ck_game_enter_world(G, G->cut + 1, CK_NODE_HOME)) break;
+            G->keepMap = false;
+            go(G, SC_TITLE);
+        }
+        break;
     case SC_JET:
         if (ck_jet_update(G)) { ck_level_come_back(G); G->scene = SC_LEVEL; }
         break;

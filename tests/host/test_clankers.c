@@ -22,21 +22,25 @@ static char *slurp(const char *path) {
     return s;
 }
 
-#define DATA "roms/clankers/data/w1/"
+#define DATA_ROOT "roms/clankers/data/"
+#define DATA DATA_ROOT "w1/"
 
+// The core reads every world's files through this, as the N64 reads them from rom:/data/.
+static char *load_data(const char *path, void *user) {
+    (void)user;
+    char full[128];
+    snprintf(full, sizeof full, DATA_ROOT "%s", path);
+    FILE *f = fopen(full, "rb");
+    if (!f) return NULL;   // a missing world is not a failure: the core asks to find out
+    fclose(f);
+    return slurp(full);
+}
+
+// A fresh game in World 1, from the real data files.
 static ck_game *load_game(void) {
     static ck_game G;
-    char *w = slurp(DATA "world.txt");
-    if (!w) return NULL;
-    EXPECT_EQ_INT(ck_game_init(&G, w, NULL), 1);
-    free(w);
-    for (int i = 0; i < G.world.nnodes; i++) {
-        if (!G.world.nodes[i].level[0]) continue;
-        char path[96];
-        snprintf(path, sizeof path, DATA "%s.txt", G.world.nodes[i].level);
-        char *t = slurp(path);
-        if (t) { ck_game_add_level(&G, G.world.nodes[i].level, t); free(t); }
-    }
+    EXPECT_EQ_INT(ck_game_boot(&G, load_data, NULL, NULL), 1);
+    EXPECT_EQ_INT(G.worldNum, 1);
     return &G;
 }
 
@@ -201,7 +205,8 @@ static uint16_t fuzz_pad(int *hold, uint16_t *cur) {
     return *cur;
 }
 static void fuzz_check(const ck_game *G) {
-    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_INTRO, 1);
+    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_CUT, 1);
+    EXPECT_EQ_INT(G->worldNum >= 1 && G->worldNum <= CK_WORLDS, 1);
     EXPECT_EQ_INT(G->nparts >= 0 && G->nparts <= CK_MAXPARTS, 1);
     EXPECT_EQ_INT(G->nsfx >= 0 && G->nsfx <= CK_MAXSFX, 1);
     EXPECT_EQ_INT(G->song >= 0 && G->song < SONG_COUNT, 1);
@@ -274,7 +279,7 @@ static void test_autotest(void) {
     }
     if (r != AT_PASS) fprintf(stderr, "autotest: %s\n", A.msg);
     EXPECT_EQ_INT(r, AT_PASS);
-    EXPECT_EQ_INT(checks, 10);
+    EXPECT_EQ_INT(checks, 14);
 }
 
 // Left alone, the story runs its songs in order, thunders during the storm and ends on the title.
@@ -376,6 +381,251 @@ static void test_music(void) {
     EXPECT_EQ_INT((int)tones[4].freq, 1319);
 }
 
+// ---------------------------------------------------------------------------- Worlds 2 to 4
+
+static void test_new_worlds(void) {
+    static const int themes[CK_WORLDS + 1] = { 0, THEME_JUNKYARD, THEME_FACTORY, THEME_MOUNTAIN, THEME_MOON };
+    static const int bosses[CK_WORLDS + 1] = { 0, BOSS_CRANE, BOSS_STAMPER, BOSS_BOULDER, BOSS_HAULER };
+    static const int songs[CK_WORLDS + 1] = { 0, SONG_MAP, SONG_MAP2, SONG_MAP3, SONG_MAP4 };
+    ck_game *G = load_game();
+    if (!G) return;
+    for (int n = 1; n <= CK_WORLDS; n++) {
+        if (n > 1) EXPECT_EQ_INT(ck_game_enter_world(G, n, CK_NODE_HOME), 1);
+        EXPECT_EQ_INT(G->worldNum, n);
+        if (n > 1) EXPECT_EQ_INT(G->scene, SC_MAP);
+        EXPECT_EQ_INT(G->world.themeId, themes[n]);
+        EXPECT_EQ_INT(G->world.song, songs[n]);
+        EXPECT_EQ_INT(G->world.nnodes, 8);
+        EXPECT_EQ_INT(G->world.nodes[G->prog.at].kind, CK_NODE_HOME);
+        for (int i = 0; i < G->world.nnodes; i++) {
+            const ck_node *N = &G->world.nodes[i];
+            if (!N->level[0]) continue;
+            EXPECT_EQ_INT(G->hasDef[i], 1);
+            const ck_leveldef *L = &G->defs[i];
+            if (N->kind == CK_NODE_BOSS) EXPECT_EQ_INT(L->bossType, bosses[n]);
+            // every Moon level has low gravity, nowhere else does
+            EXPECT_EQ_INT(L->grav < 0.25f, n == 4);
+            // every level has a start, and a pad unless the boss or the shower ends it
+            int start = 0, pad = 0, gears = 0;
+            for (int y = 0; y < CK_ROWS; y++)
+                for (int x = 0; x < L->w; x++) {
+                    char c = L->rows[y][x];
+                    start += c == '@'; pad += c == 'P'; gears += c == 'G' || c == '?';
+                }
+            EXPECT_EQ_INT(start, 1);
+            if (L->kind == CK_KIND_LEVEL) { EXPECT_EQ_INT(pad, 1); EXPECT_EQ_INT(gears, 3); }
+        }
+    }
+    // the home node takes you back a world, to that world's exit
+    G->prog.at = (uint8_t)ck_world_node(&G->world, "home");
+    G->keepMap = false;
+    ck_map_reset(G);
+    ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->worldNum, 3);
+    EXPECT_EQ_INT(G->world.nodes[G->prog.at].kind, CK_NODE_EXIT);
+    // a world that does not exist is not entered
+    EXPECT_EQ_INT(ck_game_enter_world(G, 5, CK_NODE_HOME), 0);
+    EXPECT_EQ_INT(G->worldNum, 3);
+}
+
+// Each world keeps its own progress; the heroes and tries come along. Old saves become World 1.
+static void test_saves(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.beaten = 0x1F; G->prog.gears = 7; G->prog.hero[0] = HERO_OSTRICH; G->prog.lives = 2;
+    EXPECT_EQ_INT(ck_game_enter_world(G, 2, CK_NODE_HOME), 1);
+    EXPECT_EQ_INT(G->prog.beaten, 0);
+    EXPECT_EQ_INT(G->prog.gears, 0);
+    EXPECT_EQ_INT(G->prog.hero[0], HERO_OSTRICH);
+    EXPECT_EQ_INT(G->prog.lives, 2);
+    G->prog.gears = 3;
+    static ck_saves sv;
+    sv = *ck_game_saves(G);
+    EXPECT_EQ_INT(sv.magic, CK_SAVES_MAGIC);
+    EXPECT_EQ_INT(sv.world, 2);
+    EXPECT_EQ_INT(sv.w[0].gears, 7);
+    EXPECT_EQ_INT(sv.w[1].gears, 3);
+    EXPECT_EQ_INT(sv.w[2].magic, 0);
+    // load it back: World 2, with both worlds' progress
+    static ck_game H;
+    EXPECT_EQ_INT(ck_game_boot(&H, load_data, NULL, &sv), 1);
+    EXPECT_EQ_INT(H.worldNum, 2);
+    EXPECT_EQ_INT(H.world.themeId, THEME_FACTORY);
+    EXPECT_EQ_INT(H.prog.gears, 3);
+    EXPECT_EQ_INT(ck_game_enter_world(&H, 1, CK_NODE_EXIT), 1);
+    EXPECT_EQ_INT(H.prog.gears, 7);
+    EXPECT_EQ_INT(H.prog.beaten, 0x1F);
+    // a save from before Worlds 2 to 4: one ck_prog at the start of the EEPROM
+    static uint8_t raw[512];
+    memset(raw, 0xFF, sizeof raw);
+    ck_prog old;
+    ck_prog_fresh(&old);
+    old.gears = 5; old.beaten = 0x3;
+    memcpy(raw, &old, sizeof old);
+    static ck_saves mig;
+    ck_saves_read(&mig, raw);
+    EXPECT_EQ_INT(mig.magic, CK_SAVES_MAGIC);
+    EXPECT_EQ_INT(mig.world, 1);
+    EXPECT_EQ_INT(mig.w[0].gears, 5);
+    EXPECT_EQ_INT(mig.w[1].magic, 0);
+    EXPECT_EQ_INT(ck_game_boot(&H, load_data, NULL, &mig), 1);
+    EXPECT_EQ_INT(H.prog.gears, 5);
+    // a blank or foreign EEPROM starts fresh
+    memset(raw, 0xAB, sizeof raw);
+    ck_saves_read(&mig, raw);
+    EXPECT_EQ_INT(mig.world, 1);
+    EXPECT_EQ_INT(mig.w[0].magic, 0);
+}
+
+// Conveyor belts carry you; the Moon's low gravity jumps higher.
+static void test_belts_and_gravity(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    // World 1: how high a standing jump goes
+    float jump[2] = { 0, 0 };
+    for (int n = 0; n < 2; n++) {
+        if (n) EXPECT_EQ_INT(ck_game_enter_world(G, 4, CK_NODE_HOME), 1);
+        start_level(G, "l1");
+        for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+        float y0 = G->lv.players[0].y, top = y0;
+        ck_game_step(G, CK_A, 0);
+        for (int f = 0; f < 120; f++) { ck_game_step(G, CK_A, 0); if (G->lv.players[0].y < top) top = G->lv.players[0].y; }
+        jump[n] = y0 - top;
+    }
+    EXPECT_EQ_INT(jump[1] > jump[0] * 1.3f, 1);
+    // World 2, 2-1: stand on the belt that runs right, and it carries you right
+    EXPECT_EQ_INT(ck_game_enter_world(G, 2, CK_NODE_HOME), 1);
+    start_level(G, "l1");
+    ck_level *lv = &G->lv;
+    int bx = -1;
+    for (int x = 0; x < lv->w && bx < 0; x++) if (lv->tiles[12][x] == '>') bx = x;
+    EXPECT_EQ_INT(bx > 0, 1);
+    ck_player *p = &lv->players[0];
+    p->x = bx * 16 + 2; p->y = 12 * 16 - p->h; p->vy = 0;
+    for (int f = 0; f < 3; f++) ck_game_step(G, 0, 0);
+    float x0 = p->x;
+    for (int f = 0; f < 30; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(p->x > x0 + 15, 1);
+    EXPECT_EQ_INT(p->ground, 1);
+}
+
+// Every boss can be beaten by bouncing on its three buttons, and every boss can bump you.
+static void test_bosses(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    for (int n = 1; n <= CK_WORLDS; n++) {
+        if (n > 1) EXPECT_EQ_INT(ck_game_enter_world(G, n, CK_NODE_HOME), 1);
+        // left alone, the boss gets you sooner or later
+        G->prog.lives = 9;
+        int node = start_level(G, "boss");
+        int wobbles = 0;
+        for (int f = 0; f < 60 * 40 && G->scene == SC_LEVEL; f++) {
+            // pace to and fro (the Stamper follows you, so for it stand still, away from the shelves)
+            if (n == 2 && f == 0) G->lv.players[0].x = 150;
+            ck_game_step(G, n == 2 ? 0 : (f / 50) % 2 ? CK_LEFT : CK_RIGHT, 0);
+            if (G->lv.players[0].wob > 0 || G->lv.dyingT >= 0) wobbles++;   // no bolts to drop: a bump costs a try
+        }
+        if (!wobbles) fprintf(stderr, "boss %d never got the hero\n", n);
+        EXPECT_EQ_INT(wobbles > 0, 1);
+        // bounce on each button as it comes up
+        G->prog.lives = 9;
+        start_level(G, "boss");
+        ck_level *lv = &G->lv;
+        int f = 0;
+        for (; f < 60 * 60 && G->scene == SC_LEVEL; f++) {
+            ck_player *p = &lv->players[0];
+            p->inv = 10;   // the boss is tested above; here only the buttons matter
+            for (int i = 0; i < lv->nents; i++) {
+                ck_ent *e = &lv->ents[i];
+                if (e->dead || (e->type != E_BUTTON && e->type != E_PAD) || lv->clearT >= 0) continue;
+                if (e->type == E_BUTTON && f % 20) continue;
+                p->x = e->x + e->w / 2 - p->w / 2; p->y = e->y - p->h - 4; p->vy = 2; p->vx = 0;
+                break;
+            }
+            ck_game_step(G, lv->clearT > 100 ? CK_A : 0, 0);
+        }
+        EXPECT_EQ_INT(G->scene, SC_MAP);
+        EXPECT_EQ_INT(ck_node_beaten(G, node), 1);
+        EXPECT_EQ_INT(G->lv.boss.fixed, 1);
+        EXPECT_EQ_INT(G->lv.boss.type, n == 1 ? BOSS_CRANE : n == 2 ? BOSS_STAMPER : n == 3 ? BOSS_BOULDER : BOSS_HAULER);
+    }
+}
+
+// The films: each one ends in the next world (the last at the title), and START skips.
+static void test_films(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    for (int k = 1; k <= CK_WORLDS; k++) {
+        ck_game_film(G, k);
+        EXPECT_EQ_INT(G->scene, SC_CUT);
+        EXPECT_EQ_INT(G->song, k == CK_WORLDS ? SONG_PARADE : SONG_TRAVEL);
+        ck_cut_view v;
+        int frames = 0;
+        while (G->scene == SC_CUT && frames < 60 * 30) {
+            ck_game_step(G, 0, 0);
+            frames++;
+            if (G->scene != SC_CUT) break;
+            ck_cut_cast(G, &v);
+            EXPECT_EQ_INT(v.nbabies, k == CK_WORLDS ? 16 : 4);
+            EXPECT_EQ_INT(v.caption != NULL, 1);
+            EXPECT_EQ_INT(v.heroes[0].x == v.heroes[0].x && v.heroes[0].a >= 0 && v.heroes[0].a <= 1, 1);
+        }
+        EXPECT_EQ_INT((int)(frames / 60.0f + 0.5f), (int)(ck_cut_len[k] + 0.5f));
+        if (k < CK_WORLDS) {
+            EXPECT_EQ_INT(G->scene, SC_MAP);
+            EXPECT_EQ_INT(G->worldNum, k + 1);
+            EXPECT_EQ_INT(G->world.nodes[G->prog.at].kind, CK_NODE_HOME);
+        } else EXPECT_EQ_INT(G->scene, SC_TITLE);
+    }
+    // the parade's babies are all sixteen, every world's own colours
+    ck_game_film(G, CK_WORLDS);
+    EXPECT_EQ_INT(G->cutBabies[0], 0xFF8FC7);
+    EXPECT_EQ_INT(G->cutBabies[15], 0xFFD23F);
+    // START skips, but not in the first second
+    ck_game_step(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_CUT);
+    for (int f = 0; f < 70; f++) ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_TITLE);
+    // walking onto World 1's exit and pressing A plays the first film
+    G = load_game();
+    G->scene = SC_MAP;
+    G->prog.at = (uint8_t)ck_world_node(&G->world, "exit");
+    ck_map_reset(G);
+    ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_CUT);
+    EXPECT_EQ_INT(G->cut, 1);
+}
+
+static void test_new_bot_runs(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    const char *ids[] = { "l1", "l2", "l3", "bonus" };
+    for (int n = 2; n <= CK_WORLDS; n++) {
+        EXPECT_EQ_INT(ck_game_enter_world(G, n, CK_NODE_HOME), 1);
+        for (int k = 0; k < 4; k++) {
+            G->prog.lives = 3;
+            int node = start_level(G, ids[k]);
+            int frames = 0;
+            float far = 0;
+            while (frames < 60 * 240 && G->scene != SC_MAP) {
+                if (G->scene == SC_PAUSE) { ck_game_step(G, CK_START, 0); frames++; continue; }
+                uint16_t pad = G->scene == SC_LEVEL && G->lv.nplayers ? ck_bot(&G->lv) : CK_RIGHT;
+                ck_game_step(G, pad, 0);
+                if (G->scene == SC_LEVEL && G->lv.players[0].x > far) far = G->lv.players[0].x;
+                frames++;
+            }
+            printf("  bot on w%d %-5s: %s after %d frames, got to x=%d of %d\n", n, ids[k],
+                   ck_node_beaten(G, node) ? "cleared" : G->scene == SC_MAP ? "out of tries" : "still going",
+                   frames, (int)far, G->lv.w * 16);
+            EXPECT_EQ_INT(G->nparts <= CK_MAXPARTS, 1);
+            G->scene = SC_LEVEL;
+        }
+    }
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -386,4 +636,10 @@ void test_clankers(void) {
     test_fuzz();
     test_flow();
     test_bot_runs();
+    test_new_worlds();
+    test_saves();
+    test_belts_and_gravity();
+    test_bosses();
+    test_films();
+    test_new_bot_runs();
 }

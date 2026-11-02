@@ -12,7 +12,7 @@
 static const char CRATE_CHARS[] = "X?$1234";
 static const char CRATE_HOLDS[] = { 0, 'G', 'o', 'M', 'R', 'B', 'N' };
 
-static bool solid_char(char c) { return c == '#' || c == '=' || c == 'X' || c == 'D'; }
+static bool solid_char(char c) { return c == '#' || c == '=' || c == 'X' || c == 'D' || c == '<' || c == '>'; }
 
 static char tile_at(const ck_level *lv, int tx, int ty) {
     if (tx < 0 || tx >= lv->w) return '#';
@@ -110,7 +110,7 @@ static void build(ck_game *G, int node) {
         char c = def->rows[y][x];
         const char *cr = strchr(CRATE_CHARS, c);
         float top = (float)((y + 1) * TS);
-        if (c == '#' || c == '=' || c == '-' || c == 'D') lv->tiles[y][x] = c;
+        if (c == '#' || c == '=' || c == '-' || c == 'D' || c == '<' || c == '>') lv->tiles[y][x] = c;
         else if (c && cr) { lv->tiles[y][x] = 'X'; lv->contents[y][x] = CRATE_HOLDS[cr - CRATE_CHARS]; }
         else if (c == 'o') { ck_ent *b = pickup(G, E_BOLT, x * TS + 8, y * TS + 8); b->orig = true; }
         else if (c == 'G') { ck_ent *e = pickup(G, E_GEAR, x * TS + 8, y * TS + 8); e->id = (int16_t)gearN++; }
@@ -217,12 +217,30 @@ void ck_level_start(ck_game *G, int node, bool retry, bool useSnap) {
     lv->nameT = retry ? 120 : 150;
     lv->retry = retry;
     lv->clearT = -1; lv->dyingT = -1;
-    if (lv->def->kind == CK_KIND_BOSS) { lv->hasCrane = true; lv->crane.rope = 140; }
+    if (lv->def->kind == CK_KIND_BOSS) {
+        lv->hasBoss = true;
+        lv->boss.type = lv->def->bossType;
+        lv->boss.rope = 140;
+        switch (lv->boss.type) {
+        case BOSS_STAMPER: lv->boss.x = 160; lv->boss.y = 24; lv->boss.state = BS_MOVE; lv->boss.timer = 150; break;
+        case BOSS_BOULDER: lv->boss.x = 280; lv->boss.y = 174; lv->boss.dir = -1; lv->boss.state = BS_WAIT; lv->boss.timer = 90; break;
+        case BOSS_HAULER: lv->boss.x = 160; lv->boss.y = 46; lv->boss.state = BS_FLY; lv->boss.timer = 150; break;
+        }
+    }
     if (lv->def->kind == CK_KIND_BONUS) { lv->hasShower = true; lv->showerLeft = 30 * 60; lv->showerDone = -1; }
     ck_play(G, ck_level_song(lv));
 }
 
 static float speed(const ck_game *G) { return G->prog.little ? 1 : 1.5f; }
+
+// How fast the conveyor belt under a hero carries them: > right, < left.
+static float belt_under(const ck_game *G, const ck_player *p) {
+    const ck_level *lv = &G->lv;
+    int ty = fl((p->y + p->h + 1) / TS);
+    char a = tile_at(lv, fl((p->x + 1) / TS), ty), b = tile_at(lv, fl((p->x + p->w - 1) / TS), ty);
+    int dir = (a == '>' || b == '>') ? 1 : (a == '<' || b == '<') ? -1 : 0;
+    return dir * (G->prog.little ? 0.8f : 1);
+}
 
 int ck_foes_left(const ck_level *lv) {
     int n = 0;
@@ -392,13 +410,13 @@ static void collect(ck_game *G, ck_ent *e) {
 
 static void press_button(ck_game *G, ck_ent *e) {
     ck_level *lv = &G->lv;
-    if (e->dead || !lv->hasCrane) return;
+    if (e->dead || !lv->hasBoss) return;
     e->dead = true;
-    lv->crane.hits++; lv->crane.ouch = 50; lv->crane.shake = 30;
+    lv->boss.hits++; lv->boss.ouch = 50; lv->boss.shake = 30;
     ck_sfx(G, SFX_BUTTON); ck_sfx(G, SFX_CLANK);
     ck_sparks(G, e->x + 7, e->y, 10, 0xFF8A8A);
-    if (lv->crane.hits >= 3) {
-        lv->crane.fixed = true;
+    if (lv->boss.hits >= 3) {
+        lv->boss.fixed = true;
         ck_sfx(G, SFX_REBOOT); ck_sfx(G, SFX_OPEN);
         ck_confetti(G, 160, 60, 30);
     }
@@ -406,10 +424,16 @@ static void press_button(ck_game *G, ck_ent *e) {
 
 static void spawn_button(ck_game *G) {
     ck_level *lv = &G->lv;
-    static const float buttons[3][2] = { { 3, 12 }, { 4.5f, 8 }, { 14.5f, 8 } };
-    if (!lv->hasCrane || lv->crane.fixed || lv->crane.hits >= 3) return;
+    // where each boss's three buttons come up, in tiles
+    static const float buttons[CK_BOSS_COUNT][3][2] = {
+        { { 3, 12 }, { 4.5f, 8 }, { 14.5f, 8 } },    // crane
+        { { 16, 12 }, { 4.5f, 8 }, { 14.5f, 8 } },   // stamper
+        { { 9.5f, 12 }, { 4.5f, 8 }, { 14.5f, 8 } }, // boulder
+        { { 3, 12 }, { 14.5f, 8 }, { 4.5f, 8 } },    // hauler
+    };
+    if (!lv->hasBoss || lv->boss.fixed || lv->boss.hits >= 3) return;
     for (int i = 0; i < lv->nents; i++) if (lv->ents[i].type == E_BUTTON && !lv->ents[i].dead) return;
-    const float *b = buttons[lv->crane.hits];
+    const float *b = buttons[lv->boss.type][lv->boss.hits];
     box(lv, E_BUTTON, b[0] * TS + 1, b[1] * TS - 6, 14, 6);
 }
 
@@ -664,7 +688,8 @@ static void update_players(ck_game *G, int *outcome) {
             p->vy = 0.6f; p->flapping = true;
             if (p->flapT-- <= 0) { ck_sfx(G, SFX_FLAP); p->flapT = 14; }
         }
-        p->vy = ck_minf(p->vy + 0.3f, 6);
+        float grav = lv->def->grav > 0 ? lv->def->grav : 0.3f;
+        p->vy = ck_minf(p->vy + grav, grav < 0.3f ? 4.5f : 6);   // the Moon's low gravity floats you down slower
         if (p->vy >= 0) p->spring = false;
         if (p->actT <= 0) p->shoot = false;
         ck_ent *nearCrate = NULL;
@@ -706,7 +731,10 @@ static void update_players(ck_game *G, int *outcome) {
         if (p->onMover) { p->x += p->onMover->dx; p->y += p->onMover->dy; }
         bool wasGround = p->ground || p->onMover;
         float pvy = p->vy, prevBottom = p->y + p->h;
+        float belt = p->ground ? belt_under(G, p) : 0;   // a conveyor belt carries you along
+        p->vx += belt;
         move_body(lv, &p->body);
+        if (belt && !p->hitWall) p->vx -= belt;
         p->onMover = NULL;
         for (int k = 0; k < lv->nents; k++) {
             ck_ent *m = &lv->ents[k];
@@ -736,7 +764,7 @@ static void update_players(ck_game *G, int *outcome) {
         if (p->ground) {
             int l = fl((p->x + 1) / TS), r = fl((p->x + p->w - 1) / TS), ty = fl((p->y + p->h + 1) / TS);
             char a = tile_at(lv, l, ty), b = tile_at(lv, r, ty);
-            bool okA = a == '#' || a == '=' || a == '-', okB = b == '#' || b == '=' || b == '-';
+            bool okA = a == '#' || a == '=' || a == '-' || a == '<' || a == '>', okB = b == '#' || b == '=' || b == '-' || b == '<' || b == '>';
             if (okA && okB) { p->safeX = p->x; p->safeY = p->y; }
         }
         if (p->y > H + 30) lose_life(G, p);
@@ -907,21 +935,149 @@ static void update_ents(ck_game *G) {
 static void update_crane(ck_game *G) {
     ck_level *lv = &G->lv;
     float sp = G->prog.little ? 0.9f : 1.25f;
-    lv->crane.ang = lv->crane.fixed ? lv->crane.ang * 0.96f : 0.95f * cosf(lv->t * sp);   // starts out at the side
-    if (lv->crane.shake > 0) lv->crane.shake--;
-    if (lv->crane.ouch > 0) lv->crane.ouch--;
-    if (lv->frame > 60) spawn_button(G);
-    lv->crane.rope = lv->crane.fixed ? ck_maxf(40, lv->crane.rope - 1.2f) : 140;   // fixed: reel the magnet up
-    float mx = 160 + sinf(lv->crane.ang) * lv->crane.rope, my = 24 + cosf(lv->crane.ang) * lv->crane.rope;
-    lv->crane.mx = mx; lv->crane.my = my;
-    if (!lv->crane.fixed)
+    lv->boss.ang = lv->boss.fixed ? lv->boss.ang * 0.96f : 0.95f * cosf(lv->t * sp);   // starts out at the side
+    lv->boss.rope = lv->boss.fixed ? ck_maxf(40, lv->boss.rope - 1.2f) : 140;   // fixed: reel the magnet up
+    float mx = 160 + sinf(lv->boss.ang) * lv->boss.rope, my = 24 + cosf(lv->boss.ang) * lv->boss.rope;
+    lv->boss.mx = mx; lv->boss.my = my;
+    if (!lv->boss.fixed)
         for (int k = 0; k < lv->nplayers; k++) {
             ck_player *p = &lv->players[k];
             float cx = ck_clampf(mx, p->x, p->x + p->w), cy = ck_clampf(my, p->y, p->y + p->h);
             if (!p->bubble && (cx - mx) * (cx - mx) + (cy - my) * (cy - my) < 11 * 11 && p->inv <= 0) wobble(G, p, mx);
         }
-    if (lv->crane.fixed && !lv->crane.padShown && lv->crane.ouch <= 0) {
-        lv->crane.padShown = true;
+}
+
+// The top of the first floor, girder or plank under x0..x1, from fromY down.
+static float landing(const ck_level *lv, float x0, float x1, float fromY) {
+    for (int ty = fl(ck_maxf(0, fromY) / TS); ty < lv->h; ty++)
+        for (int tx = fl(x0 / TS); tx <= fl(x1 / TS); tx++) {
+            char t = tile_at(lv, tx, ty);
+            if (solid_char(t) || t == '-') return (float)(ty * TS);
+        }
+    return (float)(lv->h * TS);
+}
+
+static float nearest_x(const ck_level *lv, float x) {
+    float best = x, bd = 1e9f;
+    for (int k = 0; k < lv->nplayers; k++) {
+        const ck_player *p = &lv->players[k];
+        if (p->bubble || p->dead) continue;
+        float d = ck_absf(p->x + p->w / 2 - x);
+        if (d < bd) { bd = d; best = p->x + p->w / 2; }
+    }
+    return best;
+}
+
+static void hit_players(ck_game *G, rect box, float fromX) {
+    ck_level *lv = &G->lv;
+    for (int k = 0; k < lv->nplayers; k++) {
+        ck_player *p = &lv->players[k];
+        if (!p->bubble && p->inv <= 0 && overlap_r(R(&p->body), box)) wobble(G, p, fromX);
+    }
+}
+
+// The Stamper: slides along its rail over the nearest hero, shakes, then slams down to the floor.
+static void update_stamper(ck_game *G) {
+    ck_level *lv = &G->lv;
+    bool little = G->prog.little;
+    float sp = (little ? 0.9f : 1.25f) * (1 + lv->boss.hits * 0.15f);
+    if (lv->boss.fixed) { lv->boss.y += (24 - lv->boss.y) * 0.05f; lv->boss.x += (160 - lv->boss.x) * 0.03f; lv->boss.state = BS_MOVE; return; }
+    switch (lv->boss.state) {
+    case BS_MOVE:
+        lv->boss.x = ck_clampf(lv->boss.x + ck_clampf(nearest_x(lv, lv->boss.x) - lv->boss.x, -1.1f * sp, 1.1f * sp), 40, 280);
+        if (--lv->boss.timer <= 0) { lv->boss.state = BS_WARN; lv->boss.timer = little ? 50 : 36; }
+        break;
+    case BS_WARN:
+        lv->boss.low = landing(lv, lv->boss.x - 23, lv->boss.x + 23, lv->boss.y + 30);   // where it will land (drawn as a warning)
+        if (--lv->boss.timer <= 0) { lv->boss.state = BS_DROP; lv->boss.vy = 1; }
+        break;
+    case BS_DROP:
+        lv->boss.vy = ck_minf(lv->boss.vy + 0.7f, 9);
+        lv->boss.y += lv->boss.vy;
+        if (lv->boss.y + 30 >= lv->boss.low) {
+            lv->boss.y = lv->boss.low - 30; lv->boss.state = BS_DOWN; lv->boss.timer = 50; lv->shake = 10;
+            ck_sfx(G, SFX_STOMP);
+            ck_puff(G, lv->boss.x - 20, lv->boss.low, 5, 0xFFF8E6, 230);
+            ck_puff(G, lv->boss.x + 20, lv->boss.low, 5, 0xFFF8E6, 230);
+        }
+        hit_players(G, (rect){ lv->boss.x - 24, lv->boss.y + 4, 48, 26 }, lv->boss.x);
+        break;
+    case BS_DOWN:
+        if (--lv->boss.timer <= 0) lv->boss.state = BS_RISE;
+        break;
+    case BS_RISE:
+        lv->boss.y -= 1.2f * sp;
+        if (lv->boss.y <= 24) { lv->boss.y = 24; lv->boss.state = BS_MOVE; lv->boss.timer = little ? 170 : 120; }
+        break;
+    }
+    if (lv->boss.state == BS_DOWN || lv->boss.state == BS_RISE)   // a solid block while it is down
+        for (int k = 0; k < lv->nplayers; k++) {
+            ck_player *p = &lv->players[k];
+            if (p->bubble || !overlap_r(R(&p->body), (rect){ lv->boss.x - 24, lv->boss.y + 4, 48, 26 })) continue;
+            p->x = p->x + p->w / 2 < lv->boss.x ? lv->boss.x - 24 - p->w - 0.5f : lv->boss.x + 24.5f;
+            p->vx = 0;
+        }
+}
+
+// Rumbleboulder: rolls along the floor, bumps the wall, sits dizzy for a moment, rolls back.
+static void update_boulder(ck_game *G) {
+    ck_level *lv = &G->lv;
+    bool little = G->prog.little;
+    const float r = 18, floor = 12 * TS;
+    if (lv->boss.fixed) { lv->boss.x += (272 - lv->boss.x) * 0.04f; lv->boss.rot += (272 - lv->boss.x) * 0.002f; lv->boss.y = floor - r; return; }
+    if (lv->boss.state == BS_WAIT || lv->boss.state == BS_DIZZY) { if (--lv->boss.timer <= 0) lv->boss.state = BS_ROLL; }
+    else {
+        float v = (little ? 1.2f : 1.7f) * (1 + lv->boss.hits * 0.2f) * lv->boss.dir;
+        lv->boss.x += v; lv->boss.rot += v / r;
+        if (lv->boss.x - r <= 16 || lv->boss.x + r >= W - 16) {
+            lv->boss.x = ck_clampf(lv->boss.x, 16 + r, W - 16 - r);
+            lv->boss.dir = -lv->boss.dir; lv->boss.state = BS_DIZZY; lv->boss.timer = little ? 80 : 50; lv->shake = 8;
+            ck_sfx(G, SFX_STOMP);
+            ck_puff(G, lv->boss.x - lv->boss.dir * r, floor - 8, 6, 0xFFF8E6, 230);
+        }
+    }
+    lv->boss.y = floor - r;
+    for (int k = 0; k < lv->nplayers; k++) {
+        ck_player *p = &lv->players[k];
+        if (p->bubble || p->inv > 0) continue;
+        float cx = ck_clampf(lv->boss.x, p->x, p->x + p->w), cy = ck_clampf(lv->boss.y, p->y, p->y + p->h);
+        if ((cx - lv->boss.x) * (cx - lv->boss.x) + (cy - lv->boss.y) * (cy - lv->boss.y) < 15 * 15) wobble(G, p, lv->boss.x);
+    }
+}
+
+// The Sky Hauler: flies to and fro, stops, flickers a warning, then shines a beam straight down.
+static void update_hauler(ck_game *G) {
+    ck_level *lv = &G->lv;
+    bool little = G->prog.little;
+    float sp = (little ? 0.9f : 1.25f) * (1 + lv->boss.hits * 0.15f);
+    if (lv->boss.fixed) { lv->boss.y += (30 - lv->boss.y) * 0.03f; lv->boss.x += (160 - lv->boss.x) * 0.03f; lv->boss.state = BS_FLY; return; }
+    if (lv->boss.state == BS_FLY) {
+        lv->boss.ft += 1.0f / 60 * sp;
+        lv->boss.x = 160 + sinf(lv->boss.ft * 0.7f) * 110;
+        lv->boss.y = 46 + sinf(lv->boss.ft * 2.1f) * 4;
+        if (--lv->boss.timer <= 0) { lv->boss.state = BS_WARN; lv->boss.timer = little ? 60 : 45; }
+    } else if (lv->boss.state == BS_WARN) {
+        if (--lv->boss.timer <= 0) { lv->boss.state = BS_BEAM; lv->boss.timer = 80; ck_sfx(G, SFX_BLOW); }
+    } else if (lv->boss.state == BS_BEAM) {
+        if (lv->frame % 6 == 0) lv->shake = 3;
+        hit_players(G, (rect){ lv->boss.x - 12, lv->boss.y + 14, 24, 12 * TS - lv->boss.y - 14 }, lv->boss.x);
+        if (--lv->boss.timer <= 0) { lv->boss.state = BS_FLY; lv->boss.timer = little ? 170 : 130; }
+    }
+}
+
+static void update_boss(ck_game *G) {
+    ck_level *lv = &G->lv;
+    if (lv->boss.shake > 0) lv->boss.shake--;
+    if (lv->boss.ouch > 0) lv->boss.ouch--;
+    if (lv->frame > 60) spawn_button(G);
+    switch (lv->boss.type) {
+    case BOSS_STAMPER: update_stamper(G); break;
+    case BOSS_BOULDER: update_boulder(G); break;
+    case BOSS_HAULER: update_hauler(G); break;
+    default: update_crane(G); break;
+    }
+    if (lv->boss.fixed && !lv->boss.padShown && lv->boss.ouch <= 0) {
+        lv->boss.padShown = true;
         box(lv, E_PAD, 9 * TS - 4, 12 * TS - 6, 24, 6);
         ck_sfx(G, SFX_OPEN);
     }
@@ -977,7 +1133,7 @@ int ck_level_update(ck_game *G) {
         float sx = 0;
         for (int k = 0; k < lv->nplayers; k++) {
             ck_player *p = &lv->players[k];
-            p->vy += 0.3f;
+            p->vy += lv->def->grav > 0 ? lv->def->grav : 0.3f;
             move_body(lv, &p->body);
             sx += p->x;
         }
@@ -1025,7 +1181,7 @@ int ck_level_update(ck_game *G) {
         if (lv->doorT == 40)
             for (int y = 0; y < lv->h; y++) for (int x = 0; x < lv->w; x++) if (lv->tiles[y][x] == 'D') lv->tiles[y][x] = '.';
     }
-    if (lv->hasCrane) update_crane(G);
+    if (lv->hasBoss) update_boss(G);
     if (lv->hasShower) {
         if (lv->showerLeft > 0) {
             lv->showerLeft--;

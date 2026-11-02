@@ -28,27 +28,39 @@ static char *slurp(const char *path) {
     return s;
 }
 
+// The core reads each world's files through this as you travel: "w2/world.txt" -> rom:/data/w2/world.txt.
+static char *rom_data(const char *path, void *user) {
+    (void)user;
+    char full[96];
+    snprintf(full, sizeof full, "rom:/data/%s", path);
+    return slurp(full);
+}
+
 // ---------------------------------------------------------------------------- saving (EEPROM 4K)
 
-static ck_prog saved;
+static ck_saves saved;
 static bool have_eeprom;
 
-__attribute__((unused)) static void save_load(ck_prog *out) {
+// An old one-world save is turned into the new layout by ck_saves_read().
+__attribute__((unused)) static void save_load(ck_saves *out) {
     have_eeprom = eeprom_present() != EEPROM_NONE;
     if (!have_eeprom) return;
-    eeprom_read_bytes(out, 0, sizeof *out);
-    saved = *out;
+    static uint8_t raw[sizeof(ck_saves)];
+    eeprom_read_bytes(raw, 0, sizeof raw);
+    ck_saves_read(out, raw);
+    memcpy(&saved, raw, sizeof saved);
 }
 
 // Write the 8-byte blocks that changed. EEPROM writes are slow, so this only runs between scenes.
 static void save_now(void) {
     if (!have_eeprom) return;
-    const uint8_t *a = (const uint8_t *)&G.prog, *b = (const uint8_t *)&saved;
-    for (size_t off = 0; off < sizeof G.prog; off += 8) {
-        size_t n = sizeof G.prog - off < 8 ? sizeof G.prog - off : 8;
+    const ck_saves *now = ck_game_saves(&G);
+    const uint8_t *a = (const uint8_t *)now, *b = (const uint8_t *)&saved;
+    for (size_t off = 0; off < sizeof *now; off += 8) {
+        size_t n = sizeof *now - off < 8 ? sizeof *now - off : 8;
         if (memcmp(a + off, b + off, n)) eeprom_write_bytes(a + off, off, n);
     }
-    saved = G.prog;
+    saved = *now;
 }
 
 // ---------------------------------------------------------------------------- input
@@ -106,23 +118,12 @@ int main(void) {
     rdpq_init();
     joypad_init();
 
-    char *world = slurp("rom:/data/w1/world.txt");
-    if (!world) fatal("rom:/data/w1/world.txt is missing");
-    ck_prog prog;
-    memset(&prog, 0, sizeof prog);
+    static ck_saves boot;
+    memset(&boot, 0, sizeof boot);
 #ifndef CK_AUTOTEST
-    save_load(&prog);   // the test build always starts from a fresh save and never writes one
+    save_load(&boot);   // the test build always starts from a fresh save and never writes one
 #endif
-    if (!ck_game_init(&G, world, &prog)) fatal("world.txt has no map");
-    free(world);
-    for (int i = 0; i < G.world.nnodes; i++) {
-        if (!G.world.nodes[i].level[0] || G.hasDef[i]) continue;
-        char path[64];
-        snprintf(path, sizeof path, "rom:/data/w1/%s.txt", G.world.nodes[i].level);
-        char *t = slurp(path);
-        if (t) { ck_game_add_level(&G, G.world.nodes[i].level, t); free(t); }
-        else debugf("missing %s\n", path);
-    }
+    if (!ck_game_boot(&G, rom_data, NULL, &boot)) fatal("rom:/data/w1/world.txt is missing");
     char *songs = slurp("rom:/data/songs.txt");
     synth_init(songs);
     free(songs);
@@ -156,7 +157,7 @@ int main(void) {
             for (int i = 0; i < G.nsfx; i++) synth_sfx(G.sfx[i]);
             synth_song(G.song);
             if (G.scene != prev_scene) {
-                if (G.progDirty && (G.scene == SC_MAP || G.scene == SC_SELECT)) { save_now(); G.progDirty = false; }
+                if (G.progDirty && (G.scene == SC_MAP || G.scene == SC_SELECT || G.scene == SC_CUT)) { save_now(); G.progDirty = false; }
                 prev_scene = G.scene;
             }
         }

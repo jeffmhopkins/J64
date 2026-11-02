@@ -4,8 +4,8 @@
 > baby bots that a Big Glitch storm blew across four worlds.
 
 > [!NOTE]
-> Both the N64 ROM and the browser build play World 1 (Junkyard Hills), the only world built so far. Both read
-> the same level files in `data/`, and the ROM's rules live in one C core (`src/core/`) that a
+> Both the N64 ROM and the browser build play all four worlds: Junkyard Hills, Gear Factory,
+> Magnet Mountain and Moon Base, with a short film between worlds. Both read the same level files in `data/`, and the ROM's rules live in one C core (`src/core/`) that a
 > later WASM build can share.
 
 <a id="layout"></a>
@@ -47,14 +47,29 @@ make deploy ROM=clankers       # sends it to a SummerCart64
 ```
 
 The ROM saves to a 4K EEPROM. On a SummerCart64 the save type comes from the ROM header, so
-there is nothing to set.
+there is nothing to set. Each world keeps its own progress, and a save from before Worlds 2 to 4
+carries on as World 1.
 
 | Button | In a level | On the map |
 | --- | --- | --- |
 | Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
-| A | Jump (hold to jump higher, again to boost or flap) | Enter a level |
+| A | Jump (hold to jump higher, again to boost or flap) | Enter a level; on the exit, go to the next world; at home, go back a world |
 | B or C-left | Action: grab, throw, shoot | |
 | Start | Pause | Enter a level |
+
+<a id="worlds"></a>
+## The four worlds
+
+| World | New here | Big Glitch |
+| --- | --- | --- |
+| 1 Junkyard Hills | crates, levers, tyres, rafts, the jetpack zone | Clanky Crane swings its magnet |
+| 2 Gear Factory | conveyor belts that carry you along | The Stamper slams down where you stand |
+| 3 Magnet Mountain | low caves to slide through, mine carts over the pits | Rumbleboulder rolls wall to wall |
+| 4 Moon Base | low gravity: big floaty jumps | The Sky Hauler shines a beam down |
+
+Every boss is beaten the same way: bounce on its three red buttons. A world's exit plays a
+short film (into the factory, up the mine lift, the rocket to the Moon), and Moon Base's exit
+plays the parade home and THE END. A or START skips a film after the first second.
 
 In the pause menu, Start or A goes back to the level, B goes back to the map, and Z turns the
 CRT scanlines on or off. A second controller plays the ostrich.
@@ -87,7 +102,8 @@ It needs Node and Playwright with Chromium. It writes `assets/*.png`, `assets/rg
 - Glows, sparks and puffs are tinted dots, not soft gradients.
 - The story before the title cross-fades three baked pictures (night, storm, dawn) instead of
   blending colours, so the sun fades in rather than rising, and the robot in it is always blue.
-- The map's river and chimney smoke stand still.
+- The map's river, chimney smoke and factory belts stand still.
+- In the films, the babies and heroes fade at the door or the rocket instead of being hidden by it.
 - Music and sound effects come from a small software synth playing `data/songs.txt` and the
   browser's sound recipes, so they sound close to, but not exactly like, the browser.
 - The game always runs 60 ticks a second, so PAL consoles play at the same speed and drop a

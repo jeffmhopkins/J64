@@ -1,0 +1,28 @@
+# World 2 map. The map is 20 x 15 tiles; a node sits at "col row". The factory theme draws its own
+# scenery (belts, gears, chimneys), so there are no props here.
+name: Gear Factory
+num: 2
+theme: factory
+song: map2
+gears: 9
+babies: FFB347 8FD3FF C28BFF 49F08A
+boss-msg: Fixed! The mine lift is running
+
+# node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
+node home   2 3   home   "Factory gate"
+node l1     6 3   level  "Conveyor Corridor"          level=2-1
+node l2     6 8   level  "Gear Climb"                 level=2-2
+node shop   3 8   shop   "Parts shop"
+node l3     11 8  level  "Paint Shop"                 level=2-3
+node bonus  11 4  bonus  "Bonus · Spin Room"          level=bonus gate=3
+node boss   14 12 boss   "Big Glitch · The Stamper"   level=boss
+node exit   17 9  exit   "Mine lift to World 3"
+
+# road <from> <to> [via=<col>,<row> ...] [gate=<gears needed>]
+road home l1
+road l1 l2
+road l2 shop
+road l2 l3
+road l3 bonus gate=3
+road l3 boss via=14,8
+road boss exit via=17,12
