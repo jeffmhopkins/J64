@@ -35,9 +35,12 @@ static void drop(int id) {
 }
 
 static bool is_big(int id) {
-    static const int big[] = { SPR_TITLE, SPR_SELECT_BG, SPR_MAP_W1, SPR_BG_FAR, SPR_BG_FAR_BOSS, SPR_BG_MID,
-                               SPR_JET_SKY, SPR_JET_HILLS, SPR_CRANE, SPR_INTRO_NIGHT, SPR_INTRO_STORM, SPR_INTRO_DAWN };
+    static const int big[] = { SPR_TITLE, SPR_SELECT_BG, SPR_JET_SKY, SPR_JET_HILLS, SPR_CRANE, SPR_INTRO_NIGHT,
+                               SPR_INTRO_STORM, SPR_INTRO_DAWN, SPR_CUT_FLOAT, SPR_CUT_ROCKET };
     for (unsigned i = 0; i < sizeof big / sizeof *big; i++) if (big[i] == id) return true;
+    // one of each per world or film
+    for (int k = 0; k < CK_WORLDS; k++)
+        if (id == SPR_MAP_W1 + k || id == SPR_BG_FAR_0 + k || id == SPR_BG_FAR_BOSS_0 + k || id == SPR_BG_MID_0 + k || id == SPR_CUT_BG_1 + k) return true;
     return false;
 }
 static int hero_sprite(int hero, int col) { return (hero == HERO_ROBOT ? SPR_HERO_ROBOT_0 : SPR_HERO_OSTRICH_0) + (col & 7); }
@@ -61,7 +64,8 @@ void draw_init(void) {
 
 // Free the big pictures and hero sheets the next scene does not need.
 static void free_for(const ck_game *G) {
-    int group = G->scene == SC_INTRO ? 4 : G->scene == SC_TITLE ? 0 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP) ? 2 : 3;
+    int group = G->scene == SC_INTRO ? 4 : G->scene == SC_TITLE ? 0 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP) ? 2 : G->scene == SC_CUT ? 5 : 3;
+    group = group * 16 + G->worldNum * 4 + (G->scene == SC_CUT ? G->cut % 4 : 0);   // a new world or film needs its own pictures
     waited = false;
     if (group != big_group) {
         big_group = group;
@@ -314,12 +318,22 @@ static void draw_select(const ck_game *G) {
 
 // ---------------------------------------------------------------------------- the world map
 
-static void road(const ck_road *r, float upto, bool open) {
+// Each world's road colours (road, roadEdge, roadDot, roadLocked, roadLockedEdge in its web theme).
+typedef struct { uint32_t fill, edge, dot, lockFill, lockEdge; float lockFillA, lockEdgeA; } road_cols;
+static const road_cols ROADS[CK_THEME_COUNT] = {
+    { 0xF2D7A6, 0x7A4A2C, 0xD9B77F, 0xFFF0D7, 0x3C1E14, 0.35f, 0.25f },   // junkyard
+    { 0xCFD4DE, 0x2A2F3C, 0x9AA1B0, 0xDCE4F0, 0x0A0C14, 0.35f, 0.35f },   // factory
+    { 0xE6D6BD, 0x4A3B45, 0xC4AE8E, 0xFFF0D7, 0x3C1E14, 0.35f, 0.25f },   // mountain
+    { 0xCDEEFF, 0x3D4A66, 0x93C3E6, 0xCDEEFF, 0x141828, 0.30f, 0.35f },   // moon
+};
+static int theme_of(const ck_game *G) { return G->world.themeId >= 0 && G->world.themeId < CK_THEME_COUNT ? G->world.themeId : 0; }
+
+static void road(const ck_road *r, float upto, bool open, const road_cols *rc) {
     float cut = (upto < 0 ? 0 : upto > 1 ? 1 : upto) * r->total;
     for (int pass = 0; pass < (open ? 2 : 2); pass++) {
         float w = open ? (pass ? 7 : 10) : (pass ? 4 : 8);
-        uint32_t col = open ? (pass ? 0xF2D7A6 : 0x7A4A2C) : (pass ? 0xFFF0D7 : 0x3C1E14);
-        float alpha = open ? 1 : (pass ? 0.35f : 0.25f);
+        uint32_t col = open ? (pass ? rc->fill : rc->edge) : (pass ? rc->lockFill : rc->lockEdge);
+        float alpha = open ? 1 : (pass ? rc->lockFillA : rc->lockEdgeA);
         for (int i = 1; i < r->npts; i++) {
             float x0 = r->pts[i - 1][0], y0 = r->pts[i - 1][1], x1 = r->pts[i][0], y1 = r->pts[i][1];
             if (r->lens[i - 1] >= cut) break;
@@ -337,8 +351,8 @@ static void road(const ck_road *r, float upto, bool open) {
         float x, y, x2, y2;
         ck_road_point(r, d / r->total, &x, &y);
         ck_road_point(r, fminf(1, (d + 1) / r->total), &x2, &y2);
-        if (fabsf(x2 - x) > fabsf(y2 - y)) rect(x - 0.5f, y - 3, 1, 6, 0xD9B77F, 1);
-        else rect(x - 3, y - 0.5f, 6, 1, 0xD9B77F, 1);
+        if (fabsf(x2 - x) > fabsf(y2 - y)) rect(x - 0.5f, y - 3, 1, 6, rc->dot, 1);
+        else rect(x - 3, y - 0.5f, 6, 1, rc->dot, 1);
     }
 }
 
@@ -348,13 +362,15 @@ static void draw_map(const ck_game *G) {
     const ck_world *Wd = &G->world;
     const ck_map *M = &G->map;
     float t = M->now;
-    blit(SPR_MAP_W1, 0, 0, 0);
-    for (int r = 0; r < Wd->nroads; r++) if (!ck_road_open(G, r)) road(&Wd->roads[r], 1, false);
+    int wi = G->worldNum >= 1 && G->worldNum <= CK_WORLDS ? G->worldNum - 1 : 0;
+    const road_cols *rc = &ROADS[theme_of(G)];
+    blit(SPR_MAP_W1 + wi, 0, 0, 0);
+    for (int r = 0; r < Wd->nroads; r++) if (!ck_road_open(G, r)) road(&Wd->roads[r], 1, false, rc);
     for (int r = 0; r < Wd->nroads; r++) {
         if (!ck_road_open(G, r)) continue;
         float upto = 1;
         for (int k = 0; k < M->nreveal; k++) if (M->reveal[k].road == r) upto = (t - M->reveal[k].t0) / M->reveal[k].dur;
-        road(&Wd->roads[r], upto, true);
+        road(&Wd->roads[r], upto, true, rc);
     }
     // pads, top to bottom
     int order[CK_MAXNODES], n = Wd->nnodes;
@@ -366,8 +382,8 @@ static void draw_map(const ck_game *G) {
         bool beaten = ck_node_beaten(G, id), reach = ck_node_reachable(G, id);
         if (nd->kind == CK_NODE_HOME) continue;   // baked into the map picture
         if (nd->kind == CK_NODE_SHOP) { blit(SPR_MAP_SHOP, reach ? 0 : 1, nd->x, nd->y); continue; }
-        if (nd->kind == CK_NODE_EXIT) { blit(SPR_MAP_EXIT, reach ? 0 : 1, nd->x, nd->y); continue; }
-        if (nd->kind == CK_NODE_BOSS) blit(SPR_MAP_BOSS, beaten ? 1 : 0, nd->x, nd->y);
+        if (nd->kind == CK_NODE_EXIT) { blit(SPR_MAP_EXIT_1 + wi, reach ? 0 : 1, nd->x, nd->y); continue; }
+        if (nd->kind == CK_NODE_BOSS) blit(SPR_MAP_BOSS_1 + wi, beaten ? 1 : 0, nd->x, nd->y);
         float sz = nd->kind == CK_NODE_BOSS ? 16 : 14, x = nd->x - sz / 2, y = nd->y - sz / 2;
         rect(x - 1, y + 1, sz + 2, sz + 2, 0x1E0F14, 0.4f);
         rect(x - 1, y - 1, sz + 2, sz + 2, 0x2B2230, 1);
@@ -475,14 +491,16 @@ static void draw_shop(const ck_game *G) {
 
 // ---------------------------------------------------------------------------- a level
 
-static bool solid(char c) { return c == '#' || c == '=' || c == 'X' || c == 'D'; }
+static bool solid(char c) { return c == '#' || c == '=' || c == 'X' || c == 'D' || c == '<' || c == '>'; }
 static char tile_at(const ck_level *lv, int tx, int ty) {
     if (tx < 0 || tx >= lv->w) return '#';
     if (ty < 0 || ty >= lv->h) return '.';
     return lv->tiles[ty][tx];
 }
 
-static void draw_tiles(const ck_level *lv, float cam) {
+static void draw_tiles(const ck_level *lv, float cam, int theme) {
+    const int TILES = SPR_TILES_0 + theme;
+    const int beltK = (lv->frame / 4) % 4;
     int x0 = (int)floorf(cam / TS), x1 = x0 + 21;
     if (x0 < 0) x0 = 0;   // the camera can sit left of the level while it shakes
     if (x1 > lv->w - 1) x1 = lv->w - 1;
@@ -494,15 +512,16 @@ static void draw_tiles(const ck_level *lv, float cam) {
         unsigned hash = ((unsigned)(tx * 73856093) ^ (unsigned)(ty * 19349663));
         if (t == '#') {
             bool top = !solid(tile_at(lv, tx, ty - 1));
-            blit(SPR_TILES, (top ? 0 : 4) + hash % 4, x, y);
+            blit(TILES, (top ? 0 : 4) + hash % 4, x, y);
             if (!solid(tile_at(lv, tx - 1, ty)) && tx > 0) rect(x, y, 2, TS, 0, 0.15f);
             if (!solid(tile_at(lv, tx + 1, ty)) && tx < lv->w - 1) rect(x + TS - 2, y, 2, TS, 0, 0.2f);
-        } else if (t == '=') blit(SPR_TILES, 8, x, y);
-        else if (t == '-') blit(SPR_TILES, 9, x, y);
+        } else if (t == '=') blit(TILES, 8, x, y);
+        else if (t == '-') blit(TILES, 9, x, y);
+        else if (t == '>' || t == '<') blit(TILES, 14 + (t == '>' ? beltK : 3 - beltK), x, y);
         else if (t == 'X') {
             char c = lv->contents[ty][tx];
             bool prize = c && c != 'o';
-            blit(SPR_TILES, prize ? 11 : 10, x, y);
+            blit(TILES, prize ? 11 : 10, x, y);
             if (prize) {
                 if (sinf(lv->t * 4 + tx) > 0.6f) star_icon(x + 13, y + 3, 2.2f, 0xFFF6A0, 1);
                 for (int k = 0; k < lv->nplayers; k++) {
@@ -523,7 +542,7 @@ static void draw_tiles(const ck_level *lv, float cam) {
     for (int ty = 0; ty < lv->h; ty++) for (int tx = x0; tx <= x1; tx++) {
         if (lv->tiles[ty][tx] != 'D') continue;
         float drop = lv->doorT >= 0 ? fminf(1, lv->doorT / 40.0f) * TS * lv->h : 0;
-        blit(SPR_TILES, ty % 3 == 0 ? 13 : 12, roundf(tx * TS - cam), ty * TS + drop + shakeY);
+        blit(TILES, ty % 3 == 0 ? 13 : 12, roundf(tx * TS - cam), ty * TS + drop + shakeY);
     }
     rdpq_set_scissor(0, 0, W, H);
 }
@@ -652,20 +671,74 @@ static void draw_ents(const ck_game *G, float cam) {
 }
 
 static void draw_crane(const ck_level *lv) {
-    if (!lv->hasCrane) return;
-    float sh = lv->crane.shake > 0 ? sinf(lv->crane.shake * 1.7f) * 2 : 0, tx = 286 + sh;
+    float sh = lv->boss.shake > 0 ? sinf(lv->boss.shake * 1.7f) * 2 : 0, tx = 286 + sh;
     blit(SPR_CRANE, 0, sh, shakeY);
-    blit(SPR_CAB, lv->crane.ouch > 0 ? 1 : lv->crane.fixed ? 2 : 0, tx, shakeY);
-    if (!lv->crane.fixed && (int)(lv->t * 8) % 3 == 0) {
+    blit(SPR_CAB, lv->boss.ouch > 0 ? 1 : lv->boss.fixed ? 2 : 0, tx, shakeY);
+    if (!lv->boss.fixed && (int)(lv->t * 8) % 3 == 0) {
         line(tx + 18, 4 + shakeY, tx + 22, 9 + shakeY, 1, 0xBFF6FF, 1);
         line(tx + 22, 9 + shakeY, tx + 19, 10 + shakeY, 1, 0xBFF6FF, 1);
         line(tx + 19, 10 + shakeY, tx + 24, 15 + shakeY, 1, 0xBFF6FF, 1);
     }
-    float mx = lv->crane.mx ? lv->crane.mx : 160, my = lv->crane.my ? lv->crane.my : 164;
+    float mx = lv->boss.mx ? lv->boss.mx : 160, my = lv->boss.my ? lv->boss.my : 164;
     line(160, 24 + shakeY, mx, my - 8 + shakeY, 1.5f, 0x3A3346, 1);
-    blit_o(SPR_MAGNET, 0, mx, my + shakeY, (bopt){ .rot = lv->crane.ang });
-    if (!lv->crane.fixed) { float k = fmodf(lv->t * 1.5f, 1); shape(SPR_RING, mx, my + shakeY, 12 + k * 8, 0xFF6B6B, 0.5f * (1 - k)); }
-    for (int i = 0; i < 3; i++) shape(SPR_DOT, 140 + i * 20, 220, 5, i < lv->crane.hits ? 0x49D17A : 0xFFFFFF, i < lv->crane.hits ? 1 : 0.25f);
+    blit_o(SPR_MAGNET, 0, mx, my + shakeY, (bopt){ .rot = lv->boss.ang });
+    if (!lv->boss.fixed) { float k = fmodf(lv->t * 1.5f, 1); shape(SPR_RING, mx, my + shakeY, 12 + k * 8, 0xFF6B6B, 0.5f * (1 - k)); }
+}
+
+// A little crackle of glitch beside a boss that is not fixed yet.
+static void zap(const ck_level *lv, float x, float y) {
+    if (lv->boss.fixed || (int)(lv->t * 8) % 3) return;
+    line(x, y, x + 4, y + 5, 1, 0xBFF6FF, 1);
+    line(x + 4, y + 5, x + 1, y + 6, 1, 0xBFF6FF, 1);
+    line(x + 1, y + 6, x + 6, y + 11, 1, 0xBFF6FF, 1);
+}
+
+// drawBoss in web/game.js.
+static void draw_boss(const ck_level *lv) {
+    if (!lv->hasBoss) return;
+    int face = lv->boss.ouch > 0 ? 1 : lv->boss.fixed ? 2 : (lv->boss.type == BOSS_BOULDER && lv->boss.state == BS_DIZZY) ? 3 : 0;
+    float bx = lv->boss.x, by = lv->boss.y + shakeY;
+    switch (lv->boss.type) {
+    case BOSS_STAMPER: {
+        // the rail it hangs from, and its piston
+        rect(24, 14 + shakeY, 272, 6, 0x3A3346, 1); rect(24, 14 + shakeY, 272, 2, 0x5D6378, 1);
+        rect(bx - 12, 10 + shakeY, 24, 12, 0x7D8397, 1);
+        float len = fmaxf(0, lv->boss.y - 20);
+        rect(bx - 3, 20 + shakeY, 6, len, 0x9AA1B0, 1); rect(bx + 1, 20 + shakeY, 2, len, 0x5D6378, 1);
+        float sh = lv->boss.state == BS_WARN ? sinf(lv->frame * 1.8f) * 1.5f : 0;
+        blit(SPR_BOSS_STAMPER, face, bx + sh, by);
+        if (lv->boss.state == BS_WARN && lv->frame % 8 < 4) rect(bx - 24, lv->boss.low - 2 + shakeY, 48, 2, 0xFF6B6B, 0.5f);
+        zap(lv, bx + 26, by + 2);
+        break;
+    }
+    case BOSS_BOULDER:
+        blit_o(SPR_DOT, 0, bx, 12 * TS + shakeY, (bopt){ .sx = 18 / 7.5f, .sy = 4 / 7.5f, .tinted = true, .tint = hexc(0x1E141E, 77) });
+        blit_o(SPR_BOSS_ROCK, 0, bx, by, (bopt){ .rot = lv->boss.rot });
+        blit(SPR_BOSS_ROCKFACE, face, bx, by);
+        if (face == 3)
+            for (int k = 0; k < 3; k++) {
+                float a = lv->t * 5 + k * PI * 2 / 3;
+                star_icon(bx + cosf(a) * 14, by - 24 + sinf(a) * 3, 2.2f, 0xFFF6A0, 1);
+            }
+        zap(lv, bx + 16, by - 22);
+        break;
+    case BOSS_HAULER: {
+        float bottom = 12 * TS + shakeY, top = by + 14;
+        if (lv->boss.state == BS_WARN && lv->frame % 6 < 3) rect(bx - 1, top, 2, bottom - top, 0xBFF6FF, 0.7f);
+        if (lv->boss.state == BS_BEAM) {
+            float w = 24 + sinf(lv->frame * 0.6f) * 2;
+            rect(bx - w / 2, top, w, bottom - top, 0xBFF6FF, 0.35f);
+            rect(bx - 4, top, 8, bottom - top, 0xBFF6FF, 0.7f);
+        }
+        float tilt = lv->boss.fixed ? 0 : sinf(lv->t * 2.2f) * 0.08f;
+        blit_o(SPR_BOSS_HAULER, face, bx, by, (bopt){ .rot = tilt });
+        zap(lv, bx + 30, by - 14);
+        break;
+    }
+    default: draw_crane(lv); break;
+    }
+    // hits so far
+    for (int i = 0; i < 3; i++) shape(SPR_DOT, 140 + i * 20, 220, 5, i < lv->boss.hits ? 0x49D17A : 0xFFFFFF, i < lv->boss.hits ? 1 : 0.25f);
 }
 
 static void draw_player(const ck_game *G, const ck_player *p, float cam, int nplayers) {
@@ -775,7 +848,7 @@ static void level_hud(const ck_game *G) {
         if (lv->retry) txt(F_SMALL, ST_PLAIN, W / 2, 128, ALIGN_CENTER, "%d %s left", G->prog.lives, G->prog.lives > 1 ? "tries" : "try");
     }
     if (lv->dyingT > 40) { dark_panel(W / 2 - 80, 96, 160, 34); txt(F_BIG, ST_YELLOW, W / 2, 118, ALIGN_CENTER, G->prog.lives > 0 ? "OOPS!" : "OUT OF TRIES"); }
-    if (lv->hasCrane && !lv->crane.fixed && lv->frame < 260) txt(F_MED, ST_CREAM, W / 2, 140, ALIGN_CENTER, "Bounce on the red buttons!");
+    if (lv->hasBoss && !lv->boss.fixed && lv->frame < 260) txt(F_MED, ST_CREAM, W / 2, 140, ALIGN_CENTER, "Bounce on the red buttons!");
     if (lv->hasShower && lv->frame < 180) txt(F_MED, ST_CREAM, W / 2, 140, ALIGN_CENTER, "Catch the bolts!");
     if (lv->clearT >= 0) {
         float k = fminf(1, lv->clearT / 20.0f);
@@ -813,16 +886,17 @@ static void level_hud(const ck_game *G) {
 static void draw_level(const ck_game *G) {
     const ck_level *lv = &G->lv;
     float cam = floorf(lv->camX);
-    int far = lv->def->kind == CK_KIND_BOSS ? SPR_BG_FAR_BOSS : SPR_BG_FAR;
+    int theme = theme_of(G);
+    int far = (lv->def->kind == CK_KIND_BOSS ? SPR_BG_FAR_BOSS_0 : SPR_BG_FAR_0) + theme;
     float off = fmodf(lv->camX * 0.2f, 640);
     blit(far, 0, -off, 0);
     if (off > 320) blit(far, 0, 640 - off, 0);
     float mo = fmodf(lv->camX * 0.5f, 640);
-    blit(SPR_BG_MID, 0, -mo, 0);
-    if (mo > 320) blit(SPR_BG_MID, 0, 640 - mo, 0);
+    blit(SPR_BG_MID_0 + theme, 0, -mo, 0);
+    if (mo > 320) blit(SPR_BG_MID_0 + theme, 0, 640 - mo, 0);
     shakeY = lv->shake > 0 ? sinf(lv->shake * 2.3f) * 2 : 0;
-    draw_crane(lv);
-    draw_tiles(lv, cam);
+    draw_boss(lv);
+    draw_tiles(lv, cam, theme);
     draw_ents(G, cam);
     for (int k = 0; k < lv->nplayers; k++) draw_player(G, &lv->players[k], cam, lv->nplayers);
     particles(G, cam);
@@ -898,6 +972,65 @@ static void draw_pause(const ck_game *G, bool scan) {
     txt(F_SMALL, ST_GREY, W / 2, 156, ALIGN_CENTER, "Z: TV lines %s", scan ? "on" : "off");
 }
 
+// ---------------------------------------------------------------------------- the films between worlds
+
+// cutScene().draw in web/game.js; where everyone is comes from ck_cut_cast().
+static void draw_cut(const ck_game *G) {
+    ck_cut_view v;
+    ck_cut_cast(G, &v);
+    int k = G->cut < 1 ? 1 : G->cut > CK_WORLDS ? CK_WORLDS : G->cut;
+    float t = G->t;
+    blit(SPR_CUT_BG_1 + k - 1, 0, 0, 0);
+    if (k == 1) {   // the roller door rises into the wall
+        rdpq_set_scissor(CK_CUT_GATE_X, CK_CUT_GATE_Y, CK_CUT_GATE_X + CK_CUT_GATE_W, CK_CUT_GATE_Y + CK_CUT_GATE_H);
+        blit(SPR_CUT_GATE, 0, CK_CUT_GATE_X, CK_CUT_GATE_Y - v.gate * CK_CUT_GATE_H);
+        rdpq_set_scissor(0, 0, W, H);
+    }
+    if (k == 2) blit(SPR_CUT_CAGE, 0, CK_CUT_SHAFT_X, v.cageY);
+    if (k == 3) {
+        float x = CK_CUT_PAD_X + v.shake;
+        if (v.flame) { float sc = v.bigFlame ? 1 : 0.55f; blit_o(SPR_CUT_FLAME, (int)(t * 14) % 2, x, v.rocketY, (bopt){ .sx = sc, .sy = sc }); }
+        blit(SPR_CUT_ROCKET, 0, x, v.rocketY);
+    }
+    if (k == 4) blit(SPR_CUT_FLOAT, 0, v.floatX, 210);
+    // babies behind, heroes in front
+    for (int j = 0; j < v.nbabies; j++) {
+        const ck_cut_actor *c = &v.babies[j];
+        if (c->a <= 0) continue;
+        float hop = c->walk || k == 4 ? fabsf(sinf(t * (k == 4 ? 8 : 9) + j)) * (k == 4 ? 6 : 4) : 0;
+        int fr = (k == 4 ? 2 : 0) + (int)(t * 3 + j) % 2;
+        char name[32];
+        snprintf(name, sizeof name, "rom:/baby_%06lX.sprite", (unsigned long)G->cutBabies[j]);
+        int id = SPR_BABY_FF8FC7;
+        for (int i = 0; i < SPR_COUNT; i++) if (!strcmp(SPR_INFO[i].file, name)) { id = i; break; }
+        blit_o(id, fr, c->x, c->y - hop, (bopt){ .sx = 0.05f / 0.06f, .sy = 0.05f / 0.06f, .tinted = true, .tint = RGBA32(255, 255, 255, (int)(c->a * 255)) });
+    }
+    int i = 0;
+    for (int s = 0; s < 2 && i < v.nheroes; s++) {
+        if (!G->prog.joined[s]) continue;
+        const ck_cut_actor *c = &v.heroes[i];
+        int hero = G->prog.hero[s], col = G->prog.col[s];
+        float tt = t + i * 0.7f;
+        i++;
+        if (c->a <= 0) continue;
+        int fr;
+        if (c->walk) fr = 4 + (int)(tt * (hero == HERO_ROBOT ? 2.2f * 11 : 2 * 10) / (2 * PI) * 8) % 8;
+        else if (k == 4 || (k == 2 && t > 9.5f)) fr = 25 + (int)(tt * 6) % 2;
+        else fr = (int)(tt / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
+        blit_o(hero_sprite(hero, col), fr, c->x, c->y, (bopt){ .tinted = true, .tint = RGBA32(255, 255, 255, (int)(c->a * 255)) });
+    }
+    if (k == 2) blit(SPR_CUT_CAGE, 1, CK_CUT_SHAFT_X, v.cageY);
+    particles(G, 0);
+    // the caption strip
+    if (v.caption && v.captionA > 0.2f) {
+        panel(20, 210, 280, 22, 0x1B1426, 0.86f * v.captionA);
+        txt(F_MED, v.gold ? ST_YELLOW : ST_CREAM, W / 2, 225, ALIGN_CENTER, "%s", v.caption);
+    }
+    if (v.black > 0) rect(0, 0, W, H, 0x000000, v.black);
+    if (v.white > 0) rect(0, 0, W, H, 0xFFF8E6, v.white);
+    if (t > 1 && (int)(t * 2) % 2) txt(F_SMALL, ST_PALE, W - 8, 14, ALIGN_RIGHT, "START to skip");
+}
+
 // ---------------------------------------------------------------------------- a frame
 
 void draw_frame(const ck_game *G, bool scanlines) {
@@ -914,6 +1047,7 @@ void draw_frame(const ck_game *G, bool scanlines) {
     case SC_LEVEL: draw_level(G); break;
     case SC_JET: draw_jet(G); break;
     case SC_PAUSE: draw_pause(G, scanlines); break;
+    case SC_CUT: draw_cut(G); break;
     }
     if (scanlines) {
         // a hint of a CRT: darken every other line

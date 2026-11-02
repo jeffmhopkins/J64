@@ -988,7 +988,8 @@ static void update_stamper(ck_game *G) {
         if (--lv->boss.timer <= 0) { lv->boss.state = BS_WARN; lv->boss.timer = little ? 50 : 36; }
         break;
     case BS_WARN:
-        if (--lv->boss.timer <= 0) { lv->boss.state = BS_DROP; lv->boss.vy = 1; lv->boss.low = landing(lv, lv->boss.x - 23, lv->boss.x + 23, lv->boss.y + 30); }
+        lv->boss.low = landing(lv, lv->boss.x - 23, lv->boss.x + 23, lv->boss.y + 30);   // where it will land (drawn as a warning)
+        if (--lv->boss.timer <= 0) { lv->boss.state = BS_DROP; lv->boss.vy = 1; }
         break;
     case BS_DROP:
         lv->boss.vy = ck_minf(lv->boss.vy + 0.7f, 9);

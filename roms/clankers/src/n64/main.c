@@ -29,7 +29,7 @@ static char *slurp(const char *path) {
 }
 
 // The core reads each world's files through this as you travel: "w2/world.txt" -> rom:/data/w2/world.txt.
-static char *load_data(const char *path, void *user) {
+static char *rom_data(const char *path, void *user) {
     (void)user;
     char full[96];
     snprintf(full, sizeof full, "rom:/data/%s", path);
@@ -123,7 +123,7 @@ int main(void) {
 #ifndef CK_AUTOTEST
     save_load(&boot);   // the test build always starts from a fresh save and never writes one
 #endif
-    if (!ck_game_boot(&G, load_data, NULL, &boot)) fatal("rom:/data/w1/world.txt is missing");
+    if (!ck_game_boot(&G, rom_data, NULL, &boot)) fatal("rom:/data/w1/world.txt is missing");
     char *songs = slurp("rom:/data/songs.txt");
     synth_init(songs);
     free(songs);
