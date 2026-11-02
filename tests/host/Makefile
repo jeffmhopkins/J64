@@ -3,6 +3,12 @@
 # root runs it in the container.
 CC      ?= cc
 CFLAGS  ?= -std=gnu17 -Wall -Wextra -Werror -O1 -g
+# Address and undefined-behaviour checks catch out-of-bounds reads and overflows that the N64
+# would turn into a crash. SANITIZE=0 turns them off.
+SANITIZE ?= 1
+ifeq ($(SANITIZE),1)
+  CFLAGS += -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer
+endif
 ROOT    := ../..
 BUILD   := build
 

@@ -192,6 +192,75 @@ static void test_bot_runs(void) {
     EXPECT_EQ_INT(ck_node_beaten(G, ck_world_node(&G->world, "bonus")), 1);
 }
 
+// Mashing: random buttons on both controllers through every screen and every level, with
+// checks that nothing runs away. Build with sanitizers (see docs/testing.md) to catch overflows.
+static uint32_t fz;
+static uint32_t fuzz_rand(void) { fz ^= fz << 13; fz ^= fz >> 17; fz ^= fz << 5; return fz; }
+static uint16_t fuzz_pad(int *hold, uint16_t *cur) {
+    if (--*hold <= 0) { *cur = (uint16_t)(fuzz_rand() & 0x7F); *hold = 1 + (int)(fuzz_rand() % 40); }
+    return *cur;
+}
+static void fuzz_check(const ck_game *G) {
+    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_INTRO, 1);
+    EXPECT_EQ_INT(G->nparts >= 0 && G->nparts <= CK_MAXPARTS, 1);
+    EXPECT_EQ_INT(G->nsfx >= 0 && G->nsfx <= CK_MAXSFX, 1);
+    EXPECT_EQ_INT(G->song >= 0 && G->song < SONG_COUNT, 1);
+    EXPECT_EQ_INT(G->prog.lives >= 0 && G->prog.lives <= 9, 1);
+    if (G->scene == SC_LEVEL || G->scene == SC_PAUSE)
+        for (int k = 0; k < G->lv.nplayers; k++) {
+            const ck_player *p = &G->lv.players[k];
+            EXPECT_EQ_INT(p->x == p->x && p->y == p->y, 1);   // not NaN
+            EXPECT_EQ_INT(p->x > -1000 && p->x < G->lv.w * 16 + 1000, 1);
+        }
+}
+static void test_fuzz(void) {
+    static const char *ids[] = { "l1", "l2", "l3", "bonus", "boss" };
+    for (uint32_t seed = 1; seed <= 6; seed++) {
+        ck_game *G = load_game();
+        if (!G) return;
+        fz = seed * 2654435761u;
+        int h1 = 0, h2 = 0;
+        uint16_t c1 = 0, c2 = 0;
+        int before = test_failures;
+        // the whole game from the intro, both controllers
+        for (int f = 0; f < 60 * 60 * 3 && test_failures == before; f++) {
+            ck_game_step(G, fuzz_pad(&h1, &c1), fuzz_pad(&h2, &c2));
+            fuzz_check(G);
+        }
+        // then every level with two players
+        G->prog.joined[1] = 1;
+        G->prog.hero[1] = HERO_OSTRICH;
+        for (int k = 0; k < 5 && test_failures == before; k++) {
+            G->prog.lives = 3;
+            start_level(G, ids[k]);
+            for (int f = 0; f < 60 * 90 && test_failures == before; f++) {
+                if (G->scene == SC_MAP) break;
+                ck_game_step(G, fuzz_pad(&h1, &c1), fuzz_pad(&h2, &c2));
+                fuzz_check(G);
+            }
+        }
+        if (test_failures != before) fprintf(stderr, "fuzz: seed %u failed\n", seed);
+    }
+    // a damaged save (right magic, random bytes) must load into something playable
+    for (uint32_t seed = 1; seed <= 20; seed++) {
+        char *w = slurp(DATA "world.txt");
+        if (!w) return;
+        static ck_game G;
+        ck_prog bad;
+        fz = seed * 40503u;
+        uint8_t *b = (uint8_t *)&bad;
+        for (size_t i = 0; i < sizeof bad; i++) b[i] = (uint8_t)fuzz_rand();
+        bad.magic = CK_SAVE_MAGIC;
+        EXPECT_EQ_INT(ck_game_init(&G, w, &bad), 1);
+        free(w);
+        EXPECT_EQ_INT(G.prog.at < G.world.nnodes, 1);
+        EXPECT_EQ_INT(G.prog.col[0] < CK_NCOLS && G.prog.col[1] < CK_NCOLS, 1);
+        int h1 = 0, h2 = 0;
+        uint16_t c1 = 0, c2 = 0;
+        for (int f = 0; f < 60 * 60; f++) { ck_game_step(&G, fuzz_pad(&h1, &c1), fuzz_pad(&h2, &c2)); fuzz_check(&G); }
+    }
+}
+
 // The self-playing test ROM's tour passes, checkpoint by checkpoint, on a fresh save.
 static void test_autotest(void) {
     ck_game *G = load_game();
@@ -266,6 +335,20 @@ static int emitted;
 static void count_tone(const ck_tone *t, void *u) { (void)u; if (t->dur > 0 && t->vol > 0) emitted++; }
 
 static void test_music(void) {
+    {   // bad song files: a zero or negative bpm and a very long note fall back to safe values
+        static ck_song bad[SONG_COUNT];
+        char text[1400] = "song title bpm=0 loop\nsquare 0.1 C5\nsong map bpm=-5 loop\nsquare 0.1 C5";
+        strcat(text, "\nsong level loop\nsquare 0.1 C5");
+        for (int i = 0; i < 300; i++) strcat(text, "-");
+        strcat(text, "\n");
+        EXPECT_EQ_INT(ck_parse_songs(text, bad), 3);
+        EXPECT_EQ_INT((int)bad[SONG_TITLE].bpm, 120);
+        EXPECT_EQ_INT((int)bad[SONG_MAP].bpm, 120);
+        EXPECT_EQ_INT(bad[SONG_LEVEL].tracks[0].len[0] > 0, 1);
+        ck_music m;
+        ck_music_start(&m, bad, SONG_LEVEL);
+        for (int i = 0; i < 600; i++) ck_music_advance(&m, 1.0f / 60, count_tone, NULL);
+    }
     static ck_song songs[SONG_COUNT];
     char *t = slurp("roms/clankers/data/songs.txt");
     if (!t) return;
@@ -300,6 +383,7 @@ void test_clankers(void) {
     test_level_rules();
     test_intro();
     test_autotest();
+    test_fuzz();
     test_flow();
     test_bot_runs();
 }

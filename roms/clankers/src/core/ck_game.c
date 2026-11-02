@@ -102,9 +102,19 @@ bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
     if (!ck_parse_world(world_text, &G->world)) return false;
     if (saved && saved->magic == CK_SAVE_MAGIC) G->prog = *saved;
     else ck_prog_fresh(&G->prog);
-    G->prog.joined[0] = 1;
-    if (G->prog.at >= G->world.nnodes) G->prog.at = 0;
-    if (G->prog.lives < 1) G->prog.lives = 3;
+    // A save can come back damaged (a half-finished write, another game's EEPROM): keep every
+    // field in range so nothing indexes past an array.
+    ck_prog *P = &G->prog;
+    for (int i = 0; i < 2; i++) {
+        P->hero[i] = P->hero[i] == HERO_OSTRICH ? HERO_OSTRICH : HERO_ROBOT;
+        P->col[i] = (uint8_t)(P->col[i] % CK_NCOLS);
+        P->joined[i] = P->joined[i] ? 1 : 0;
+    }
+    P->joined[0] = 1;
+    P->little = P->little ? 1 : 0;
+    for (int i = 0; i < CK_MAXNODES; i++) { P->got[i] &= 7; P->stars[i] &= 7; }
+    if (P->at >= G->world.nnodes) P->at = 0;
+    if (P->lives < 1 || P->lives > 9) P->lives = 3;
     ck_map_reset(G);
     G->scene = SC_INTRO;
     G->song = SONG_LULLABY;

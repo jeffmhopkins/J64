@@ -484,6 +484,7 @@ static char tile_at(const ck_level *lv, int tx, int ty) {
 
 static void draw_tiles(const ck_level *lv, float cam) {
     int x0 = (int)floorf(cam / TS), x1 = x0 + 21;
+    if (x0 < 0) x0 = 0;   // the camera can sit left of the level while it shakes
     if (x1 > lv->w - 1) x1 = lv->w - 1;
     bool anyNear = false;
     for (int ty = 0; ty < lv->h; ty++) for (int tx = x0; tx <= x1; tx++) {
