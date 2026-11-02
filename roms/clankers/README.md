@@ -4,7 +4,7 @@
 > baby bots that a Big Glitch storm blew across four worlds.
 
 > [!NOTE]
-> The N64 ROM plays World 1 (Junkyard Jumble). The browser build plays every world. Both read
+> Both the N64 ROM and the browser build play World 1 (Junkyard Hills), the only world built so far. Both read
 > the same level files in `data/`, and the ROM's rules live in one C core (`src/core/`) that a
 > later WASM build can share.
 
