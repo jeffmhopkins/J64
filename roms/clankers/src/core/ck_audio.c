@@ -121,6 +121,8 @@ int ck_parse_songs(const char *text, ck_song *songs) {
                 if (wl[k] > 4 && !strncmp(w[k], "bpm=", 4)) cur->bpm = (float)atof(w[k] + 4);
                 else if (wl[k] == 4 && !strncmp(w[k], "loop", 4)) cur->loop = true;
             }
+            // a bpm of 0, a negative one or a typo would make notes endless or the sequencer spin
+            if (!(cur->bpm >= 20 && cur->bpm <= 600)) cur->bpm = 120;
             continue;
         }
         bool drum;
@@ -136,7 +138,7 @@ int ck_parse_songs(const char *text, ck_song *songs) {
             if (drum) f = n && s[0] == 'k' ? 1 : n && s[0] == 's' ? 2 : n && s[0] == 'h' ? 3 : 0;
             else if (!(n == 1 && s[0] == '.')) f = hz(s, n);
             t->freq[t->n] = f;
-            t->len[t->n] = (uint8_t)(1 + dashes);
+            t->len[t->n] = (uint8_t)(1 + (dashes > 200 ? 200 : dashes));   // a uint8_t: never wrap to 0
             t->n++;
         }
     }

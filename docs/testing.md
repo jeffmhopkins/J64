@@ -27,6 +27,12 @@ that uses `EXPECT_EQ_INT`, then call it from `tests/host/test_main.c`.
 > `src/` a thin layer that reads input, calls into `common/`, and draws. The more lives in
 > `common/`, the more CI can test.
 
+> [!NOTE]
+> The host tests build with address and undefined-behaviour sanitizers, so an out-of-bounds
+> read or an overflow fails `make test` instead of crashing the console later. They also mash
+> random buttons through every screen and level, and load damaged saves. `SANITIZE=0` turns the
+> sanitizers off.
+
 <a id="ares"></a>
 ## ares
 
