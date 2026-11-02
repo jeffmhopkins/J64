@@ -144,11 +144,18 @@ static void line(float x0, float y0, float x1, float y1, float w, uint32_t hex, 
 }
 
 static void txt(int font, int style, float x, float y, int align, const char *fmt, ...) {
-    char buf[96];
+    char raw[96], buf[192];
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(buf, sizeof buf, fmt, ap);
+    vsnprintf(raw, sizeof raw, fmt, ap);
     va_end(ap);
+    // rdpq_text reads $xx and ^xx as font and style changes; double them to print them as they are
+    size_t n = 0;
+    for (const char *c = raw; *c && n < sizeof buf - 2; c++) {
+        if (*c == '$' || *c == '^') buf[n++] = *c;
+        buf[n++] = *c;
+    }
+    buf[n] = 0;
     float x0 = align == ALIGN_CENTER ? x - 160 : align == ALIGN_RIGHT ? x - 320 : x;
     rdpq_text_print(&(rdpq_textparms_t){ .style_id = style, .width = align == ALIGN_LEFT ? 0 : 320, .align = align, .disable_aa_fix = true },
                     font, x0, y, buf);
