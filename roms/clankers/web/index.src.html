@@ -22,9 +22,11 @@
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .touch { display: none; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; user-select: none; -webkit-user-select: none; touch-action: none; }
   .touch.on { display: grid; }
-  .dpad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 50px); gap: 4px; }
-  .dpad [data-btn="up"] { grid-column: 2; grid-row: 1; } .dpad [data-btn="left"] { grid-column: 1; grid-row: 2; }
-  .dpad [data-btn="right"] { grid-column: 3; grid-row: 2; } .dpad [data-btn="down"] { grid-column: 2; grid-row: 3; }
+  /* Joystick: put a thumb anywhere on the ring and drag. Eight ways, so down + forward slides. */
+  .stick { position: relative; width: 132px; height: 132px; border-radius: 50%; background: var(--frame); border: 1px solid var(--frame-edge); touch-action: none; cursor: pointer; }
+  .stick::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; border: 1px dashed var(--frame-edge); }
+  .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: var(--frame-edge); box-shadow: 0 2px 6px #0008; pointer-events: none; }
+  .stick.held .knob { filter: brightness(1.5); }
   .touch button { border-radius: 14px; font-size: 1.1rem; padding: 0; touch-action: none; }
   .ab { display: grid; grid-template-columns: 70px 70px; grid-template-rows: 70px 70px; gap: 8px; }
   .ab [data-btn="a"] { grid-column: 2; grid-row: 1; background: var(--a); border-color: var(--a); border-radius: 50%; font-family: var(--display); font-size: 1.5rem; }
@@ -36,7 +38,7 @@
   .help strong { color: var(--fg); }
   kbd { font: 700 0.8rem var(--body); background: var(--frame); border: 1px solid var(--frame-edge); border-radius: 5px; padding: 1px 5px; color: var(--fg); }
   body.test { padding: 0; } body.test .bar, body.test .help { display: none; } body.test main { gap: 8px; }
-  @media (max-width: 420px) { .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 44px); } .ab { grid-template-columns: 60px 60px; grid-template-rows: 60px 60px; } }
+  @media (max-width: 420px) { .stick { width: 116px; height: 116px; } .stick .knob { width: 50px; height: 50px; margin: -25px 0 0 -25px; } .ab { grid-template-columns: 60px 60px; grid-template-rows: 60px 60px; } }
 </style>
 
 <main>
@@ -51,15 +53,12 @@
   </div>
   <div class="screen" id="wrap"><canvas id="scr" width="320" height="240" aria-label="Clankers game screen" tabindex="0"></canvas></div>
   <div class="touch" id="touch">
-    <div class="dpad">
-      <button data-btn="up" aria-label="Up">▲</button><button data-btn="left" aria-label="Left">◀</button>
-      <button data-btn="right" aria-label="Right">▶</button><button data-btn="down" aria-label="Down">▼</button>
-    </div>
+    <div class="stick" id="stick" role="application" aria-label="Joystick: touch and drag to move"><div class="knob"></div></div>
     <div class="mid"><button data-btn="start">START</button></div>
     <div class="ab"><button data-btn="b" aria-label="B">B</button><button data-btn="a" aria-label="A">A</button></div>
   </div>
   <div class="help">
-    <p><strong>Player 1</strong> uses <kbd>←</kbd><kbd>→</kbd> to run, <kbd>Z</kbd> or <kbd>Space</kbd> to jump (A), <kbd>X</kbd> for the special (B), <kbd>↓</kbd> to crouch or slide (or to drop into a hatch) and <kbd>Enter</kbd> for Start. On a phone, use the touch buttons.</p>
+    <p><strong>Player 1</strong> uses <kbd>←</kbd><kbd>→</kbd> to run, <kbd>Z</kbd> or <kbd>Space</kbd> to jump (A), <kbd>X</kbd> for the special (B), <kbd>↓</kbd> to crouch or slide (or to drop into a hatch) and <kbd>Enter</kbd> for Start. On a phone, drag the joystick (down and forward to slide) and tap A and B.</p>
     <p><strong>Player 2</strong> uses <kbd>A</kbd><kbd>D</kbd> to run, <kbd>G</kbd> to jump, <kbd>H</kbd> for the special, <kbd>S</kbd> to crouch. Press <kbd>G</kbd> on the player screen to join. USB or Bluetooth game controllers also work, one per player.</p>
     <p><strong>This build</strong> is all of World 1: three levels, the Bolt Shower bonus and the Clanky Crane. Little mode slows the Glitchies and the crane down. Progress saves in this browser. <button id="wipe">Start a new game</button></p>
   </div>

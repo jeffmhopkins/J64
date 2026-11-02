@@ -197,6 +197,26 @@ for (const b of touchEl.querySelectorAll('[data-btn]')) {
   b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
   b.addEventListener('contextmenu', e => e.preventDefault());
 }
+// Joystick: direction from the ring's centre to the thumb. Eight 45-degree slices, a small dead zone in the middle.
+const stickEl = document.getElementById('stick'), knobEl = stickEl.querySelector('.knob');
+let stickId = null;
+function setStick(dx, dy) {
+  const r = stickEl.clientWidth / 2, d = Math.hypot(dx, dy), k = d > r ? r / d : 1, on = d > r * 0.22, s = d * 0.383;   // sin 22.5
+  knobEl.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+  const want = { left: on && dx < -s, right: on && dx > s, up: on && dy < -s, down: on && dy > s };
+  for (const b in want) { if (want[b] && !touch[b]) latch.add('touch:' + b); touch[b] = want[b]; }
+  stickEl.classList.toggle('held', on);
+}
+function stickMove(e) { const r = stickEl.getBoundingClientRect(); setStick(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)); }
+function stickOff(e) { if (e.pointerId !== stickId) return; stickId = null; setStick(0, 0); }
+stickEl.addEventListener('pointerdown', e => {
+  e.preventDefault(); if (stickId !== null) return;
+  stickId = e.pointerId; onFirstInput(); try { stickEl.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
+  stickMove(e);
+});
+stickEl.addEventListener('pointermove', e => { if (e.pointerId === stickId) { e.preventDefault(); stickMove(e); } });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) stickEl.addEventListener(ev, stickOff);
+stickEl.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('pointerdown', () => { onFirstInput(); cv.focus(); });
 function pollPads() {
   let gps = [];
