@@ -797,7 +797,7 @@ static void level_hud(const ck_game *G) {
                     int at = 70 + s * 18;
                     float pop = lv->clearT < at ? 0 : fminf(1, (lv->clearT - at) / 8.0f);
                     bool got = R->stars[s];
-                    float sx = W / 2 - 36 + s * 36, sy = 150;
+                    float sx = W / 2 - 56 + s * 56, sy = 150;   // wide enough for "GOT IT ALL" in the small font
                     float r = 9 * (got ? 0.6f + pop * 0.4f + (pop < 1 ? 0.3f * sinf(pop * PI) : 0) : 0.8f);
                     if (lv->clearT >= at || !got) star_icon(sx, sy, r + 1.5f, got ? 0x7A4A10 : 0x1B1426, got ? 1 : 0.6f);
                     if (got && lv->clearT >= at) star_icon(sx, sy, r, 0xFFD23F, 1);
