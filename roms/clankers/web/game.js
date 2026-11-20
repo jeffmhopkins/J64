@@ -15,11 +15,14 @@ const store = {
 // ----------------------------------------------------------------------------- AUDIO
 const SND = (() => {
   let ac = null, master, musicG, sfxG, muted = store.get('muted', false), cur = null, timer = null;
+  const VOL = 1.1;
   function ensure() {
     if (ac) return;
     try {
       ac = new (window.AudioContext || window.webkitAudioContext)();
-      master = ac.createGain(); master.gain.value = muted ? 0 : 0.55; master.connect(ac.destination);
+      // Twice as loud as it first was (0.55 master), with a limiter in front of the speakers so the loud bits don't crackle.
+      const lim = ac.createDynamicsCompressor(); lim.threshold.value = -6; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15; lim.connect(ac.destination);
+      master = ac.createGain(); master.gain.value = muted ? 0 : VOL; master.connect(lim);
       musicG = ac.createGain(); musicG.gain.value = 0.32; musicG.connect(master);
       sfxG = ac.createGain(); sfxG.gain.value = 0.7; sfxG.connect(master);
     } catch (e) { ac = null; }
@@ -43,6 +46,9 @@ const SND = (() => {
     jump: () => tone(330, 0.16, 'square', 0.18, 0, 2.2),
     boost: () => { noise(0.3, 0.25, 0, 1800); tone(220, 0.22, 'sawtooth', 0.1, 0, 2.6); },
     flap: () => tone(520, 0.06, 'triangle', 0.14, 0, 1.5),
+    hop2: () => { tone(440, 0.12, 'triangle', 0.2, 0, 2); noise(0.08, 0.1, 0, 2500); },
+    hover: () => noise(0.09, 0.09, 0, 1400),
+    buy: () => [659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.1, 'square', 0.15, i * 0.05)),
     bolt: () => { tone(988, 0.05, 'square', 0.12); tone(1319, 0.09, 'square', 0.12, 0.05); },
     gear: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.14, 'square', 0.16, i * 0.07)),
     reboot: () => { tone(180, 0.08, 'square', 0.18, 0, 3); tone(880, 0.1, 'triangle', 0.22, 0.08); tone(1175, 0.14, 'triangle', 0.22, 0.15); },
@@ -116,7 +122,7 @@ const SND = (() => {
     }, 50);
   }
   function stopSong() { if (timer) clearInterval(timer); timer = null; cur = null; }
-  function setMuted(m) { muted = m; store.set('muted', m); if (master) master.gain.value = m ? 0 : 0.55; }
+  function setMuted(m) { muted = m; store.set('muted', m); if (master) master.gain.value = m ? 0 : VOL; }
   return { resume, fx: new Proxy(fx, { get: (o, k) => (a) => { if (ac && o[k]) try { o[k](a); } catch (e) { /* audio hiccup */ } } }), playSong, stopSong, setMuted, get muted() { return muted; }, get ready() { return !!ac; } };
 })();
 
@@ -204,7 +210,19 @@ const saveProg = () => store.set('w' + worldNum, prog);
 let particles = [];
 let scene = null;
 function go(s) { scene = s; if (s.enter) s.enter(); if (s.song && SND.ready) SND.playSong(s.song); }
-const activeParty = () => party.filter(m => m.joined).map((m, i) => ({ hero: m.hero, hex: COLS[m.col], slot: party.indexOf(m) }));
+// Accessories bought at the parts shop: owned once for the whole family, each player picks what to wear.
+const ACC_IDS = new Set(K.ACC.map(a => a.id)), accOf = id => K.ACC.find(a => a.id === id);
+const freshCloset = () => ({ own: [], wear: [{}, {}] });
+let closet = store.get('closet', freshCloset());
+function cleanCloset(c) {   // a damaged or old save never breaks the game
+  const out = freshCloset();
+  if (c && Array.isArray(c.own)) out.own = c.own.filter(id => ACC_IDS.has(id));
+  if (c && Array.isArray(c.wear)) for (let i = 0; i < 2; i++) { const w = c.wear[i] || {}; for (const sl of ['head', 'face', 'neck']) if (out.own.includes(w[sl]) && accOf(w[sl]).slot === sl) out.wear[i][sl] = w[sl]; }
+  return out;
+}
+closet = cleanCloset(closet);
+const saveCloset = () => store.set('closet', closet);
+const activeParty = () => party.filter(m => m.joined).map((m, i) => ({ hero: m.hero, hex: COLS[m.col], slot: party.indexOf(m), acc: closet.wear[party.indexOf(m)] }));
 
 // ----------------------------------------------------------------------------- PARTICLES
 function puff(x, y, n = 6, col = 'rgba(255,248,230,0.9)') { for (let i = 0; i < n; i++) particles.push({ x, y, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 1.2, life: 26 + Math.random() * 10, max: 36, r: 2 + Math.random() * 2, col, kind: 'puff' }); }
@@ -234,6 +252,10 @@ function text(s, x, y, size = 10, col = '#fff6d8', align = 'center', outline = '
   g.fillStyle = col; g.fillText(s, x, y);
 }
 function panel(x, y, w, h, c = 'rgba(27,20,38,0.86)') { K.rr(x, y, w, h, 5, c); }
+// width of a line of text, so a box can grow to hold it (no letters spilling off a banner)
+function textW(s, size) { g.font = `${size}px ${FONT}`; return Math.ceil(g.measureText(s).width); }
+// a box centred on the screen at least w wide, wider if the words need it
+function fitPanel(s, size, w, y, h, c) { const ww = Math.min(W - 6, Math.max(w, textW(s, size) + 20)); panel((W - ww) / 2, y, ww, h, c); }
 
 // ----------------------------------------------------------------------------- TITLE
 const TITLE = makeTitle(g, W, H, reduce);
@@ -316,7 +338,7 @@ const introScene = {
     // captions
     const cap = t < 4.5 ? 'One night in Junkyard Hills...' : t < 8 ? '...a Big Glitch storm rolled in!' : t < 11 ? 'Whoosh! The baby bots blew far away!' : 'Time to bring them home!';
     const ct = t < 4.5 ? t : t < 8 ? t - 4.5 : t < 11 ? t - 8 : t - 11;
-    g.globalAlpha = clamp(ct * 2, 0, 1); panel(30, 210, 260, 22); text(cap, W / 2, 225, 10, '#fff6d8', 'center', null); g.globalAlpha = 1;
+    g.globalAlpha = clamp(ct * 2, 0, 1); fitPanel(cap, 10, 260, 210, 22); text(cap, W / 2, 225, 10, '#fff6d8', 'center', null); g.globalAlpha = 1;
     if (t > 14.4) { g.fillStyle = 'rgba(255,248,230,' + clamp((t - 14.4) / 0.8, 0, 1) + ')'; g.fillRect(0, 0, W, H); }
     if (Math.floor(t * 2) % 2 && t > 1) text('START to skip', W - 8, 14, 7, '#d9d2e6', 'right', null);
   },
@@ -359,8 +381,8 @@ const selectScene = {
       // pedestal and hero
       K.rr(x + 30, y + 118, w - 60, 8, 4, 'rgba(255,255,255,0.12)');
       const hex = COLS[m.col], ready = this.ready[i];
-      if (m.hero === 'robot') K.robot(x + w / 2, y + 120, 0.2, hex, { t, bob: Math.sin(t * 3) * 3, armR: ready ? -150 + Math.sin(t * 8) * 20 : -22, eyes: { happy: ready ? 0.7 : 0.45 } });
-      else K.ostrich(x + w / 2, y + 120, 0.19, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: ready ? 0.7 : 0.4 } });
+      if (m.hero === 'robot') K.robot(x + w / 2, y + 120, 0.2, hex, { t, bob: Math.sin(t * 3) * 3, armR: ready ? -150 + Math.sin(t * 8) * 20 : -22, eyes: { happy: ready ? 0.7 : 0.45 }, acc: closet.wear[i] });
+      else K.ostrich(x + w / 2, y + 120, 0.19, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: ready ? 0.7 : 0.4 }, acc: closet.wear[i] });
       text(m.hero === 'robot' ? 'ROBOT' : 'ROBOT OSTRICH', x + w / 2, y + 138, 10);
       text('◀ ▶ hero   ▲ ▼ ' + CNAMES[m.col].toLowerCase(), x + w / 2, y + 151, 7, '#d9d2e6', 'center', null);
       if (ready) { K.rr(x + 30, y + 22, w - 60, 16, 5, '#49d17a'); text('READY!', x + w / 2, y + 34, 10, '#fff', 'center', '#1f6b3c'); }
@@ -384,11 +406,12 @@ const mapScene = {
     this.t += 1 / 60;
     for (let i = 0; i < 2; i++) {
       for (const [b, k] of [['left', 'ArrowLeft'], ['right', 'ArrowRight'], ['up', 'ArrowUp'], ['down', 'ArrowDown']]) if (hit(i, b)) { if (MAP.step(k)) SND.fx.step(); }
-      if (hit(i, 'a') || hit(i, 'start')) {
+      if (hit(i, 'start')) { SND.fx.select(); go(mapMenu()); return; }   // START opens the map menu
+      if (hit(i, 'a')) {
         const n = MAP.here(); if (!n) continue;
         prog.at = n.id; saveProg();
         if ((n.kind === 'level' || n.kind === 'boss' || n.kind === 'bonus') && LEVELS[n.id]) { SND.fx.confirm(); go(levelScene(n.id)); }
-        else if (n.kind === 'shop') { SND.fx.confirm(); go(shopScene); }
+        else if (n.kind === 'shop') { SND.fx.confirm(); go(shopScene()); }
         else if (n.kind === 'exit') {
           if (WORLD_FILES[worldNum + 1] || worldNum >= 4) { SND.fx.confirm(); go(cutScene(worldNum)); }
           else { SND.fx.nope(); MAP.say('World ' + (worldNum + 1) + ' is coming soon!'); }
@@ -413,7 +436,7 @@ const mapScene = {
       if (d.time) bits.push('RACE ' + clock(d.time * 60));
       if (best != null) bits.push('BEST ' + clock(best));
       if (d.par && n.kind === 'level') bits.push('STAR TIME ' + clock(d.par * 60));
-      if (bits.length) { const s = bits.join('   '), w = s.length * 5 + 16; panel(6, 24, w, 14); text(s, 6 + w / 2, 34, 7, '#fff6d8', 'center', null); }
+      if (bits.length) { const s = bits.join('   '), w = textW(s, 7) + 16; panel(6, 24, w, 14); text(s, 6 + w / 2, 34, 7, '#fff6d8', 'center', null); }
     }
   },
 };
@@ -426,24 +449,122 @@ function finishNode(id, res) {
   if (!before) SND.fx.open();
 }
 
-// ----------------------------------------------------------------------------- SHOP (placeholder)
-const shopScene = {
-  song: 'map', t: 0,
-  update() { this.t += 1 / 60; if (anyHit('a') || anyHit('b') || anyHit('start')) { SND.fx.select(); go(mapScene); } },
-  draw() {
-    K.g = g; MAP.frame(this.t);
+// ----------------------------------------------------------------------------- MAP MENU (START on the map)
+// Keep playing, change heroes, or start a whole new game (asks once more before wiping anything).
+function newGame() {
+  for (let n = 1; n <= LAST_WORLD; n++) store.set('w' + n, fresh());
+  closet = freshCloset(); saveCloset();
+  setWorld(1);
+}
+function mapMenu() {
+  const items = ['Keep playing', 'Change heroes', 'New game'], sure = ['No, keep my game', 'Yes, start over'];
+  const M = { song: mapScene.song, t: 0, pick: 0, ask: false };
+  const close = () => { mapScene.keep = true; go(mapScene); };
+  M.update = function () {
+    M.t += 1 / 60; const list = M.ask ? sure : items;
+    if (anyHit('up')) { M.pick = (M.pick + list.length - 1) % list.length; SND.fx.select(); }
+    if (anyHit('down')) { M.pick = (M.pick + 1) % list.length; SND.fx.select(); }
+    if (anyHit('b') || (anyHit('start') && !M.ask)) { SND.fx.select(); if (M.ask) { M.ask = false; M.pick = 2; } else close(); return; }
+    if (!anyHit('a') && !anyHit('start')) return;
+    if (M.ask) {
+      if (M.pick === 1) { SND.fx.open(); newGame(); go(selectScene); }
+      else { SND.fx.select(); M.ask = false; M.pick = 2; }
+      return;
+    }
+    if (M.pick === 0) { SND.fx.select(); close(); }
+    else if (M.pick === 1) { SND.fx.confirm(); go(selectScene); }
+    else { SND.fx.nope(); M.ask = true; M.pick = 0; }
+  };
+  M.draw = function () {
+    K.g = g; MAP.frame(M.t + mapScene.t);
     g.fillStyle = 'rgba(15,10,25,0.6)'; g.fillRect(0, 0, W, H);
-    panel(40, 50, 240, 140, '#3b2a5c');
-    text('PARTS SHOP', W / 2, 78, 16, '#ffd23f');
-    for (let i = 0; i < 3; i++) { K.rr(64 + i * 68, 92, 56, 50, 6, 'rgba(255,255,255,0.08)'); }
-    // hats on the shelf: a party hat, a propeller cap, a light-up antenna
-    g.fillStyle = '#ff8fc7'; g.beginPath(); g.moveTo(80, 132); g.lineTo(92, 102); g.lineTo(104, 132); g.fill(); K.circ(92, 101, 3, '#ffd23f');
-    K.rr(146, 120, 40, 12, 6, '#5ad1ff'); g.fillStyle = '#3a3346'; g.fillRect(165, 108, 2, 12); K.rr(152, 104 + Math.sin(this.t * 20) * 0.5, 28, 4, 2, '#ffd23f');
-    g.fillStyle = '#9aa1b0'; g.fillRect(235, 108, 3, 24); K.circ(236.5, 106, 6, ['#ff7a59', '#49f08a', '#5ad1ff'][Math.floor(this.t * 3) % 3]);
-    text('Hats and antennas open soon!', W / 2, 164, 9, '#fff6d8', 'center', null);
-    text('Press A to go back', W / 2, 180, 8, '#a49db4', 'center', null);
-  },
-};
+    const list = M.ask ? sure : items, h = M.ask ? 120 : 104, y0 = (H - h) / 2;
+    panel(70, y0, 180, h, '#3b2a5c');
+    text(M.ask ? 'START OVER?' : 'MENU', W / 2, y0 + 22, 14, '#ffd23f');
+    if (M.ask) { text('Every world, bolt, star and hat', W / 2, y0 + 38, 7, '#d9d2e6', 'center', null); text('goes back to the start.', W / 2, y0 + 48, 7, '#d9d2e6', 'center', null); }
+    list.forEach((s, k) => {
+      const y = y0 + (M.ask ? 58 : 34) + k * 22, on = k === M.pick;
+      K.rr(84, y, 152, 18, 6, on ? '#ffd23f' : 'rgba(255,255,255,0.08)');
+      text(s, W / 2, y + 13, 9, on ? '#2b2230' : '#fff6d8', 'center', null);
+    });
+    text('▲ ▼ choose   A ok   B back', W / 2, y0 + h - 6, 7, '#a49db4', 'center', null);
+  };
+  return M;
+}
+
+// ----------------------------------------------------------------------------- PARTS SHOP
+// Trade bolts for hats, glasses and neckwear. Each player has a cursor; A buys, then puts on or takes off.
+function shopScene() {
+  const S = { song: mapScene.song, t: 0, cur: [0, 0], msg: null };
+  const team = activeParty();
+  const COLS_N = 5, cell = (k) => ({ x: 34 + (k % COLS_N) * 52, y: 46 + Math.floor(k / COLS_N) * 46 });
+  const leave = () => { saveProg(); go(mapScene); };
+  function act(slot) {
+    const it = K.ACC[S.cur[slot]], wear = closet.wear[slot];
+    if (!closet.own.includes(it.id)) {
+      if ((prog.bolts || 0) < it.cost) { SND.fx.nope(); S.msg = { text: 'Need ' + (it.cost - (prog.bolts || 0)) + ' more bolts', t: 90 }; return; }
+      prog.bolts -= it.cost; saveProg(); closet.own.push(it.id); wear[it.slot] = it.id; saveCloset();
+      SND.fx.buy(); sparks(cell(S.cur[slot]).x + 22, cell(S.cur[slot]).y + 20, 14, '#ffd23f'); S.msg = { text: it.name + '!', t: 90 };
+      return;
+    }
+    if (wear[it.slot] === it.id) { delete wear[it.slot]; SND.fx.select(); } else { wear[it.slot] = it.id; SND.fx.confirm(); }
+    saveCloset();
+  }
+  S.update = function () {
+    S.t += 1 / 60;
+    for (const m of team) {
+      const i = m.slot, n = K.ACC.length;
+      if (hit(i, 'left')) { S.cur[i] = (S.cur[i] + n - 1) % n; SND.fx.select(); }
+      if (hit(i, 'right')) { S.cur[i] = (S.cur[i] + 1) % n; SND.fx.select(); }
+      if (hit(i, 'up') && S.cur[i] >= COLS_N) { S.cur[i] -= COLS_N; SND.fx.select(); }
+      if (hit(i, 'down') && S.cur[i] + COLS_N < n) { S.cur[i] += COLS_N; SND.fx.select(); }
+      if (hit(i, 'a')) act(i);
+      if (hit(i, 'b') || hit(i, 'start')) { SND.fx.select(); leave(); return; }
+    }
+    if (S.msg && --S.msg.t <= 0) S.msg = null;
+    stepParticles();
+  };
+  S.draw = function () {
+    K.g = g; MAP.frame(S.t + mapScene.t);
+    g.fillStyle = 'rgba(15,10,25,0.65)'; g.fillRect(0, 0, W, H);
+    panel(8, 6, W - 16, H - 12, '#3b2a5c');
+    text('PARTS SHOP', 20, 28, 14, '#ffd23f', 'left');
+    panel(W - 86, 14, 70, 18, 'rgba(27,20,38,0.9)'); K.nut(W - 74, 23, 5, S.t, '#ffd23f'); text('×' + (prog.bolts || 0), W - 64, 28, 10, '#fff6d8', 'left', null);
+    K.ACC.forEach((it, k) => {
+      const { x, y } = cell(k), own = closet.own.includes(it.id), worn = team.some(m => closet.wear[m.slot][it.slot] === it.id);
+      K.rr(x, y, 44, 40, 6, worn ? 'rgba(73,209,122,0.35)' : 'rgba(255,255,255,0.08)');
+      // the item on a little grey head so you can see it
+      const hx = x + 22, top = y + (it.slot === 'head' ? 24 : 10);
+      if (it.slot !== 'neck') K.rr(hx - 12, top, 24, 20, 6, '#9aa1b0');
+      if (it.slot === 'head') K.wearHead(it.id, hx, top, 24, S.t);
+      else if (it.slot === 'face') K.wearFace(it.id, [[hx - 5.5, top + 8, 4, 4.6], [hx + 5.5, top + 8, 4, 4.6]]);
+      else { K.rr(hx - 12, y + 2, 24, 16, 6, '#9aa1b0'); K.circ(hx - 5.5, y + 9, 2, '#2b2230'); K.circ(hx + 5.5, y + 9, 2, '#2b2230'); K.wearNeck(it.id, hx, y + 21, 28); }
+      if (own) { K.circ(x + 38, y + 6, 5, '#49d17a'); text('✓', x + 38, y + 9, 7, '#fff', 'center', null); }
+      else { K.rr(x + 2, y + 30, 40, 9, 3, 'rgba(27,20,38,0.85)'); K.nut(x + 10, y + 34.5, 3, 0, '#ffd23f'); text(String(it.cost), x + 25, y + 38, 7, (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'center', null); }
+    });
+    // cursors, one per player
+    team.forEach((m, j) => {
+      const { x, y } = cell(S.cur[m.slot]), c = m.slot ? '#8fd3ff' : '#ffd23f', o = j * 2;
+      g.strokeStyle = c; g.lineWidth = 2; g.strokeRect(x - 2 - o, y - 2 - o, 48 + o * 2, 44 + o * 2);
+      if (team.length > 1) text('P' + (m.slot + 1), x + (j ? 40 : 4), y - 3 - o, 7, c);
+    });
+    // the heroes trying on what their cursor is on
+    team.forEach((m, j) => {
+      const it = K.ACC[S.cur[m.slot]], worn = closet.wear[m.slot], tryOn = Object.assign({}, worn, { [it.slot]: it.id });
+      const x = team.length > 1 ? 110 + j * 100 : 160, y = 218, t = S.t + j;
+      K.rr(x - 26, y - 2, 52, 6, 3, 'rgba(255,255,255,0.12)');
+      if (m.hero === 'robot') K.robot(x, y, 0.13, m.hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
+      else K.ostrich(x, y, 0.12, m.hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: 0.6 }, acc: tryOn });
+      const own = closet.own.includes(it.id), how = !own ? 'A buy' : worn[it.slot] === it.id ? 'A take off' : 'A wear';
+      text(it.name, x, y - 72, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'center'); text(how, x, y - 62, 7, '#fff6d8', 'center');
+    });
+    drawParticles(0);
+    if (S.msg) { fitPanel(S.msg.text, 10, 0, 14, 18, '#ffd23f'); text(S.msg.text, W / 2, 27, 10, '#2b2230', 'center', null); }
+    text('B leave', W - 20, H - 14, 7, '#a49db4', 'right', null);
+  };
+  particles = [];
+  return S;
+}
 
 // ----------------------------------------------------------------------------- FILMS BETWEEN WORLDS
 // 1: into the Gear Factory, 2: up the mine lift, 3: the rocket to the Moon, 4: the parade home.
@@ -532,9 +653,9 @@ function cutScene(k) {
     for (const c of cast) {
       if (c.baby || c.a <= 0) continue;
       g.globalAlpha = c.a; const m = team[c.i], tt = t + c.i * 0.7;
-      if (c.walk) { if (m.hero === 'robot') K.robotSide(c.x, c.y, 0.074, m.hex, Object.assign(K.pose('robot', 'run', tt * 2.2), { dir: 1 })); else K.ostrichSide(c.x, c.y, 0.071, m.hex, Object.assign(K.pose('ostrich', 'run', tt * 2), { dir: 1 })); }
-      else if (k === 4 || (k === 2 && t > 9.5)) { if (m.hero === 'robot') K.robot(c.x, c.y, 0.074, m.hex, { t: tt, armL: 150 + Math.sin(tt * 9) * 20, armR: -150 - Math.sin(tt * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o' }); else K.ostrich(c.x, c.y, 0.071, m.hex, { t: tt, bob: Math.abs(Math.sin(tt * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8 }); }
-      else { if (m.hero === 'robot') K.robot(c.x, c.y, 0.074, m.hex, { t: tt, bob: Math.sin(tt * 3) * 3 }); else K.ostrich(c.x, c.y, 0.071, m.hex, { t: tt, bob: Math.abs(Math.sin(tt * 2.6)) * 8 }); }
+      if (c.walk) { if (m.hero === 'robot') K.robotSide(c.x, c.y, 0.074, m.hex, Object.assign(K.pose('robot', 'run', tt * 2.2), { dir: 1, acc: m.acc })); else K.ostrichSide(c.x, c.y, 0.071, m.hex, Object.assign(K.pose('ostrich', 'run', tt * 2), { dir: 1, acc: m.acc })); }
+      else if (k === 4 || (k === 2 && t > 9.5)) { if (m.hero === 'robot') K.robot(c.x, c.y, 0.074, m.hex, { t: tt, armL: 150 + Math.sin(tt * 9) * 20, armR: -150 - Math.sin(tt * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o', acc: m.acc }); else K.ostrich(c.x, c.y, 0.071, m.hex, { t: tt, bob: Math.abs(Math.sin(tt * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8, acc: m.acc }); }
+      else { if (m.hero === 'robot') K.robot(c.x, c.y, 0.074, m.hex, { t: tt, bob: Math.sin(tt * 3) * 3, acc: m.acc }); else K.ostrich(c.x, c.y, 0.071, m.hex, { t: tt, bob: Math.abs(Math.sin(tt * 2.6)) * 8, acc: m.acc }); }
     }
     g.globalAlpha = 1;
     if (k === 2) { g.save(); g.translate(CUTART.SHAFT.x, cutCageY(t)); CUTART.cage(g, true); g.restore(); }
@@ -542,7 +663,7 @@ function cutScene(k) {
     // the caption strip
     const caps = CUT_CAPS[k]; let ci = 0; for (let i = 0; i < caps.length; i++) if (t >= caps[i][0]) ci = i;
     const ct = t - caps[ci][0];
-    g.globalAlpha = clamp(ct * 3, 0, 1); panel(20, 210, 280, 22); text(caps[ci][1], W / 2, 225, 10, k === 4 && ci === 2 ? '#ffd23f' : '#fff6d8', 'center', null); g.globalAlpha = 1;
+    g.globalAlpha = clamp(ct * 3, 0, 1); fitPanel(caps[ci][1], 10, 280, 210, 22); text(caps[ci][1], W / 2, 225, 10, k === 4 && ci === 2 ? '#ffd23f' : '#fff6d8', 'center', null); g.globalAlpha = 1;
     if (t < 0.6) { g.fillStyle = 'rgba(0,0,0,' + (1 - t / 0.6) + ')'; g.fillRect(0, 0, W, H); }
     if (t > len - 0.8) { g.fillStyle = 'rgba(255,248,230,' + clamp((t - (len - 0.8)) / 0.8, 0, 1) + ')'; g.fillRect(0, 0, W, H); }
     if (t > 1 && Math.floor(t * 2) % 2) text('START to skip', W - 8, 14, 7, '#d9d2e6', 'right', null);
@@ -584,14 +705,17 @@ let WORLD_FILE = null, WORLD = null;
 function levelDef(text, theme) {
   const { meta, rows, w } = DATA_FMT.parseLevel(text);
   return { name: (meta.name || 'LEVEL').toUpperCase(), w, rows, song: meta.song, boss: meta.kind === 'boss', bonus: meta.kind === 'bonus', baby: parseInt(meta.baby || 'FF8FC7', 16), zone: meta.hatch, par: +meta.par || 0, time: +meta.time || 0,
-    bossType: meta.boss || 'crane', gravity: meta.gravity === 'low' ? 0.2 : 0.3, theme: meta.theme || theme || 'junkyard' };
+    bossType: meta.boss || 'crane', gravity: meta.gravity === 'low' ? GRAV * 2 / 3 : GRAV, theme: meta.theme || theme || 'junkyard' };
 }
 const LEVELS = {};
+// Gravity is 80% of what it first was (0.3) so heroes hang in the air longer. Every upward kick a hero gets is
+// scaled by JK = sqrt(0.8), so jumps, springs and bounces still reach exactly as high as before.
+const GRAV = 0.24, JK = Math.sqrt(0.8), RAMP = 30;
 function setWorld(n) {
   worldNum = clamp(Math.round(+n) || 1, 1, LAST_WORLD); store.set('world', worldNum);
   prog = Object.assign(fresh(), store.get('w' + worldNum, {}));
   WORLD_FILE = WORLD_FILES[worldNum]; WORLD = DATA_FMT.worldForMap(WORLD_FILE);
-  mapScene.song = shopScene.song = WORLD_FILE.meta.song || 'map';
+  mapScene.song = WORLD_FILE.meta.song || 'map';
   for (const k of Object.keys(LEVELS)) delete LEVELS[k];
   const dir = 'w' + worldNum + '/';
   for (const n of WORLD_FILE.nodes) if (n.level && DATA[dir + n.level + '.txt']) LEVELS[n.id] = levelDef(DATA[dir + n.level + '.txt'], WORLD_FILE.meta.theme);
@@ -698,8 +822,8 @@ const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h 
 
 function makePlayer(m, i, x, y) {
   const stack = testPower ? [testPower] : [], h = baseH({ hero: m.hero, stack });   // power-ups never carry over between levels
-  return { slot: m.slot, i, hero: m.hero, hex: m.hex, stack, rainbowT: 0, magnetT: 0, x: x + i * 14, y: y - h, w: 12, h,
-    vx: 0, vy: 0, face: 1, ground: false, coyote: 0, boost: false, jetT: 0, flapping: false, flapT: 0, actT: 0, inv: 0, wob: 0,
+  return { slot: m.slot, i, hero: m.hero, hex: m.hex, acc: m.acc, stack, rainbowT: 0, magnetT: 0, x: x + i * 14, y: y - h, w: 12, h,
+    vx: 0, vy: 0, face: 1, ground: false, coyote: 0, runT: 0, runDir: 0, boost: false, jetT: 0, flapping: false, flapT: 0, actT: 0, inv: 0, wob: 0,
     safeX: x, safeY: y - 30, anim: 0, idleT: 0, cheer: false };
 }
 
@@ -743,7 +867,7 @@ function levelScene(id, retry, defIn, snap) {
   // bonus state
   const shower = def.bonus ? { left: 30 * 60, done: -1 } : null;
   const speed = () => (little ? 1 : 1.5);
-  const grav = def.gravity || 0.3;
+  const grav = def.gravity || GRAV;
   function beltUnder(p) {
     const ty = Math.floor((p.y + p.h + 1) / TS), a = tileAt(lv, Math.floor((p.x + 1) / TS), ty), b = tileAt(lv, Math.floor((p.x + p.w - 1) / TS), ty);
     const dir = (a === '>' || b === '>') ? 1 : (a === '<' || b === '<') ? -1 : 0;
@@ -773,6 +897,27 @@ function levelScene(id, retry, defIn, snap) {
     const top = p.y + p.h - h, x0 = Math.floor(p.x / TS), x1 = Math.floor((p.x + p.w - 0.01) / TS);
     for (let ty = Math.floor(top / TS); ty <= Math.floor((p.y - 0.01) / TS); ty++) for (let tx = x0; tx <= x1; tx++) if (isSolid(lv, tx, ty)) return false;
     return true;
+  }
+  // Room for a body here: no solid tile inside it.
+  function bodyClear(x, y, w, h) {
+    for (let ty = Math.floor(y / TS); ty <= Math.floor((y + h - 0.01) / TS); ty++) for (let tx = Math.floor(x / TS); tx <= Math.floor((x + w - 0.01) / TS); tx++) if (isSolid(lv, tx, ty)) return false;
+    return true;
+  }
+  // Firm floor right under both feet (not a pit, not half over a ledge).
+  function footing(x, w, bottom) {
+    const ty = Math.floor((bottom + 1) / TS), ok = t => SOLID[t] || t === '-';
+    return ok(tileAt(lv, Math.floor((x + 1) / TS), ty)) && ok(tileAt(lv, Math.floor((x + w - 1) / TS), ty));
+  }
+  // Set p down beside buddy b, who must be standing on tiles (not jumping, not riding a raft). Tries behind b,
+  // in front of b, then exactly where b stands. Returns false, leaving p alone, if there is no clear spot with a floor.
+  function setDown(p, b) {
+    if (!b || b.bubble || b.dead || !b.ground || b.onMover) return false;
+    const bottom = b.y + b.h;
+    for (const x of [b.x - b.face * 14, b.x + b.face * 14, b.x]) {
+      if (x < 0 || x > lv.w * TS - p.w) continue;
+      if (bodyClear(x, bottom - p.h, p.w, p.h) && footing(x, p.w, bottom)) { p.x = x; p.y = bottom - p.h; p.vx = 0; p.vy = 0; return true; }
+    }
+    return false;
   }
   function respawn(p) {
     p.x = p.safeX; p.y = p.safeY - 4; p.vx = 0; p.vy = 0; p.inv = 60; p.boost = false;
@@ -812,7 +957,8 @@ function levelScene(id, retry, defIn, snap) {
   function openDoors() { if (lv.doorT >= 0) return; lv.doorT = 0; SND.fx.door(); }
   function actionBox(p) {
     if (p.hero === 'robot') return p.face > 0 ? { x: p.x + p.w, y: p.y + p.h - 18, w: 30, h: 10 } : { x: p.x - 30, y: p.y + p.h - 18, w: 30, h: 10 };
-    return p.face > 0 ? { x: p.x + p.w - 2, y: p.y + p.h - 16, w: 18, h: 14 } : { x: p.x - 16, y: p.y + p.h - 16, w: 18, h: 14 };
+    // the ostrich's leg telescopes out as far as the robot's arm
+    return p.face > 0 ? { x: p.x + p.w - 2, y: p.y + p.h - 16, w: 32, h: 14 } : { x: p.x - 30, y: p.y + p.h - 16, w: 32, h: 14 };
   }
   function doAction(p) {
     const box = actionBox(p);
@@ -913,7 +1059,7 @@ function levelScene(id, retry, defIn, snap) {
 
   S.comeBack = function (h, bolts) {
     lv.bolts += bolts; scene = S; SND.playSong(S.song);
-    players.forEach((p, k) => { p.x = h.out.x - p.w / 2 + k * 10; p.y = h.out.y - p.h - 2; p.vx = 0; p.vy = -6.5; p.spring = true; p.inv = 60; p.safeX = p.x; p.safeY = h.out.y - p.h; });
+    players.forEach((p, k) => { p.x = h.out.x - p.w / 2 + k * 10; p.y = h.out.y - p.h - 2; p.vx = 0; p.vy = -6.5 * JK; p.spring = true; p.inv = 60; p.safeX = p.x; p.safeY = h.out.y - p.h; });
     S.camX = clamp(h.out.x - W / 2, 0, Math.max(0, lv.w * TS - W)); puff(h.out.x, h.out.y, 10); SND.fx.boing();
   };
   S.update = function () {
@@ -965,7 +1111,11 @@ function levelScene(id, retry, defIn, snap) {
         const b = players.find(q => q !== p && !q.bubble) || p;
         p.bubble++; const tx = b.x - b.face * 4, ty = b.y - 26;
         p.x += (tx - p.x) * 0.05; p.y += (ty - p.y) * 0.05 + Math.sin(S.t * 4) * 0.3;
-        if ((p.bubble > 50 && Math.hypot(tx - p.x, ty - p.y) < 14) || hit(p.slot, 'a') && p.bubble > 50) { p.bubble = 0; p.inv = 90; p.vy = -2; SND.fx.pop(); puff(p.x + p.w / 2, p.y + p.h / 2, 8, 'rgba(190,240,255,0.9)'); }
+        // the bubble only pops once the buddy stands on firm ground, and sets you down on the floor beside them
+        if (p.bubble > 50 && (Math.hypot(tx - p.x, ty - p.y) < 14 || hit(p.slot, 'a'))) {
+          const bx = p.x, by = p.y;
+          if (setDown(p, b)) { p.bubble = 0; p.inv = 90; p.safeX = p.x; p.safeY = p.y; SND.fx.pop(); puff(bx + p.w / 2, by + p.h / 2, 8, 'rgba(190,240,255,0.9)'); }
+        }
         continue;
       }
       const i = p.slot; p.anim += Math.abs(p.vx) * 0.055 + 0.004;
@@ -975,7 +1125,11 @@ function levelScene(id, retry, defIn, snap) {
       const max = (p.hero === 'robot' ? 1.75 : 2.2) * (p.rainbowT > 0 ? 1.35 : 1), acc = p.ground ? 0.32 : 0.2;
       let dir = 0;
       if (p.wob > 0) p.wob--; else dir = (held(i, 'right') ? 1 : 0) - (held(i, 'left') ? 1 : 0);
-      if (dir) { p.vx = clamp(p.vx + dir * acc, -max, max); p.face = dir; }
+      // Speed climbs steadily from nearly nothing to full over half a second, so small taps place you exactly.
+      if (dir && dir === p.runDir) p.runT = Math.min(RAMP, p.runT + 1); else p.runT = 0;
+      p.runDir = dir;
+      const cap = max * Math.max(0.1, p.runT / RAMP);   // a smooth climb from a creep to full speed
+      if (dir) { const lim = Math.max(cap, Math.min(dir * p.vx, max)); p.vx = clamp(p.vx + dir * acc, -lim, lim); p.face = dir; }   // speed you already have is kept
       else if (p.wob <= 0) { p.vx *= p.ground ? 0.7 : 0.94; if (Math.abs(p.vx) < 0.06) p.vx = 0; }
       if (p.ground) { p.coyote = 7; p.boost = false; } else if (p.coyote > 0) p.coyote--;
       if (hit(i, 'down') && p.ground && !p.low && p.wob <= 0) {
@@ -995,13 +1149,17 @@ function levelScene(id, retry, defIn, snap) {
       }
       if (hit(i, 'a') && p.wob <= 0 && p.low) { if (canStand(p, fullH)) { setH(p, fullH); p.low = false; p.slideT = 0; } }
       if (hit(i, 'a') && p.wob <= 0 && !p.low) {
-        if (p.coyote > 0) { p.vy = p.hero === 'robot' ? -5.5 : -6.1; p.coyote = 0; p.ground = false; SND.fx.jump(); puff(p.x + p.w / 2, p.y + p.h, 3); }
-        else if (p.hero === 'robot' && !p.boost) { p.vy = -4.8; p.boost = true; p.jetT = 22; SND.fx.boost(); }
+        if (p.coyote > 0) { p.vy = (p.hero === 'robot' ? -5.5 : -6.1) * JK; p.coyote = 0; p.ground = false; SND.fx.jump(); puff(p.x + p.w / 2, p.y + p.h, 3); }
+        else if (!p.boost) {   // a second jump in the air, once until you land: the robot's jetpack kicks, the ostrich flaps hard
+          p.boost = true; p.jetT = 22;
+          if (p.hero === 'robot') { p.vy = -4.8 * JK; SND.fx.boost(); } else { p.vy = -5.4 * JK; SND.fx.hop2(); puff(p.x + p.w / 2, p.y + p.h - 4, 4); }
+        }
       }
-      if (!held(i, 'a') && p.vy < -2.2 && p.jetT <= 0 && !p.spring) p.vy = -2.2;
+      if (!held(i, 'a') && p.vy < -2.2 * JK && p.jetT <= 0 && !p.spring) p.vy = -2.2 * JK;
       p.flapping = false;
-      if (p.hero === 'ostrich' && held(i, 'a') && p.vy > 0.6 && !p.ground) { p.vy = 0.6; p.flapping = true; if (p.flapT-- <= 0) { SND.fx.flap(); p.flapT = 14; } }
-      p.vy = Math.min(p.vy + grav, grav < 0.3 ? 4.5 : 6);   // the Moon's low gravity floats you down slower
+      // Hold A while falling to glide: the ostrich flaps, the robot hovers on its jetpack.
+      if (held(i, 'a') && p.vy > 0.6 && !p.ground) { p.vy = 0.6; p.flapping = true; if (p.flapT-- <= 0) { (p.hero === 'robot' ? SND.fx.hover : SND.fx.flap)(); p.flapT = 14; } }
+      p.vy = Math.min(p.vy + grav, grav < GRAV ? 3.6 : 4.8);   // the Moon's low gravity floats you down slower
       if (p.vy >= 0) p.spring = false;
       if (p.actT <= 0) p.shoot = false;
       const near = !p.carry && hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && !p.low && lv.ents.find(e => e.type === 'enemy' && e.state === 'shell' && !e.dead && overlap(e, { x: p.x - 10, y: p.y - 4, w: p.w + 20, h: p.h + 8 }));
@@ -1047,7 +1205,10 @@ function levelScene(id, retry, defIn, snap) {
     // two players: a player left far behind hops over to their buddy
     if (players.length === 2 && !players.some(q => q.bubble)) {
       const [a, b] = players, dx = a.x - b.x;
-      if (Math.abs(dx) > 250) { const lag = dx > 0 ? b : a, lead = dx > 0 ? a : b; puff(lag.x + 6, lag.y + 15, 6); lag.x = lead.x - lead.face * 14; lag.y = lead.y - 6; lag.vx = 0; lag.vy = -2; lag.inv = 40; SND.fx.hop(); puff(lag.x + 6, lag.y + 15, 6); }
+      if (Math.abs(dx) > 250) {   // only onto firm floor next to the leader, never into a wall or over a pit
+        const lag = dx > 0 ? b : a, lead = dx > 0 ? a : b, ox = lag.x, oy = lag.y;
+        if (!lag.carry && !lag.low && setDown(lag, lead)) { puff(ox + 6, oy + 15, 6); lag.inv = 40; lag.safeX = lag.x; lag.safeY = lag.y; SND.fx.hop(); puff(lag.x + 6, lag.y + 15, 6); }
+      }
     }
     // --- doors
     if (lv.doorT >= 0) { lv.doorT++; if (lv.doorT === 40) for (let y = 0; y < lv.h; y++) for (let x = 0; x < lv.w; x++) if (lv.tiles[y][x] === 'D') lv.tiles[y][x] = '.'; }
@@ -1088,12 +1249,12 @@ function levelScene(id, retry, defIn, snap) {
         for (const p of players) if (!p.bubble && e.delay <= 0 && overlap(p, e)) collect(e, p);
       } else if (e.type === 'enemy') {
         updateEnemy(e);
-        if (e.state === 'bubbled') for (const p of players) if (!p.bubble && overlap(p, e)) { e.bubT = 999; if (p.vy > 0) p.vy = -4; }
+        if (e.state === 'bubbled') for (const p of players) if (!p.bubble && overlap(p, e)) { e.bubT = 999; if (p.vy > 0) p.vy = -4 * JK; }
         if ((e.state === 'shell' || e.state === 'kicked') && e.kickT <= 0) for (const p of players) {
           if (p.bubble || p.carry || !overlap(p, e)) continue;
           const fromTop = p.vy > 0 && p.y + p.h - p.vy <= e.y + 5;
-          if (e.state === 'kicked' && fromTop) { e.state = 'shell'; e.shellT = 0; e.vx = 0; e.kickT = 10; p.vy = -4.4; SND.fx.stomp(); puff(e.x + e.w / 2, e.y + e.h, 4); }
-          else if (e.state === 'shell') { kickCrate(e, p.x + p.w / 2 < e.x + e.w / 2 ? 1 : -1, p.slot); if (fromTop) p.vy = -4.4; }
+          if (e.state === 'kicked' && fromTop) { e.state = 'shell'; e.shellT = 0; e.vx = 0; e.kickT = 10; p.vy = -4.4 * JK; SND.fx.stomp(); puff(e.x + e.w / 2, e.y + e.h, 4); }
+          else if (e.state === 'shell') { kickCrate(e, p.x + p.w / 2 < e.x + e.w / 2 ? 1 : -1, p.slot); if (fromTop) p.vy = -4.4 * JK; }
           break;
         }
         if (e.state === 'glitchy') for (const p of players) {
@@ -1101,7 +1262,7 @@ function levelScene(id, retry, defIn, snap) {
           if (p.slideT > 0 || p.rainbowT > 0) { reboot(e, p); continue; }
           if (p.vy > 0 && p.y + p.h - p.vy <= e.y + 5) {
             if (e.kind === 'grumble') shutCrate(e); else reboot(e, p);
-            p.vy = held(p.slot, 'a') ? (e.kind === 'sprocket' ? -8.6 : -6.2) : (e.kind === 'sprocket' ? -7.6 : -4.4); p.spring = e.kind === 'sprocket'; p.boost = false;
+            p.vy = (held(p.slot, 'a') ? (e.kind === 'sprocket' ? -8.6 : -6.2) : (e.kind === 'sprocket' ? -7.6 : -4.4)) * JK; p.spring = e.kind === 'sprocket'; p.boost = false;
           } else if (p.inv <= 0) wobble(p, e.x + e.w / 2);
         }
       } else if (e.type === 'power') {
@@ -1129,12 +1290,12 @@ function levelScene(id, retry, defIn, snap) {
       } else if (e.type === 'tyre') {
         if (e.sq > 0) e.sq -= 0.08;
         for (const p of players) if (p.vy > 0 && p.x + p.w > e.x + 1 && p.x < e.x + e.w - 1 && p.y + p.h >= e.y && p.y + p.h - p.vy <= e.y + 6) {
-          p.y = e.y - p.h; p.vy = held(p.slot, 'a') ? -9.4 : -8.4; p.spring = true; p.boost = false; e.sq = 1; SND.fx.spring();
+          p.y = e.y - p.h; p.vy = (held(p.slot, 'a') ? -9.4 : -8.4) * JK; p.spring = true; p.boost = false; e.sq = 1; SND.fx.spring();
         }
       } else if (e.type === 'lever') {
         if (!e.on) for (const p of players) if (overlap(p, { x: e.x, y: 0, w: e.w, h: e.y + e.h })) { e.on = true; SND.fx.lever(); openDoors(); }   // bumping it counts too
       } else if (e.type === 'button') {
-        for (const p of players) if (p.vy > 0 && overlap(p, e) && p.y + p.h - p.vy <= e.y + 4) { pressButton(e); p.vy = -5; }
+        for (const p of players) if (p.vy > 0 && overlap(p, e) && p.y + p.h - p.vy <= e.y + 4) { pressButton(e); p.vy = -5 * JK; }
       } else if (e.type === 'flag') {
         if (!e.on) for (const p of players) if (!p.bubble && overlap(p, e)) {
           e.on = true; SND.fx.flag(); sparks(e.x + 6, e.y + 4, 14, '#9dffc0'); S.toast = { text: 'CHECKPOINT!', t: 100 };
@@ -1387,12 +1548,12 @@ function levelScene(id, retry, defIn, snap) {
     if (p.inv > 0 && p.wob <= 0 && !p.dead && !p.bubble && Math.floor(p.inv / 4) % 2 === 0 && S.clearT < 0) return;
     if (p.dead) {
       const fx = p.x + p.w / 2 - S.camX, fy = p.y + p.h, o = { t: S.t, eyes: { open: 0.15 }, mouth: 'wavy', armL: 160, armR: -160, stars: true };
-      if (p.hero === 'robot') K.robot(fx, fy, 0.074, p.hex, o); else K.ostrich(fx, fy, 0.071, p.hex, { t: S.t, eyes: { open: 0.15 }, beakOpen: 0.6, stars: true });
+      if (p.hero === 'robot') K.robot(fx, fy, 0.074, p.hex, Object.assign(o, { acc: p.acc })); else K.ostrich(fx, fy, 0.071, p.hex, { t: S.t, eyes: { open: 0.15 }, beakOpen: 0.6, stars: true, acc: p.acc });
       return;
     }
     if (p.bubble) {
       const fx = p.x + p.w / 2 - S.camX, cy = p.y + p.h / 2;
-      if (p.hero === 'robot') K.robot(fx, p.y + p.h, 0.074, p.hex, { t: S.t, eyes: { happy: 0.4 } }); else K.ostrich(fx, p.y + p.h, 0.071, p.hex, { t: S.t });
+      if (p.hero === 'robot') K.robot(fx, p.y + p.h, 0.074, p.hex, { t: S.t, eyes: { happy: 0.4 }, acc: p.acc }); else K.ostrich(fx, p.y + p.h, 0.071, p.hex, { t: S.t, acc: p.acc });
       g.globalAlpha = 0.28; K.circ(fx, cy, 21, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = 'rgba(220,250,255,0.9)'; g.lineWidth = 1.5; g.beginPath(); g.arc(fx, cy, 21, 0, P * 2); g.stroke();
       K.circ(fx - 8, cy - 9, 3, 'rgba(255,255,255,0.8)');
       return;
@@ -1400,8 +1561,8 @@ function levelScene(id, retry, defIn, snap) {
     const mega = has(p, 'mega') ? 1.5 : 1, hexNow = p.rainbowT > 0 ? COLS[Math.floor(S.t * 12 + p.i * 3) % COLS.length] : p.hex;
     if (p.rainbowT > 0 && S.frame % 3 === 0) particles.push({ x: p.x + p.w / 2 + (Math.random() - 0.5) * 10, y: p.y + Math.random() * p.h, vx: 0, vy: -0.3, life: 20, max: 20, r: 2, col: hexStr(COLS[Math.floor(Math.random() * 8)]), kind: 'star' });
     const fx = p.x + p.w / 2 - S.camX, fy = p.y + p.h, hero = p.hero, dir = p.face, rs = 0.074 * mega, os = 0.071 * mega;
-    const side = hero === 'robot' ? (o) => K.robotSide(fx, fy, rs, hexNow, Object.assign(o, { dir })) : (o) => K.ostrichSide(fx, fy, os, hexNow, Object.assign(o, { dir }));
-    const front = hero === 'robot' ? (o) => K.robot(fx, fy, rs, hexNow, o) : (o) => K.ostrich(fx, fy, os, hexNow, o);
+    const side = hero === 'robot' ? (o) => K.robotSide(fx, fy, rs, hexNow, Object.assign(o, { dir, acc: p.acc })) : (o) => K.ostrichSide(fx, fy, os, hexNow, Object.assign(o, { dir, acc: p.acc }));
+    const front = hero === 'robot' ? (o) => K.robot(fx, fy, rs, hexNow, Object.assign(o, { acc: p.acc })) : (o) => K.ostrich(fx, fy, os, hexNow, Object.assign(o, { acc: p.acc }));
     const t = S.t + p.i * 0.7;
     // power-up auras, drawn behind the hero
     const aura = (col, r, a) => { const gr = g.createRadialGradient(fx, fy - p.h / 2, 2, fx, fy - p.h / 2, r); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.fillRect(fx - r, fy - p.h / 2 - r, r * 2, r * 2); };
@@ -1416,11 +1577,11 @@ function levelScene(id, retry, defIn, snap) {
     else if (p.actT > 0) {
       const k = Math.sin((22 - p.actT) / 22 * P);
       if (hero === 'robot') side({ t, grab: true, reach: k * 330, clawOpen: p.actT > 12 ? 0.7 : 0.05, legF: p.ground ? 0 : -30, legB: p.ground ? 0 : 20 });
-      else side({ t, legF: -100 * k, legB: 10 * k, rot: -0.12 * k, lean: -12 * k, beakOpen: k > 0.5 ? 0.7 : 0 });
+      else side({ t, legF: -95 * Math.min(1, k * 2), legLenF: 92 + k * 330, kneeF: 0, toeF: -90, legB: 10 * k, rot: -0.12 * k, lean: -12 * k, beakOpen: k > 0.5 ? 0.7 : 0 });
     }
     else if (!p.ground) {
-      if (hero === 'robot') side(p.jetT > 0 ? K.pose('robot', 'jet', t) : K.pose('robot', 'jump', t));
-      else side(p.flapping ? K.pose('ostrich', 'flap', t) : K.pose('ostrich', 'jump', t));
+      if (hero === 'robot') side(p.jetT > 0 || p.flapping ? K.pose('robot', 'jet', t) : K.pose('robot', 'jump', t));
+      else side(p.flapping || p.jetT > 0 ? K.pose('ostrich', 'flap', t) : K.pose('ostrich', 'jump', t));
     }
     else if (Math.abs(p.vx) > 0.25) side(K.pose(hero, 'run', p.anim * 1.6 / (hero === 'robot' ? 1 : 1.1)));
     else front(hero === 'robot' ? { t, bob: Math.sin(t * 3) * 3 } : { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, flick: Math.sin(t * 2.6) * 6 });
@@ -1451,17 +1612,17 @@ function levelScene(id, retry, defIn, snap) {
     }
     if (def.time && S.frame < 200 && S.clearT < 0 && S.dyingT < 0) { const k = Math.min(1, S.frame / 15); panel(W / 2 - 70, 150, 140, 22, '#ffd23f'); text('RACE THE CLOCK!', W / 2, 165, 10 * k, '#2b2230', 'center', null); }
     if (S.timeUp && S.dyingT > 10) { panel(W / 2 - 60, 60, 120, 22, '#ff8a8a'); text("TIME'S UP!", W / 2, 76, 12, '#2b2230', 'center', null); }
-    if (S.toast) { g.globalAlpha = Math.min(1, S.toast.t / 20); text(S.toast.text, W / 2, 50, 13, '#ffd23f'); g.globalAlpha = 1; }
+    if (S.toast) { g.globalAlpha = Math.min(1, S.toast.t / 20); fitPanel(S.toast.text, 13, 0, 36, 20); text(S.toast.text, W / 2, 51, 13, '#ffd23f'); g.globalAlpha = 1; }
     if (!def.boss && !def.bonus) {
       panel(70, 4, 50, 15);
       for (let k = 0; k < 3; k++) { const have = lv.got[k] || lv.gotNow[k]; K.gear(82 + k * 13, 11.5, 5, 9, have ? S.t : 0, have ? '#ffd23f' : 'rgba(255,255,255,0.22)', have ? '#b8860b' : 'rgba(27,20,38,0.86)'); }
     }
     if (shower && shower.left > 0) { panel(128, 4, 64, 15); text(Math.ceil(shower.left / 60) + 's', 160, 16, 10, shower.left < 300 ? '#ff8a8a' : '#fff6d8'); }
-    if (S.nameT > 0) { g.globalAlpha = Math.min(1, S.nameT / 30); panel(W / 2 - 90, 92, 180, retry ? 44 : 30); text(retry ? 'TRY AGAIN!' : def.name, W / 2, 112, 11, '#ffd23f');
+    if (S.nameT > 0) { g.globalAlpha = Math.min(1, S.nameT / 30); fitPanel(retry ? 'TRY AGAIN!' : def.name, 11, 180, 92, retry ? 44 : 30); text(retry ? 'TRY AGAIN!' : def.name, W / 2, 112, 11, '#ffd23f');
       if (retry) text(prog.lives + (prog.lives > 1 ? ' tries left' : ' try left'), W / 2, 128, 8, '#fff6d8', 'center', null); g.globalAlpha = 1; }
     if (S.dyingT > 40) { const k = Math.min(1, (S.dyingT - 40) / 20); g.globalAlpha = k; panel(W / 2 - 80, 96, 160, 34); text(prog.lives > 0 ? 'OOPS!' : 'OUT OF TRIES', W / 2, 118, 13, '#ffd23f'); g.globalAlpha = 1; }
-    if (boss && !boss.fixed && S.frame < 260) text('Bounce on the red buttons!', W / 2, 140, 9, '#fff6d8');
-    if (shower && S.frame < 180) text('Catch the bolts!', W / 2, 140, 10, '#fff6d8');
+    if (boss && !boss.fixed && S.frame < 260) { fitPanel('Bounce on the red buttons!', 9, 0, 128, 17); text('Bounce on the red buttons!', W / 2, 140, 9, '#fff6d8'); }
+    if (shower && S.frame < 180) { fitPanel('Catch the bolts!', 10, 0, 127, 18); text('Catch the bolts!', W / 2, 140, 10, '#fff6d8'); }
     if (S.clearT >= 0) {
       const k = Math.min(1, S.clearT / 20);
       panel(W / 2 - 80, 60 - (1 - k) * 30, 160, 34, '#ffd23f');
@@ -1568,8 +1729,8 @@ function jetScene(parent, hatch) {
     for (const p of ps) {
       if (p.inv > 0 && Math.floor(p.inv / 4) % 2 === 0) continue;
       const fx = p.x + p.w / 2, fy = p.y + p.h + 4, src = p.src, t = J.t + src.i;
-      if (src.hero === 'robot') { K.rr(fx - 9, fy - 22, 6, 11, 2, '#9aa1b0'); K.flame(fx - 6, fy - 10, 30, 14, t); K.robotSide(fx, fy, 0.074, src.hex, Object.assign(K.pose('robot', 'jet', t), { dir: 1, rot: 0.15 })); }
-      else { K.rr(fx - 10, fy - 22, 7, 11, 2, '#9aa1b0'); K.flame(fx - 6.5, fy - 10, 30, 14, t); K.ostrichSide(fx, fy, 0.071, src.hex, Object.assign(K.pose('ostrich', 'jump', t), { dir: 1, rot: 0.2 })); }
+      if (src.hero === 'robot') { K.rr(fx - 9, fy - 22, 6, 11, 2, '#9aa1b0'); K.flame(fx - 6, fy - 10, 30, 14, t); K.robotSide(fx, fy, 0.074, src.hex, Object.assign(K.pose('robot', 'jet', t), { dir: 1, rot: 0.15, acc: src.acc })); }
+      else { K.rr(fx - 10, fy - 22, 7, 11, 2, '#9aa1b0'); K.flame(fx - 6.5, fy - 10, 30, 14, t); K.ostrichSide(fx, fy, 0.071, src.hex, Object.assign(K.pose('ostrich', 'jump', t), { dir: 1, rot: 0.2, acc: src.acc })); }
     }
     drawParticles(sc);
     panel(4, 4, 62, 15); K.nut(13, 11.5, 4, J.t, '#ffd23f'); text('×' + (parent.lv.bolts + J.bolts), 20, 16, 9, '#fff6d8', 'left', null);
@@ -1622,10 +1783,10 @@ let touchOn = store.get('touch', coarse);
 function syncTouch() { touchEl.classList.toggle('on', touchOn); touchB.setAttribute('aria-pressed', touchOn); }
 touchB.addEventListener('click', () => { touchOn = !touchOn; store.set('touch', touchOn); syncTouch(); });
 document.getElementById('full').addEventListener('click', () => { const el = document.getElementById('wrap'); try { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (r && r.catch) r.catch(() => {}); } catch (e) { /* not available */ } });
-document.getElementById('wipe').addEventListener('click', () => { for (let n = 1; n <= LAST_WORLD; n++) store.set('w' + n, fresh()); setWorld(1); if (scene === mapScene) buildMap(); });
+document.getElementById('wipe').addEventListener('click', () => { newGame(); if (scene === mapScene) buildMap(); });
 syncButtons(); syncTouch();
 
-window.__ck = { get scene() { return scene; }, go, introScene, buildLevel, levelScene, mapScene, get prog() { return prog; }, LEVELS, setWorld, enterWorld, cutScene, get world() { return worldNum; } };
+window.__ck = { get scene() { return scene; }, go, introScene, shopScene, mapMenu, get closet() { return closet; }, party, buildLevel, levelScene, mapScene, get prog() { return prog; }, LEVELS, setWorld, enterWorld, cutScene, get world() { return worldNum; } };
 // The level editor runs this game in a frame and sends the level it is editing to play-test.
 window.addEventListener('message', e => {
   const d = e.data;

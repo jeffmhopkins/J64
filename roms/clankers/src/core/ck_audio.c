@@ -52,6 +52,9 @@ static const fx FX[SFX_COUNT] = {
     [SFX_SLIDE] = { 2, { N(0.35f, 0.2f, 0, 900, LOW), T(300, 0.25f, TRIANGLE, 0.1f, 0, 0.6f) } },
     [SFX_THUNDER] = { 2, { N(1.1f, 0.5f, 0, 160, LOW), N(0.2f, 0.3f, 0, 2000, BAND) } },
     [SFX_WHOOSH] = { 2, { N(1.4f, 0.35f, 0, 600, BAND), T(200, 1.2f, SINE, 0.08f, 0, 3) } },
+    [SFX_HOP2] = { 2, { T(440, 0.12f, TRIANGLE, 0.2f, 0, 2), N(0.08f, 0.1f, 0, 2500, BAND) } },
+    [SFX_HOVER] = { 1, { N(0.09f, 0.09f, 0, 1400, BAND) } },
+    [SFX_BUY] = { 5, { T(659, 0.1f, SQUARE, 0.15f, 0, 0), T(784, 0.1f, SQUARE, 0.15f, 0.05f, 0), T(1047, 0.1f, SQUARE, 0.15f, 0.1f, 0), T(1319, 0.1f, SQUARE, 0.15f, 0.15f, 0), T(1568, 0.1f, SQUARE, 0.15f, 0.2f, 0) } },
 };
 
 int ck_sfx_tones(int id, ck_tone *out, int max) {

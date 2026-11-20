@@ -69,7 +69,7 @@ int ck_song_by_name(const char *name) {
 bool ck_parse_level(const char *text, ck_leveldef *L) {
     memset(L, 0, sizeof *L);
     L->baby = 0xFF8FC7;
-    L->grav = 0.3f;
+    L->grav = CK_GRAV;
     const char *s = text;
     size_t n;
     char key[16], val[64];
@@ -91,7 +91,7 @@ bool ck_parse_level(const char *text, ck_leveldef *L) {
             else if (!strcmp(key, "par")) L->par = atoi(val);
             else if (!strcmp(key, "time")) L->time = atoi(val);
             else if (!strcmp(key, "boss")) { copy(L->boss, sizeof L->boss, val, strlen(val)); L->bossType = index_of(BOSS_NAMES, CK_BOSS_COUNT, L->boss); }
-            else if (!strcmp(key, "gravity")) L->grav = !strcmp(val, "low") ? 0.2f : 0.3f;
+            else if (!strcmp(key, "gravity")) L->grav = !strcmp(val, "low") ? CK_GRAV * 2 / 3 : CK_GRAV;
         }
         p = next;
     }

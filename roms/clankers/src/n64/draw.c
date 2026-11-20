@@ -166,6 +166,23 @@ static void txt(int font, int style, float x, float y, int align, const char *fm
     mode = M_NONE;
 }
 
+// How wide a line of text is in a font, so a box can grow to hold it.
+static float txt_w(int font, const char *s) {
+    int n = (int)strlen(s);
+    rdpq_paragraph_t *pg = rdpq_paragraph_build(&(rdpq_textparms_t){ .disable_aa_fix = true }, font, s, &n);
+    float w = pg ? pg->bbox.x1 - pg->bbox.x0 : (float)strlen(s) * 6;
+    if (pg) rdpq_paragraph_free(pg);
+    return w;
+}
+// A banner: a dark box with a bright rim, sized to its words and centred, with the words in a light colour.
+// (Dark text on bright yellow blurs into a blob on a TV, so bright boxes are only ever a rim.)
+static void banner(int font, int style, uint32_t rim, float y, float minW, float h, float textY, const char *s) {
+    float w = fminf(W - 6, fmaxf(minW, txt_w(font, s) + 20)), x = (W - w) / 2;
+    rect(x, y, w, h, rim, 1);
+    rect(x + 2, y + 2, w - 4, h - 4, 0x1B1426, 1);
+    txt(font, style, W / 2, textY, ALIGN_CENTER, "%s", s);
+}
+
 static const char *clock_str(int frames, char *buf) {
     int sec = frames / 60;
     sprintf(buf, "%d:%02d", sec / 60, sec % 60);
@@ -274,7 +291,7 @@ static void draw_intro(const ck_game *G) {
     const char *cap = t < 4.5f ? "One night in Junkyard Hills..." : t < 8 ? "...a Big Glitch storm rolled in!"
                     : t < 11 ? "Whoosh! The baby bots blew far away!" : "Time to bring them home!";
     float ct = t < 4.5f ? t : t < 8 ? t - 4.5f : t < 11 ? t - 8 : t - 11, ca = clampf(ct * 2, 0, 1);
-    panel(30, 210, 260, 22, 0x1B1426, 0.86f * ca);
+    { float w = fminf(W - 6, fmaxf(260, txt_w(F_MED, cap) + 20)); panel((W - w) / 2, 210, w, 22, 0x1B1426, 0.86f * ca); }
     if (ca > 0.5f) txt(F_MED, ST_CREAM, W / 2, 225, ALIGN_CENTER, "%s", cap);
     if (t > 14.4f) rect(0, 0, W, H, 0xFFF8E6, clampf((t - 14.4f) / 0.8f, 0, 1));
     if ((int)(t * 2) % 2 && t > 1) txt(F_SMALL, ST_PALE, W - 8, 14, ALIGN_RIGHT, "START to skip");
@@ -439,18 +456,21 @@ static void draw_map(const ck_game *G) {
         k++;
     }
     // HUD
-    dark_panel(6, 6, 150, 15);
-    char up[40];
+    char up[40], head[56];
     for (int i = 0; i < (int)sizeof up; i++) { char c = Wd->name[i]; up[i] = c >= 'a' && c <= 'z' ? c - 32 : c; if (!c) break; }
     up[sizeof up - 1] = 0;
-    txt(F_MED, ST_PLAIN, 12, 17, ALIGN_LEFT, "WORLD %d \xC2\xB7 %s", Wd->num, up);
+    snprintf(head, sizeof head, "WORLD %d \xC2\xB7 %s", Wd->num, up);
+    dark_panel(6, 6, fminf(222, fmaxf(150, txt_w(F_MED, head) + 14)), 15);
+    txt(F_MED, ST_PLAIN, 12, 17, ALIGN_LEFT, "%s", head);
     dark_panel(232, 6, 82, 15);
     blit_o(SPR_BOLT, 0, 242, 13.5f, (bopt){ .sx = 4 / 4.2f, .sy = 4 / 4.2f });
     txt(F_MED, ST_PLAIN, 248, 17, ALIGN_LEFT, "x%d", M->bolts);
     blit_o(SPR_GEAR, 0, 280, 13.5f, (bopt){ .sx = 4.5f / 7, .sy = 4.5f / 7, .rot = -t * 0.7f });
     txt(F_MED, ST_PLAIN, 286, 17, ALIGN_LEFT, "%d/%d", M->gears, Wd->gears);
     int here = ck_map_here(G);
-    float bw = 172, bx = (W - bw) / 2;
+    float bw = 172;
+    if (here >= 0) bw = fminf(W - 8, fmaxf(172, txt_w(F_MED, Wd->nodes[here].label) + 70));
+    float bx = (W - bw) / 2;
     dark_panel(bx, 214, bw, 20);
     if (here >= 0) {
         const ck_node *nd = &Wd->nodes[here];
@@ -468,13 +488,12 @@ static void draw_map(const ck_game *G) {
             if (d->time) { strcat(s, "RACE "); strcat(s, clock_str(d->time * 60, c)); strcat(s, "   "); }
             if (G->prog.best[here]) { strcat(s, "BEST "); strcat(s, clock_str((int)G->prog.best[here], c)); strcat(s, "   "); }
             if (d->par && nd->kind == CK_NODE_LEVEL) { strcat(s, "STAR TIME "); strcat(s, clock_str(d->par * 60, c)); }
-            if (s[0]) { float w = strlen(s) * 5 + 16; dark_panel(6, 24, w, 14); txt(F_SMALL, ST_PLAIN, 6 + w / 2, 34, ALIGN_CENTER, "%s", s); }
+            if (s[0]) { float w = txt_w(F_SMALL, s) + 16; dark_panel(6, 24, w, 14); txt(F_SMALL, ST_PLAIN, 6 + w / 2, 34, ALIGN_CENTER, "%s", s); }
         }
     } else txt(F_MED, ST_PLAIN, W / 2, 228, ALIGN_CENTER, "...");
     if (M->hasMsg) {
-        float k2 = fminf(1, (t - M->msgT0) * 6), wd = 150;
-        panel((W - wd) / 2, 30 - (1 - k2) * 8, wd, 18, 0xFFD23F, 1);
-        txt(F_MED, ST_DARK, W / 2, 42 - (1 - k2) * 8, ALIGN_CENTER, "%s", M->msg);
+        float k2 = fminf(1, (t - M->msgT0) * 6);
+        banner(F_MED, ST_YELLOW, 0xFFD23F, 30 - (1 - k2) * 8, 150, 18, 42 - (1 - k2) * 8, M->msg);
     }
     lives_hud(G, 4, H - 19);
 }
@@ -768,8 +787,8 @@ static void draw_player(const ck_game *G, const ck_player *p, float cam, int npl
     else if (p->actT > 0 && p->shoot) fr = 24;
     else if (p->actT > 0) fr = p->actT > 16 ? 21 : p->actT > 10 ? 22 : 23;
     else if (!p->ground) {
-        if (R) fr = p->jetT > 0 ? 13 + (int)(t * 20) % 2 : 12;
-        else fr = p->flapping ? 13 + ((int)(t * 13 / (2 * PI) * 4)) % 4 : 12;
+        if (R) fr = p->jetT > 0 || p->flapping ? 13 + (int)(t * 20) % 2 : 12;   // jetpack for the double jump and the glide
+        else fr = p->flapping || p->jetT > 0 ? 13 + ((int)(t * 13 / (2 * PI) * 4)) % 4 : 12;
     } else if (fabsf(p->vx) > 0.25f) {
         float f = R ? p->anim * 1.6f * 11 : p->anim * 1.6f / 1.1f * 10;
         fr = 4 + ((int)(f / (2 * PI) * 8)) % 8;
@@ -826,11 +845,10 @@ static void level_hud(const ck_game *G) {
         txt(F_MED, warn && (int)(lv->t * 4) % 2 ? ST_RED : ST_PLAIN, 158, 16, ALIGN_CENTER, "%s", clock_str(def->time ? left : lv->timeF, c));
     }
     if (def->time && lv->frame < 200 && lv->clearT < 0 && lv->dyingT < 0) {
-        panel(W / 2 - 70, 150, 140, 22, 0xFFD23F, 1);
-        txt(F_MED, ST_DARK, W / 2, 165, ALIGN_CENTER, "RACE THE CLOCK!");
+        banner(F_MED, ST_YELLOW, 0xFFD23F, 150, 140, 22, 165, "RACE THE CLOCK!");
     }
-    if (lv->timeUp && lv->dyingT > 10) { panel(W / 2 - 60, 60, 120, 22, 0xFF8A8A, 1); txt(F_BIG, ST_DARK, W / 2, 76, ALIGN_CENTER, "TIME'S UP!"); }
-    if (lv->toastT > 0 && lv->toast[0]) txt(F_BIG, ST_YELLOW, W / 2, 50, ALIGN_CENTER, "%s", lv->toast);
+    if (lv->timeUp && lv->dyingT > 10) banner(F_BIG, ST_WHITE, 0xFF8A8A, 60, 120, 22, 76, "TIME'S UP!");
+    if (lv->toastT > 0 && lv->toast[0]) banner(F_BIG, ST_YELLOW, 0x1B1426, 35, 0, 21, 51, lv->toast);
     if (def->kind == CK_KIND_LEVEL) {
         dark_panel(70, 4, 50, 15);
         for (int k = 0; k < 3; k++) {
@@ -843,17 +861,16 @@ static void level_hud(const ck_game *G) {
         txt(F_MED, lv->showerLeft < 300 ? ST_RED : ST_CREAM, 160, 16, ALIGN_CENTER, "%ds", (lv->showerLeft + 59) / 60);
     }
     if (lv->nameT > 0) {
-        dark_panel(W / 2 - 90, 92, 180, lv->retry ? 44 : 30);
+        { float w = fminf(W - 6, fmaxf(180, txt_w(F_MED, lv->retry ? "TRY AGAIN!" : def->name) + 20)); dark_panel((W - w) / 2, 92, w, lv->retry ? 44 : 30); }
         txt(F_MED, ST_YELLOW, W / 2, 112, ALIGN_CENTER, "%s", lv->retry ? "TRY AGAIN!" : def->name);
         if (lv->retry) txt(F_SMALL, ST_PLAIN, W / 2, 128, ALIGN_CENTER, "%d %s left", G->prog.lives, G->prog.lives > 1 ? "tries" : "try");
     }
     if (lv->dyingT > 40) { dark_panel(W / 2 - 80, 96, 160, 34); txt(F_BIG, ST_YELLOW, W / 2, 118, ALIGN_CENTER, G->prog.lives > 0 ? "OOPS!" : "OUT OF TRIES"); }
-    if (lv->hasBoss && !lv->boss.fixed && lv->frame < 260) txt(F_MED, ST_CREAM, W / 2, 140, ALIGN_CENTER, "Bounce on the red buttons!");
-    if (lv->hasShower && lv->frame < 180) txt(F_MED, ST_CREAM, W / 2, 140, ALIGN_CENTER, "Catch the bolts!");
+    if (lv->hasBoss && !lv->boss.fixed && lv->frame < 260) banner(F_MED, ST_CREAM, 0x1B1426, 127, 0, 18, 140, "Bounce on the red buttons!");
+    if (lv->hasShower && lv->frame < 180) banner(F_MED, ST_CREAM, 0x1B1426, 127, 0, 18, 140, "Catch the bolts!");
     if (lv->clearT >= 0) {
         float k = fminf(1, lv->clearT / 20.0f);
-        panel(W / 2 - 80, 60 - (1 - k) * 30, 160, 34, 0xFFD23F, 1);
-        txt(F_HUGE, ST_DARK, W / 2, 84 - (1 - k) * 30, ALIGN_CENTER, def->kind == CK_KIND_BOSS ? "FIXED!" : def->kind == CK_KIND_BONUS ? "BONUS!" : "RESCUED!");
+        banner(F_HUGE, ST_YELLOW, 0xFFD23F, 60 - (1 - k) * 30, 160, 34, 84 - (1 - k) * 30, def->kind == CK_KIND_BOSS ? "FIXED!" : def->kind == CK_KIND_BONUS ? "BONUS!" : "RESCUED!");
         if (lv->clearT > 40) {
             int nG = 0;
             for (int g = 0; g < 3; g++) if (lv->gotNow[g] && !((G->prog.got[lv->node] >> g) & 1)) nG++;
@@ -878,7 +895,7 @@ static void level_hud(const ck_game *G) {
                     txt(F_SMALL, got && lv->clearT >= at ? ST_PLAIN : ST_GREY, sx, sy + 18, ALIGN_CENTER, "%s", names[s]);
                 }
             }
-            if (R->record && lv->clearT > 140) { panel(W / 2 - 58, 183, 116, 18, 0xFF8FC7, 1); txt(F_MED, ST_DARK, W / 2, 197, ALIGN_CENTER, "NEW RECORD!"); }
+            if (R->record && lv->clearT > 140) banner(F_MED, ST_WHITE, 0xFF8FC7, 183, 116, 18, 197, "NEW RECORD!");
         }
     }
 }
@@ -1023,7 +1040,8 @@ static void draw_cut(const ck_game *G) {
     particles(G, 0);
     // the caption strip
     if (v.caption && v.captionA > 0.2f) {
-        panel(20, 210, 280, 22, 0x1B1426, 0.86f * v.captionA);
+        float w = fminf(W - 6, fmaxf(280, txt_w(F_MED, v.caption) + 20));
+        panel((W - w) / 2, 210, w, 22, 0x1B1426, 0.86f * v.captionA);
         txt(F_MED, v.gold ? ST_YELLOW : ST_CREAM, W / 2, 225, ALIGN_CENTER, "%s", v.caption);
     }
     if (v.black > 0) rect(0, 0, W, H, 0x000000, v.black);

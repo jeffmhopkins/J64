@@ -140,6 +140,7 @@ const CK = (() => {
       circ(cx, cy, 14, lim);
       clawEnd = [cx, cy];
     }
+    wear(p, { cx: tilt, top: HY - HH, w: HW * 2 * 0.95, eyes: [[tilt - ex, ey, 26, 30], [tilt + ex, ey, 26, 30]], neck: [tilt, HY + HH + 4, 150] });
     if (p.stars) K.stars(tilt, HY - HH - 30, 90, t);
     g.restore();
     return clawEnd;
@@ -185,6 +186,7 @@ const CK = (() => {
     const eo = Object.assign({ open: K.blink(t, p.phase ?? 1.7), happy: 0.4 }, p.eyes || {});
     eye(hx - 31, 100, 45, 53, dark, head, Object.assign({}, eo, { angry: eo.angry ? 1 : 0 }));
     eye(hx + 31, 100, 45, 53, dark, head, Object.assign({}, eo, { angry: eo.angry ? -1 : 0 }));
+    wear(p, { cx: hx, top: 58, w: 128, eyes: [[hx - 31, 100, 22, 26], [hx + 31, 100, 22, 26]], neck: [hx - 2, 160, 90] });
     if (p.stars) K.stars(hx, 30, 80, t);
     g.restore();
   };
@@ -253,6 +255,7 @@ const CK = (() => {
       limb(cx, 6, -90 + 40 + open * 30, 30, 12, lim); limb(cx, 6, -90 - 40 - open * 30, 30, 12, lim);
       circ(cx, 6, 14, lim); end = [cx, 6];
     }
+    wear(p, { side: true, cx: 0, top: HY - HH, w: 168 * 0.95, eyes: [[22, ey, 26, 30], [74, ey, 15, 29]], neck: [20, HY + HH + 4, 130] });
     g.translate(0, -bob);
     const [ff] = legK(16, 98 + bob, p.legF ?? 0, legLen - bob, 30, lim, p.kneeF);
     if (p.jet) K.flame(ff[0], ff[1] + 16, 60, 26, t);
@@ -319,11 +322,107 @@ const CK = (() => {
     } else {
       rr(-50, 244, 96, 60, 28, wing); for (const r of [20, 34, 48]) arc(-46, 252, r, P * 0.06, P * 0.44, 3, col);
     }
+    wear(p, { side: true, cx: hx + 4, top: hy, w: 112, eyes: [[hx + 4, hy + 40, 22, 26], [hx + 46, hy + 40, 13, 25]], neck: [hx - 4, hy + 100, 80] });
     g.translate(0, -bob);
     legDraw(8, p.legF ?? 0, p.legLenF ?? 92, leg, p.kneeF, p.toeF);
     if (p.stars) { g.translate(0, bob); K.stars(hx, 30, 80, t); }
     g.restore();
   };
+
+
+  // ---------- ACCESSORIES (bought with bolts at the parts shop) ----------
+  // acc = { head, face, neck }, each an id from K.ACC or empty. Every hero view passes where its head,
+  // eyes and neck are, in its own units, and these draw on top: w = head width, top = head top.
+  K.ACC = [
+    { id: 'party', slot: 'head', name: 'Party hat', cost: 15 },
+    { id: 'flower', slot: 'head', name: 'Flower', cost: 15 },
+    { id: 'propeller', slot: 'head', name: 'Propeller cap', cost: 30 },
+    { id: 'tophat', slot: 'head', name: 'Top hat', cost: 40 },
+    { id: 'crown', slot: 'head', name: 'Crown', cost: 60 },
+    { id: 'shades', slot: 'face', name: 'Cool shades', cost: 25 },
+    { id: 'hearts', slot: 'face', name: 'Heart glasses', cost: 25 },
+    { id: 'bowtie', slot: 'neck', name: 'Bow tie', cost: 15 },
+    { id: 'scarf', slot: 'neck', name: 'Scarf', cost: 20 },
+  ];
+  function heart(x, y, r, c) {
+    const g = K.g; g.fillStyle = c; g.beginPath();
+    g.moveTo(x, y + r * 0.95);
+    g.bezierCurveTo(x - r * 1.5, y - r * 0.1, x - r * 0.8, y - r * 1.2, x, y - r * 0.45);
+    g.bezierCurveTo(x + r * 0.8, y - r * 1.2, x + r * 1.5, y - r * 0.1, x, y + r * 0.95);
+    g.fill();
+  }
+  K.wearHead = (id, cx, top, w, t = 0, side = false) => {
+    const g = K.g, k = w / 100;
+    g.save(); g.translate(cx, top); g.scale(k, k);
+    if (id === 'party') {
+      g.fillStyle = '#ff8fc7'; g.beginPath(); g.moveTo(-24, 6); g.lineTo(0, -62); g.lineTo(24, 6); g.closePath(); g.fill();
+      g.save(); g.clip(); g.fillStyle = '#ffd23f'; for (const y of [-40, -16]) { g.beginPath(); g.moveTo(-40, y); g.lineTo(40, y - 14); g.lineTo(40, y - 4); g.lineTo(-40, y + 10); g.fill(); } g.restore();
+      circ(0, -64, 10, '#5ad1ff'); circ(-3, -67, 3.5, '#ffffff');
+    } else if (id === 'flower') {
+      const fx = side ? -26 : 30, fy = -2;
+      limb(fx, fy, 160, 14, 5, '#3f9e57');
+      for (let i = 0; i < 6; i++) { const a = i / 6 * P * 2 + t * 0.4; circ(fx + Math.cos(a) * 12, fy - 16 + Math.sin(a) * 12, 9, '#ff7a59'); }
+      circ(fx, fy - 16, 8, '#ffd23f');
+    } else if (id === 'propeller') {
+      rr(-38, -6, 76, 14, 7, '#e0564f');                 // brim band
+      g.fillStyle = '#5ad1ff'; g.beginPath(); g.ellipse(0, -4, 34, 30, 0, P, 0); g.fill();
+      g.fillStyle = '#ffd23f'; g.beginPath(); g.ellipse(0, -4, 34, 30, 0, P * 1.38, P * 1.62); g.lineTo(0, -4); g.fill();
+      g.fillStyle = '#3a3346'; g.fillRect(-2.5, -50, 5, 18);
+      const sp = Math.cos(t * 18); rr(-34 * Math.abs(sp), -54, 68 * Math.abs(sp) + 1, 8, 4, '#e0564f'); circ(0, -50, 5, '#ffd23f');
+    } else if (id === 'tophat') {
+      rr(-46, -4, 92, 10, 5, '#1f1b26');
+      rr(-28, -56, 56, 56, 5, '#2b2833');
+      g.fillStyle = '#e0564f'; g.fillRect(-28, -18, 56, 10);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(-22, -52, 6, 32);
+    } else if (id === 'crown') {
+      g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(-36, 6); g.lineTo(-36, -30); g.lineTo(-18, -12); g.lineTo(0, -38); g.lineTo(18, -12); g.lineTo(36, -30); g.lineTo(36, 6); g.closePath(); g.fill();
+      g.fillStyle = '#e8a91f'; g.fillRect(-36, -4, 72, 10);
+      circ(-36, -32, 5, '#fff6a0'); circ(0, -40, 6, '#fff6a0'); circ(36, -32, 5, '#fff6a0');
+      circ(-18, 1, 4.5, '#e0564f'); circ(0, 1, 4.5, '#5ad1ff'); circ(18, 1, 4.5, '#49f08a');
+    }
+    g.restore();
+  };
+  // eyes: [[x, y, rx, ry], ...] near eye first; side views pass the squeezed far eye second
+  K.wearFace = (id, eyes, side = false) => {
+    const g = K.g;
+    if (id === 'shades') {
+      const [a, b] = eyes, lw = Math.max(3, a[2] * 0.22);
+      g.strokeStyle = '#1b1426'; g.lineWidth = lw; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(a[0] + (b[0] > a[0] ? a[2] : -a[2]), a[1] - a[3] * 0.3); g.lineTo(b[0] - (b[0] > a[0] ? b[2] : -b[2]), b[1] - b[3] * 0.3); g.stroke();
+      if (side) { g.beginPath(); g.moveTo(a[0] - a[2], a[1] - a[3] * 0.3); g.lineTo(a[0] - a[2] * 2.6, a[1] - a[3] * 0.5); g.stroke(); }
+      for (const [x, y, rx, ry] of eyes) {
+        rr(x - rx - 4, y - ry * 0.62, rx * 2 + 8, ry * 1.2, ry * 0.45, '#1b1426');
+        g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.moveTo(x - rx * 0.6, y - ry * 0.4); g.lineTo(x - rx * 0.1, y - ry * 0.4); g.lineTo(x - rx * 0.5, y + ry * 0.3); g.closePath(); g.fill();
+      }
+    } else if (id === 'hearts') {
+      const [a, b] = eyes;
+      g.strokeStyle = '#c23b78'; g.lineWidth = Math.max(3, a[2] * 0.18); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(a[0], a[1] - a[3] * 0.5); g.lineTo(b[0], b[1] - b[3] * 0.5); g.stroke();
+      for (const [x, y, rx, ry] of eyes) { g.save(); g.translate(x, y); g.scale(rx / ry, 1); heart(0, 0, ry * 0.95, '#c23b78'); heart(0, -ry * 0.04, ry * 0.75, '#ff8fc7'); g.restore(); }
+    }
+  };
+  K.wearNeck = (id, x, y, w, dir = 0) => {
+    const g = K.g, k = w / 100;
+    g.save(); g.translate(x, y); g.scale(k * (dir ? 0.7 : 1), k);
+    if (id === 'bowtie') {
+      g.fillStyle = '#e0564f';
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(-30, -16); g.lineTo(-30, 16); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(30, -16); g.lineTo(30, 16); g.closePath(); g.fill();
+      circ(0, 0, 8, '#a8323b');
+    } else if (id === 'scarf') {
+      rr(-46, -10, 92, 22, 11, '#49d17a');
+      g.fillStyle = '#ffffff'; for (const sx of [-26, 0, 26]) g.fillRect(sx - 4, -10, 8, 22);
+      g.save(); g.translate(dir ? -30 : 24, 6); g.rotate(dir ? 0.5 : 0.2); rr(-10, 0, 20, 40, 6, '#49d17a'); g.fillStyle = '#ffffff'; g.fillRect(-10, 14, 20, 7); g.restore();
+    }
+    g.restore();
+  };
+  // draws whatever the hero wears; a: head/face/neck anchors in the view's own units
+  function wear(p, a) {
+    const acc = p.acc; if (!acc) return;
+    if (acc.neck) K.wearNeck(acc.neck, a.neck[0], a.neck[1], a.neck[2], a.side ? 1 : 0);
+    if (acc.face) K.wearFace(acc.face, a.eyes, a.side);
+    if (acc.head) K.wearHead(acc.head, a.cx, a.top, a.w, p.t ?? 0, a.side);
+  }
 
   // Poses in one place so the mocks and the game agree. kind: idle|run|jump|special|wobble
   K.pose = (hero, kind, t) => {

@@ -41,6 +41,7 @@ enum {
     SFX_SELECT, SFX_CONFIRM, SFX_OPEN, SFX_STEP, SFX_HOP, SFX_NOPE, SFX_SPROUT, SFX_POWER,
     SFX_SHRINK, SFX_BLOW, SFX_STOMP, SFX_HATCH, SFX_OUCH, SFX_POP, SFX_TICK, SFX_STAR0,
     SFX_STAR1, SFX_STAR2, SFX_RECORD, SFX_FLAG, SFX_SLIDE, SFX_THUNDER, SFX_WHOOSH,
+    SFX_HOP2, SFX_HOVER, SFX_BUY,
     SFX_COUNT
 };
 enum {
@@ -68,7 +69,12 @@ int ck_sfx_tones(int id, ck_tone *out, int max);
 
 // Music from data/songs.txt.
 #define CK_MAXTRACKS 4
-#define CK_MAXNOTES  96
+// Gravity is 80% of what it first was (0.3), and every upward kick a hero gets is scaled by CK_JK = sqrt(0.8),
+// so heroes hang in the air longer but jump exactly as high. Running speed climbs from a creep over CK_RAMP frames.
+#define CK_GRAV 0.24f
+#define CK_JK   0.8944272f
+#define CK_RAMP 30
+#define CK_MAXNOTES  160   // 16 bars of eighth notes, with room to spare
 typedef struct {
     uint8_t wave;                 // WAVE_*, or WAVE_NOISE for a drum track
     bool drum;
@@ -107,7 +113,7 @@ typedef struct {
     int par, time;            // seconds; 0 = none
     char boss[16];
     int bossType;             // BOSS_*
-    float grav;               // 0.3, or 0.2 on the Moon ("gravity: low")
+    float grav;               // CK_GRAV, or two thirds of it on the Moon ("gravity: low")
     int w;                    // width in tiles
     char rows[CK_ROWS][CK_MAXW];
 } ck_leveldef;
@@ -240,6 +246,7 @@ typedef struct {
     int rainbowT, magnetT;
     int face, coyote, jetT, flapT, actT, inv, wob, bubble, slideT;
     bool boost, flapping, cheer, dead, low, spring, shoot;
+    int16_t runT; int8_t runDir;   // frames the same direction has been held: speed ramps up over CK_RAMP
     float safeX, safeY, anim;
     ck_ent *carry, *onMover;
 } ck_player;
@@ -429,6 +436,8 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2);
 // Helpers frontends use while drawing.
 float ck_rand(ck_game *G);                 // [0, 1)
 bool ck_has(const ck_player *p, int power);
+// Put p on firm floor beside buddy b (who must stand on tiles); false if there is no clear spot.
+bool ck_set_down(const ck_level *lv, ck_player *p, const ck_player *b);
 bool ck_road_open(const ck_game *G, int road);
 bool ck_node_reachable(const ck_game *G, int node);
 bool ck_node_beaten(const ck_game *G, int node);

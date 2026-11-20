@@ -404,7 +404,7 @@ static void test_new_worlds(void) {
             const ck_leveldef *L = &G->defs[i];
             if (N->kind == CK_NODE_BOSS) EXPECT_EQ_INT(L->bossType, bosses[n]);
             // every Moon level has low gravity, nowhere else does
-            EXPECT_EQ_INT(L->grav < 0.25f, n == 4);
+            EXPECT_EQ_INT(L->grav < CK_GRAV * 0.9f, n == 4);
             // every level has a start, and a pad unless the boss or the shower ends it
             int start = 0, pad = 0, gears = 0;
             for (int y = 0; y < CK_ROWS; y++)
@@ -523,7 +523,7 @@ static void test_bosses(void) {
         for (int f = 0; f < 60 * 40 && G->scene == SC_LEVEL; f++) {
             // pace to and fro (the Stamper follows you, so for it stand still, away from the shelves)
             if (n == 2 && f == 0) G->lv.players[0].x = 150;
-            ck_game_step(G, n == 2 ? 0 : (f / 50) % 2 ? CK_LEFT : CK_RIGHT, 0);
+            ck_game_step(G, n == 2 ? 0 : (f / 80) % 2 ? CK_LEFT : CK_RIGHT, 0);   // long enough legs to get up to speed
             if (G->lv.players[0].wob > 0 || G->lv.dyingT >= 0) wobbles++;   // no bolts to drop: a bump costs a try
         }
         if (!wobbles) fprintf(stderr, "boss %d never got the hero\n", n);
@@ -626,6 +626,118 @@ static void test_new_bot_runs(void) {
     }
 }
 
+// Movement: speed ramps up, both heroes double jump and glide, the ostrich's kick reaches like the
+// robot's arm, and a bubble or a catch-up hop only ever sets a hero down on clear, firm floor.
+static float jump_height(ck_game *G, int hero, bool twice) {
+    G->prog.hero[0] = (uint8_t)hero;
+    start_level(G, "l1");
+    for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+    ck_player *p = &G->lv.players[0];
+    float y0 = p->y, top = y0;
+    for (int f = 0; f < 150; f++) {
+        uint16_t pad = f < 14 || (twice && f >= 24 && f < 40) ? CK_A : 0;   // let go, then a second press in the air
+        ck_game_step(G, pad, 0);
+        if (p->y < top) top = p->y;
+    }
+    return y0 - top;
+}
+static void test_movement(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    // the run ramps up over half a second
+    G->prog.hero[0] = HERO_ROBOT;
+    start_level(G, "l1");
+    for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+    ck_player *p = &G->lv.players[0];
+    for (int f = 0; f < 8; f++) ck_game_step(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(p->vx > 0 && p->vx < 1.75f * 0.4f, 1);
+    for (int f = 0; f < 40; f++) ck_game_step(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(p->vx > 1.7f, 1);
+    // both heroes: a second press in the air goes higher
+    for (int h = 0; h < 2; h++) {
+        float one = jump_height(G, h ? HERO_OSTRICH : HERO_ROBOT, false), two = jump_height(G, h ? HERO_OSTRICH : HERO_ROBOT, true);
+        if (!(two > one + 12)) fprintf(stderr, "hero %d: jump %.1f, double %.1f\n", h, one, two);
+        EXPECT_EQ_INT(two > one + 12, 1);
+    }
+    // a first jump still reaches as high as it did with the old gravity (0.3, v = -5.5): about 50 px
+    float one = jump_height(G, HERO_ROBOT, false);
+    EXPECT_EQ_INT(one > 44 && one < 56, 1);
+    // both heroes glide while A is held on the way down
+    for (int h = 0; h < 2; h++) {
+        G->prog.hero[0] = (uint8_t)(h ? HERO_OSTRICH : HERO_ROBOT);
+        start_level(G, "l1");
+        for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+        p = &G->lv.players[0];
+        bool glided = false;
+        for (int f = 0; f < 120; f++) { ck_game_step(G, CK_A, 0); if (p->flapping && p->vy < 1) glided = true; }
+        EXPECT_EQ_INT(glided, 1);
+    }
+    // the ostrich kick reboots a Glitchy 29 px in front (the old kick stopped at 16), as the robot's arm does
+    for (int h = 0; h < 2; h++) {
+        G->prog.hero[0] = (uint8_t)(h ? HERO_OSTRICH : HERO_ROBOT);
+        start_level(G, "l1");
+        for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+        ck_level *lv = &G->lv;
+        p = &lv->players[0]; p->face = 1; p->inv = 0;
+        ck_ent *e = NULL;
+        for (int k = 0; k < lv->nents; k++) if (lv->ents[k].type == E_ENEMY && !lv->ents[k].dead) { e = &lv->ents[k]; break; }
+        EXPECT_EQ_INT(e != NULL, 1);
+        if (!e) return;
+        e->x = p->x + p->w + 29 - e->w; e->y = p->y + p->h - e->h; e->vx = 0; e->kind = EN_SPROCKET; e->state = ES_GLITCHY; e->hopT = 999;
+        ck_game_step(G, CK_B, 0);
+        for (int f = 0; f < 20; f++) { e->x = p->x + p->w + 29 - e->w; ck_game_step(G, 0, 0); }
+        EXPECT_EQ_INT(e->state == ES_HAPPY || e->dead, 1);
+    }
+    // setting a hero down beside a buddy: only on firm floor, never in a wall or over a pit
+    G->prog.hero[0] = HERO_ROBOT; G->prog.joined[1] = 1; G->prog.hero[1] = HERO_OSTRICH;
+    start_level(G, "l1");
+    for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+    ck_level *lv = &G->lv;
+    EXPECT_EQ_INT(lv->nplayers, 2);
+    ck_player *a = &lv->players[0], *b = &lv->players[1];
+    EXPECT_EQ_INT(a->ground, 1);
+    b->x = a->x + 60; b->y = a->y - 80;
+    EXPECT_EQ_INT(ck_set_down(lv, b, a), 1);
+    EXPECT_EQ_INT(ck_absf(b->y + b->h - (a->y + a->h)) < 0.01f, 1);
+    a->ground = false;   // in the air (over a pit, maybe): nowhere to put anyone
+    EXPECT_EQ_INT(ck_set_down(lv, b, a), 0);
+    a->ground = true;
+    // wall in every spot beside and at the buddy: stay in the bubble
+    int ty = (int)((a->y + a->h) / 16) - 1;
+    char keep[3];
+    for (int k = -1; k <= 1; k++) { int tx = (int)((a->x + a->w / 2) / 16) + k; keep[k + 1] = lv->tiles[ty][tx]; lv->tiles[ty][tx] = '#'; }
+    EXPECT_EQ_INT(ck_set_down(lv, b, a), 0);
+    for (int k = -1; k <= 1; k++) lv->tiles[ty][(int)((a->x + a->w / 2) / 16) + k] = keep[k + 1];
+    // bubble: a hero who lost a life floats to the buddy and lands standing on the floor, not in the air
+    G->prog.lives = 3;
+    b->y = 240 + 40; ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(b->bubble > 0, 1);
+    for (int f = 0; f < 400 && b->bubble; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(b->bubble, 0);
+    for (int f = 0; f < 3; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(b->ground, 1);
+    G->prog.joined[1] = 0;
+}
+
+// Every looping song but the two short intro moods and the parade film runs 16 bars before it repeats.
+static void test_song_lengths(void) {
+    static ck_song songs[SONG_COUNT];
+    char *t = slurp("roms/clankers/data/songs.txt");
+    if (!t) return;
+    ck_parse_songs(t, songs);
+    free(t);
+    for (int id = 1; id < SONG_COUNT; id++) {
+        const ck_song *s = &songs[id];
+        if (!s->valid || !s->loop || id == SONG_LULLABY || id == SONG_STORM || id == SONG_PARADE) continue;   // the parade film ends before it loops
+        for (int k = 0; k < s->ntracks; k++) {
+            int eighths = 0;
+            for (int n = 0; n < s->tracks[k].n; n++) eighths += s->tracks[k].len[n];
+            if (eighths != 128) fprintf(stderr, "song %d track %d: %d eighths\n", id, k, eighths);
+            EXPECT_EQ_INT(eighths, 128);
+        }
+    }
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -642,4 +754,6 @@ void test_clankers(void) {
     test_bosses();
     test_films();
     test_new_bot_runs();
+    test_movement();
+    test_song_lengths();
 }

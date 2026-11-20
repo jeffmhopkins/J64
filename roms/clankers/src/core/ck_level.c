@@ -437,10 +437,39 @@ static void spawn_button(ck_game *G) {
     box(lv, E_BUTTON, b[0] * TS + 1, b[1] * TS - 6, 14, 6);
 }
 
+// Room for a body here: no solid tile inside it.
+static bool body_clear(const ck_level *lv, float x, float y, float w, float h) {
+    for (int ty = fl(y / TS); ty <= fl((y + h - 0.01f) / TS); ty++)
+        for (int tx = fl(x / TS); tx <= fl((x + w - 0.01f) / TS); tx++) if (is_solid(lv, tx, ty)) return false;
+    return true;
+}
+// Firm floor right under both feet (not a pit, not half over a ledge).
+static bool footing(const ck_level *lv, float x, float w, float bottom) {
+    int ty = fl((bottom + 1) / TS);
+    char a = tile_at(lv, fl((x + 1) / TS), ty), b = tile_at(lv, fl((x + w - 1) / TS), ty);
+    return (solid_char(a) || a == '-') && (solid_char(b) || b == '-');
+}
+// Set p down beside buddy b, who must be standing on tiles (not jumping, not riding a raft). Tries behind b,
+// in front of b, then exactly where b stands. Returns false, leaving p alone, if no clear spot has a floor.
+bool ck_set_down(const ck_level *lv, ck_player *p, const ck_player *b) {
+    if (!b || b == p || b->bubble || b->dead || !b->ground || b->onMover) return false;
+    float bottom = b->y + b->h, xs[3] = { b->x - b->face * 14, b->x + b->face * 14, b->x };
+    for (int k = 0; k < 3; k++) {
+        float x = xs[k];
+        if (x < 0 || x > lv->w * TS - p->w) continue;
+        if (body_clear(lv, x, bottom - p->h, p->w, p->h) && footing(lv, x, p->w, bottom)) {
+            p->x = x; p->y = bottom - p->h; p->vx = 0; p->vy = 0;
+            return true;
+        }
+    }
+    return false;
+}
+
 static rect action_box(const ck_player *p) {
     if (p->hero == HERO_ROBOT)
         return p->face > 0 ? (rect){ p->x + p->w, p->y + p->h - 18, 30, 10 } : (rect){ p->x - 30, p->y + p->h - 18, 30, 10 };
-    return p->face > 0 ? (rect){ p->x + p->w - 2, p->y + p->h - 16, 18, 14 } : (rect){ p->x - 16, p->y + p->h - 16, 18, 14 };
+    // the ostrich's leg telescopes out as far as the robot's arm
+    return p->face > 0 ? (rect){ p->x + p->w - 2, p->y + p->h - 16, 32, 14 } : (rect){ p->x - 30, p->y + p->h - 16, 32, 14 };
 }
 
 static void do_action(ck_game *G, ck_player *p) {
@@ -609,10 +638,14 @@ static void update_players(ck_game *G, int *outcome) {
             float tx = b->x - b->face * 4, ty = b->y - 26;
             p->x += (tx - p->x) * 0.05f;
             p->y += (ty - p->y) * 0.05f + sinf(lv->t * 4) * 0.3f;
-            if ((p->bubble > 50 && hypotf(tx - p->x, ty - p->y) < 14) || (HIT(G, p->slot, CK_A) && p->bubble > 50)) {
-                p->bubble = 0; p->inv = 90; p->vy = -2;
-                ck_sfx(G, SFX_POP);
-                ck_puff(G, p->x + p->w / 2, p->y + p->h / 2, 8, 0xBEF0FF, 230);
+            // the bubble only pops once the buddy stands on firm ground, and sets you down on the floor beside them
+            if (p->bubble > 50 && (hypotf(tx - p->x, ty - p->y) < 14 || HIT(G, p->slot, CK_A))) {
+                float bx = p->x, by = p->y;
+                if (ck_set_down(lv, p, b)) {
+                    p->bubble = 0; p->inv = 90; p->safeX = p->x; p->safeY = p->y;
+                    ck_sfx(G, SFX_POP);
+                    ck_puff(G, bx + p->w / 2, by + p->h / 2, 8, 0xBEF0FF, 230);
+                }
             }
             continue;
         }
@@ -631,7 +664,11 @@ static void update_players(ck_game *G, int *outcome) {
         int dir = 0;
         if (p->wob > 0) p->wob--;
         else dir = (HELD(G, i, CK_RIGHT) ? 1 : 0) - (HELD(G, i, CK_LEFT) ? 1 : 0);
-        if (dir) { p->vx = ck_clampf(p->vx + dir * acc, -max, max); p->face = dir; }
+        // speed climbs steadily from nearly nothing to full over half a second, so small taps place you exactly
+        if (dir && dir == p->runDir) { if (p->runT < CK_RAMP) p->runT++; } else p->runT = 0;
+        p->runDir = (int8_t)dir;
+        float cap = max * ck_maxf(0.1f, (float)p->runT / CK_RAMP);
+        if (dir) { float lim = ck_maxf(cap, ck_minf(dir * p->vx, max)); p->vx = ck_clampf(p->vx + dir * acc, -lim, lim); p->face = dir; }   // speed you already have is kept
         else if (p->wob <= 0) { p->vx *= p->ground ? 0.7f : 0.94f; if (ck_absf(p->vx) < 0.06f) p->vx = 0; }
         if (p->ground) { p->coyote = 7; p->boost = false; }
         else if (p->coyote > 0) p->coyote--;
@@ -674,22 +711,24 @@ static void update_players(ck_game *G, int *outcome) {
         }
         if (HIT(G, i, CK_A) && p->wob <= 0 && !p->low) {
             if (p->coyote > 0) {
-                p->vy = p->hero == HERO_ROBOT ? -5.5f : -6.1f; p->coyote = 0; p->ground = false;
+                p->vy = (p->hero == HERO_ROBOT ? -5.5f : -6.1f) * CK_JK; p->coyote = 0; p->ground = false;
                 ck_sfx(G, SFX_JUMP);
                 ck_puff(G, p->x + p->w / 2, p->y + p->h, 3, 0xFFF8E6, 230);
-            } else if (p->hero == HERO_ROBOT && !p->boost) {
-                p->vy = -4.8f; p->boost = true; p->jetT = 22;
-                ck_sfx(G, SFX_BOOST);
+            } else if (!p->boost) {   // a second jump in the air, once until you land: the robot's jetpack kicks, the ostrich flaps hard
+                p->boost = true; p->jetT = 22;
+                if (p->hero == HERO_ROBOT) { p->vy = -4.8f * CK_JK; ck_sfx(G, SFX_BOOST); }
+                else { p->vy = -5.4f * CK_JK; ck_sfx(G, SFX_HOP2); ck_puff(G, p->x + p->w / 2, p->y + p->h - 4, 4, 0xFFF8E6, 230); }
             }
         }
-        if (!HELD(G, i, CK_A) && p->vy < -2.2f && p->jetT <= 0 && !p->spring) p->vy = -2.2f;
+        if (!HELD(G, i, CK_A) && p->vy < -2.2f * CK_JK && p->jetT <= 0 && !p->spring) p->vy = -2.2f * CK_JK;
         p->flapping = false;
-        if (p->hero == HERO_OSTRICH && HELD(G, i, CK_A) && p->vy > 0.6f && !p->ground) {
+        // Hold A while falling to glide: the ostrich flaps, the robot hovers on its jetpack.
+        if (HELD(G, i, CK_A) && p->vy > 0.6f && !p->ground) {
             p->vy = 0.6f; p->flapping = true;
-            if (p->flapT-- <= 0) { ck_sfx(G, SFX_FLAP); p->flapT = 14; }
+            if (p->flapT-- <= 0) { ck_sfx(G, p->hero == HERO_ROBOT ? SFX_HOVER : SFX_FLAP); p->flapT = 14; }
         }
-        float grav = lv->def->grav > 0 ? lv->def->grav : 0.3f;
-        p->vy = ck_minf(p->vy + grav, grav < 0.3f ? 4.5f : 6);   // the Moon's low gravity floats you down slower
+        float grav = lv->def->grav > 0 ? lv->def->grav : CK_GRAV;
+        p->vy = ck_minf(p->vy + grav, grav < CK_GRAV ? 3.6f : 4.8f);   // the Moon's low gravity floats you down slower
         if (p->vy >= 0) p->spring = false;
         if (p->actT <= 0) p->shoot = false;
         ck_ent *nearCrate = NULL;
@@ -812,7 +851,7 @@ static void update_ents(ck_game *G) {
             if (e->state == ES_BUBBLED)
                 for (int k = 0; k < lv->nplayers; k++) {
                     ck_player *p = &lv->players[k];
-                    if (!p->bubble && overlap(&p->body, &e->body)) { e->bubT = 999; if (p->vy > 0) p->vy = -4; }
+                    if (!p->bubble && overlap(&p->body, &e->body)) { e->bubT = 999; if (p->vy > 0) p->vy = -4 * CK_JK; }
                 }
             if ((e->state == ES_SHELL || e->state == ES_KICKED) && e->kickT <= 0)
                 for (int k = 0; k < lv->nplayers; k++) {
@@ -820,12 +859,12 @@ static void update_ents(ck_game *G) {
                     if (p->bubble || p->carry || !overlap(&p->body, &e->body)) continue;
                     bool fromTop = p->vy > 0 && p->y + p->h - p->vy <= e->y + 5;
                     if (e->state == ES_KICKED && fromTop) {
-                        e->state = ES_SHELL; e->shellT = 0; e->vx = 0; e->kickT = 10; p->vy = -4.4f;
+                        e->state = ES_SHELL; e->shellT = 0; e->vx = 0; e->kickT = 10; p->vy = -4.4f * CK_JK;
                         ck_sfx(G, SFX_STOMP);
                         ck_puff(G, e->x + e->w / 2, e->y + e->h, 4, 0xFFF8E6, 230);
                     } else if (e->state == ES_SHELL) {
                         kick_crate(G, e, p->x + p->w / 2 < e->x + e->w / 2 ? 1 : -1, p->slot);
-                        if (fromTop) p->vy = -4.4f;
+                        if (fromTop) p->vy = -4.4f * CK_JK;
                     }
                     break;
                 }
@@ -837,7 +876,7 @@ static void update_ents(ck_game *G) {
                     if (p->vy > 0 && p->y + p->h - p->vy <= e->y + 5) {
                         if (e->kind == EN_GRUMBLE) shut_crate(G, e); else reboot(G, e);
                         bool spr = e->kind == EN_SPROCKET;
-                        p->vy = HELD(G, p->slot, CK_A) ? (spr ? -8.6f : -6.2f) : (spr ? -7.6f : -4.4f);
+                        p->vy = (HELD(G, p->slot, CK_A) ? (spr ? -8.6f : -6.2f) : (spr ? -7.6f : -4.4f)) * CK_JK;
                         p->spring = spr; p->boost = false;
                     } else if (p->inv <= 0) wobble(G, p, e->x + e->w / 2);
                 }
@@ -890,7 +929,7 @@ static void update_ents(ck_game *G) {
             for (int k = 0; k < lv->nplayers; k++) {
                 ck_player *p = &lv->players[k];
                 if (p->vy > 0 && p->x + p->w > e->x + 1 && p->x < e->x + e->w - 1 && p->y + p->h >= e->y && p->y + p->h - p->vy <= e->y + 6) {
-                    p->y = e->y - p->h; p->vy = HELD(G, p->slot, CK_A) ? -9.4f : -8.4f; p->spring = true; p->boost = false; e->sq = 1;
+                    p->y = e->y - p->h; p->vy = (HELD(G, p->slot, CK_A) ? -9.4f : -8.4f) * CK_JK; p->spring = true; p->boost = false; e->sq = 1;
                     ck_sfx(G, SFX_SPRING);
                 }
             }
@@ -901,7 +940,7 @@ static void update_ents(ck_game *G) {
         } else if (e->type == E_BUTTON) {
             for (int k = 0; k < lv->nplayers; k++) {
                 ck_player *p = &lv->players[k];
-                if (p->vy > 0 && overlap(&p->body, &e->body) && p->y + p->h - p->vy <= e->y + 4) { press_button(G, e); p->vy = -5; }
+                if (p->vy > 0 && overlap(&p->body, &e->body) && p->y + p->h - p->vy <= e->y + 4) { press_button(G, e); p->vy = -5 * CK_JK; }
             }
         } else if (e->type == E_FLAG) {
             if (!e->on)
@@ -1133,7 +1172,7 @@ int ck_level_update(ck_game *G) {
         float sx = 0;
         for (int k = 0; k < lv->nplayers; k++) {
             ck_player *p = &lv->players[k];
-            p->vy += lv->def->grav > 0 ? lv->def->grav : 0.3f;
+            p->vy += lv->def->grav > 0 ? lv->def->grav : CK_GRAV;
             move_body(lv, &p->body);
             sx += p->x;
         }
@@ -1169,11 +1208,15 @@ int ck_level_update(ck_game *G) {
         ck_player *a = &lv->players[0], *b = &lv->players[1];
         float dx = a->x - b->x;
         if (ck_absf(dx) > 250) {
+            // only onto firm floor next to the leader, never into a wall or over a pit
             ck_player *lag = dx > 0 ? b : a, *lead = dx > 0 ? a : b;
-            ck_puff(G, lag->x + 6, lag->y + 15, 6, 0xFFF8E6, 230);
-            lag->x = lead->x - lead->face * 14; lag->y = lead->y - 6; lag->vx = 0; lag->vy = -2; lag->inv = 40;
-            ck_sfx(G, SFX_HOP);
-            ck_puff(G, lag->x + 6, lag->y + 15, 6, 0xFFF8E6, 230);
+            float ox = lag->x, oy = lag->y;
+            if (!lag->carry && !lag->low && ck_set_down(lv, lag, lead)) {
+                ck_puff(G, ox + 6, oy + 15, 6, 0xFFF8E6, 230);
+                lag->inv = 40; lag->safeX = lag->x; lag->safeY = lag->y;
+                ck_sfx(G, SFX_HOP);
+                ck_puff(G, lag->x + 6, lag->y + 15, 6, 0xFFF8E6, 230);
+            }
         }
     }
     if (lv->doorT >= 0) {
@@ -1302,7 +1345,7 @@ void ck_level_come_back(ck_game *G) {
     ck_play(G, ck_level_song(lv));
     for (int k = 0; k < lv->nplayers; k++) {
         ck_player *p = &lv->players[k];
-        p->x = h->outx - p->w / 2 + k * 10; p->y = h->outy - p->h - 2; p->vx = 0; p->vy = -6.5f;
+        p->x = h->outx - p->w / 2 + k * 10; p->y = h->outy - p->h - 2; p->vx = 0; p->vy = -6.5f * CK_JK;
         p->spring = true; p->inv = 60; p->safeX = p->x; p->safeY = h->outy - p->h;
         p->onMover = NULL;
     }

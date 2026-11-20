@@ -84,7 +84,7 @@ function bakeAll() {
     if (i < 24) {
       const actT = [19, 14, 9][i - 21], k = Math.sin((22 - actT) / 22 * P);
       if (R) return side({ t: 0.3, grab: true, reach: k * 330, clawOpen: actT > 12 ? 0.7 : 0.05, legF: 0, legB: 0 });
-      return side({ t: 0.3, legF: -100 * k, legB: 10 * k, rot: -0.12 * k, lean: -12 * k, beakOpen: k > 0.5 ? 0.7 : 0 });
+      return side({ t: 0.3, legF: -95 * Math.min(1, k * 2), legLenF: 92 + k * 330, kneeF: 0, toeF: -90, legB: 10 * k, rot: -0.12 * k, lean: -12 * k, beakOpen: k > 0.5 ? 0.7 : 0 });
     }
     if (i === 24) return side(R ? { t: 0.3, armF: -90, eyes: { happy: 0.3 } } : { t: 0.3, beakOpen: 0.9, lean: -6 });
     if (i < 27) { const t = 0.3 + (i - 25) * (R ? P / 18 : P / 12); return front(R ? { t, armL: 150 + Math.sin(t * 9) * 20, armR: -150 - Math.sin(t * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o' } : { t, bob: Math.abs(Math.sin(t * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8 }); }

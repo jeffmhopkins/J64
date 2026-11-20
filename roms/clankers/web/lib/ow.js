@@ -191,15 +191,18 @@ const OW = (() => {
         const off = party.length === 1 ? 0 : (i === 0 ? -6 : 6), tt = t + i * 0.2;
         if (moving) {
           const ox = party.length === 1 ? 0 : (i === 0 ? -5 : 4) * dir;
-          if (m.hero === 'robot') K.robotSide(x + ox, y, s, m.hex, Object.assign(K.pose('robot', 'run', tt), { dir }));
-          else K.ostrichSide(x + ox, y - 1, s * 0.95, m.hex, Object.assign(K.pose('ostrich', 'run', tt), { dir }));
+          if (m.hero === 'robot') K.robotSide(x + ox, y, s, m.hex, Object.assign(K.pose('robot', 'run', tt), { dir, acc: m.acc }));
+          else K.ostrichSide(x + ox, y - 1, s * 0.95, m.hex, Object.assign(K.pose('ostrich', 'run', tt), { dir, acc: m.acc }));
         } else {
-          if (m.hero === 'robot') K.robot(x + off, y, s, m.hex, { t: tt, bob: Math.sin(tt * 3) * 3 });
-          else K.ostrich(x + off, y - 1, s * 0.95, m.hex, { t: tt, bob: Math.abs(Math.sin(tt * 2.6)) * 8 });
+          if (m.hero === 'robot') K.robot(x + off, y, s, m.hex, { t: tt, bob: Math.sin(tt * 3) * 3, acc: m.acc });
+          else K.ostrich(x + off, y - 1, s * 0.95, m.hex, { t: tt, bob: Math.abs(Math.sin(tt * 2.6)) * 8, acc: m.acc });
         }
       });
     }
+    // every box grows to fit its words, so text never spills off onto the map
+    const fit = (s, size, min) => { g.font = `${size}px ${FONT}`; return Math.max(min, Math.ceil(g.measureText(s).width) + 16); };
     function banner(text, x, y, w, align) {
+      w = fit(text, 9, w);
       K.rr(x, y, w, 15, 4, 'rgba(27,20,38,0.82)');
       g.font = `9px ${FONT}`; g.textAlign = align || 'left'; g.fillStyle = '#fff6d8';
       g.fillText(text, align === 'center' ? x + w / 2 : x + 6, y + 11);
@@ -218,7 +221,7 @@ const OW = (() => {
         if (n.kind === 'level') text = `${world.num}-${n.num}  ${n.label.toUpperCase()}`;
         else text = n.label.toUpperCase();
       }
-      const w = 172; K.rr((W - w) / 2, 214, w, 20, 5, 'rgba(27,20,38,0.86)');
+      const w = Math.min(W - 8, fit(text, 9, 172 - 40) + 40); K.rr((W - w) / 2, 214, w, 20, 5, 'rgba(27,20,38,0.86)');
       g.font = `9px ${FONT}`; g.textAlign = 'center'; g.fillStyle = '#fff6d8'; g.fillText(text, W / 2, 227);
       if (n && n.kind !== 'home') {
         const done = st.beaten.has(n.id);
@@ -226,7 +229,7 @@ const OW = (() => {
         if (done && n.kind === 'level') { g.font = `7px ${FONT}`; g.fillStyle = '#49d17a'; g.fillText('✓', (W - w) / 2 + 12, 227); }
       }
       if (st.msg && now - st.msg.t0 < 1.8) {
-        const k = Math.min(1, (now - st.msg.t0) * 6), wd = 150;
+        const k = Math.min(1, (now - st.msg.t0) * 6), wd = Math.min(W - 8, fit(st.msg.text, 9, 150));
         g.save(); g.globalAlpha = Math.min(1, (1.8 - (now - st.msg.t0)) * 3);
         K.rr((W - wd) / 2, 30 - (1 - k) * 8, wd, 18, 5, '#ffd23f');
         g.font = `9px ${FONT}`; g.fillStyle = '#2b2230'; g.textAlign = 'center'; g.fillText(st.msg.text, W / 2, 42 - (1 - k) * 8);
