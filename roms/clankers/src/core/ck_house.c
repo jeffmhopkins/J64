@@ -10,25 +10,26 @@
 const ck_room ck_rooms[CK_HOUSE_ROOMS] = {
     { 0, 320, "The yard", 0x8FD3FF, 0xBDE8FF, 0x5DBB63 },
     { 320, 560, "Parts shop", 0xF3C77B, 0xE9B865, 0x8A5A3C },
-    { 560, 800, "Kitchen", 0xBDE7D2, 0xA9DCC3, 0xD9CDB8 },
-    { 800, 1040, "Paint studio", 0xFFF1D6, 0xF6E1BA, 0x9C7552 },
-    { 1040, 1280, "Music room", 0xC9B8F0, 0xB8A3E9, 0x7A4E3A },
-    { 1280, 1520, "Aquarium", 0x9FD8F0, 0x88CBE6, 0x5D7C99 },
-    { 1520, 1760, "Bedroom", 0xFFD3E2, 0xFFC1D6, 0x8C6A55 },
+    { 560, 800, "Bedroom", 0xFFD3E2, 0xFFC1D6, 0x8C6A55 },
+    { 800, 1040, "Kitchen", 0xBDE7D2, 0xA9DCC3, 0xD9CDB8 },
+    { 1040, 1280, "Paint studio", 0xFFF1D6, 0xF6E1BA, 0x9C7552 },
+    { 1280, 1520, "Music room", 0xC9B8F0, 0xB8A3E9, 0x7A4E3A },
+    { 1520, 1760, "Aquarium", 0x9FD8F0, 0x88CBE6, 0x5D7C99 },
     { 1760, 2040, "Garage", 0xB5BAC4, 0xA4AAB6, 0x6E7280 },
 };
+// indexed by SPOT_*; the bedroom is next to the shop so saving is quick
 const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
     { 440, SPOT_SHOP, FURN_COUNTER, "Parts shop" },
-    { 612, SPOT_SNACK, FURN_FRIDGE, "Have a snack" },
-    { 920, SPOT_PAINT, FURN_EASEL, "Paint the mural" },
-    { 1160, SPOT_PIANO, FURN_PIANO, "Play the piano" },
-    { 1400, SPOT_AQUA, FURN_TANK, "Swim with the fish" },
-    { 1640, SPOT_BED, FURN_BED, "Sleep and save" },
+    { 852, SPOT_SNACK, FURN_FRIDGE, "Have a snack" },
+    { 1160, SPOT_PAINT, FURN_EASEL, "Paint the mural" },
+    { 1400, SPOT_PIANO, FURN_PIANO, "Play the piano" },
+    { 1640, SPOT_AQUA, FURN_TANK, "Swim with the fish" },
+    { 680, SPOT_BED, FURN_BED, "Sleep and save" },
     { 1900, SPOT_CARS, FURN_CAR, "Race the cars" },
 };
 const ck_decor ck_decors[CK_HOUSE_DECOR] = {
-    { 120, FURN_TREE }, { 262, FURN_MAILBOX }, { 690, FURN_STOVE }, { 752, FURN_TABLE }, { 1010, FURN_PLANT },
-    { 1240, FURN_DRUM }, { 1480, FURN_PLANT }, { 1720, FURN_LAMP }, { 2000, FURN_TOOLS },
+    { 120, FURN_TREE }, { 262, FURN_MAILBOX }, { 930, FURN_STOVE }, { 992, FURN_TABLE }, { 1250, FURN_PLANT },
+    { 1480, FURN_DRUM }, { 1720, FURN_PLANT }, { 760, FURN_LAMP }, { 2000, FURN_TOOLS },
 };
 const uint32_t ck_mural_pal[CK_MURAL_PAL] = { 0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230 };
 
@@ -216,9 +217,11 @@ static void paint_update(ck_game *G) {
         int s = p->slot, want = dir_x(G, s);
         p->vx += (want * 1.8f - p->vx) * 0.25f;
         if (want) p->face = want;
-        p->jet = HELD(G, s, CK_A);
-        if (p->jet) { p->vy = ck_maxf(-2.4f, p->vy - 0.32f); if ((int)(G->t * 60) % 6 == 0) ck_sfx(G, SFX_HOVER); }
-        else p->vy = ck_minf(2.5f, p->vy + 0.14f);
+        // no gravity: A (or up) flies up, down flies down, and letting go hovers in place
+        int wy = HELD(G, s, CK_A) || HELD(G, s, CK_UP) ? -1 : HELD(G, s, CK_DOWN) ? 1 : 0;
+        p->jet = wy < 0;
+        p->vy += (wy * 2.2f - p->vy) * 0.25f;
+        if (p->jet && (int)(G->t * 60) % 6 == 0) ck_sfx(G, SFX_HOVER);
         p->x = ck_clampf(p->x + p->vx, 10, CK_W - 10);
         p->y += p->vy;
         if (p->y > CK_MURAL_FLOOR) { p->y = CK_MURAL_FLOOR; p->vy = 0; }

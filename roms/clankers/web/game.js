@@ -822,8 +822,11 @@ function paintScene(house) {
     for (const p of S.ps) {
       const sl = p.m.slot, want = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
       p.vx += (want * 1.8 - p.vx) * 0.25; if (want) p.face = want;
-      p.jet = held(sl, 'a');
-      if (p.jet) { p.vy = Math.max(-2.4, p.vy - 0.32); if (S.t * 60 % 6 < 1) SND.fx.hover(); } else p.vy = Math.min(2.5, p.vy + 0.14);
+      // no gravity: A (or up) flies up, down flies down, and letting go hovers in place
+      const wy = held(sl, 'a') || held(sl, 'up') ? -1 : held(sl, 'down') ? 1 : 0;
+      p.jet = wy < 0;
+      p.vy += (wy * 2.2 - p.vy) * 0.25;
+      if (p.jet && S.t * 60 % 6 < 1) SND.fx.hover();
       p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
       if (p.y > MURAL.FLOOR) { p.y = MURAL.FLOOR; p.vy = 0; }
       if (p.y < MURAL.Y + 28) { p.y = MURAL.Y + 28; p.vy = 0; }
@@ -858,7 +861,7 @@ function paintScene(house) {
       K.circ(bx, by, 4, '#1b1426'); K.circ(bx, by, 3, c);
     }
     drawParticles(0);
-    text('A fly   B paint   L R colour   START done', W / 2, 11, 7, '#fff6d8', 'center', '#3a2618');
+    text('A up   v down   B paint   L R colour   START done', W / 2, 11, 7, '#fff6d8', 'center', '#3a2618');
   };
   return S;
 }
@@ -1019,7 +1022,7 @@ function pianoScene(house) {
     for (const n of S.notes) { n.y += n.vy; n.life--; } S.notes = S.notes.filter(n => n.life > 0);
   };
   S.draw = function () {
-    K.g = g; const KY = HOUSEART.KEYS, room = HL.rooms[4];
+    K.g = g; const KY = HOUSEART.KEYS, room = HL.rooms[5];
     g.fillStyle = hexStr(room[3]); g.fillRect(0, 0, W, H); g.fillStyle = hexStr(room[4]); for (let x = 12; x < W; x += 24) g.fillRect(x, 0, 10, KY.y);
     g.fillStyle = '#2b2833'; g.fillRect(KY.x - 8, KY.y - 14, KY.n * KY.w + 16, KY.h + 18);
     for (let w = 0; w < KY.n; w++) { K.rr(KY.x + w * KY.w + 1, KY.y, KY.w - 2, KY.h, 3, '#fff6d8'); }

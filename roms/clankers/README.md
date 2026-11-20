@@ -91,11 +91,11 @@ uses what you stand at.
 | Room | What Down does |
 | --- | --- |
 | Store | Opens the parts shop |
+| Bedroom | Sleep, and save the game to a slot |
 | Kitchen | A snack |
-| Paint room | Fly on the jetpack (A) and paint the wall mural (hold B); L and R change colour |
+| Paint room | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall mural (hold B); L and R change colour |
 | Music room | A piano: the stick picks a key, A plays it, B jumps an octave |
 | Aquarium | Dive into the tank with a bubble helmet and swim with the fish; crabs walk the dry side |
-| Bedroom | Sleep, and save the game to a slot |
 | Garage | A three-lap kart race, one or two players (A go, B brake) |
 
 The babies you have rescued wander about the house. Two players can play every room together,

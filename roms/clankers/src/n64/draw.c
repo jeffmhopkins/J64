@@ -1470,7 +1470,7 @@ static void draw_paint(const ck_game *G) {
         shape(SPR_DOT, bx, by, 3, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : 0xFFF6E6, 1);
     }
     particles(G, 0);
-    txt(F_SMALL, ST_CREAM, W / 2, 11, ALIGN_CENTER, "A fly   B paint   L R colour   START done");
+    txt(F_SMALL, ST_CREAM, W / 2, 11, ALIGN_CENTER, "A up   v down   B paint   L R colour   START done");
 }
 
 // The aquarium: the baked backdrop, swaying weed, then shrimp, fish, crabs and the heroes (with a
@@ -1544,7 +1544,7 @@ static void draw_cars(const ck_game *G) {
 // standing over the key under their hand.
 static void draw_piano(const ck_game *G) {
     const ck_house *Hs = &G->house;
-    const ck_room *room = &ck_rooms[4];
+    const ck_room *room = &ck_rooms[5];
     rect(0, 0, W, H, room->wall, 1);
     for (int x = 12; x < W; x += 24) rect(x, 0, 10, CK_KEYS_Y, room->stripe, 1);
     rect(CK_KEYS_X - 8, CK_KEYS_Y - 14, 14 * CK_KEYS_W + 16, CK_KEYS_H + 18, 0x2B2833, 1);

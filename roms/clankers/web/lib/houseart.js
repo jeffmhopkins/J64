@@ -14,25 +14,25 @@ const HOUSEART = (() => {
     rooms: [
       [0, 320, 'The yard', 0x8FD3FF, 0xBDE8FF, 0x5DBB63],
       [320, 560, 'Parts shop', 0xF3C77B, 0xE9B865, 0x8A5A3C],
-      [560, 800, 'Kitchen', 0xBDE7D2, 0xA9DCC3, 0xD9CDB8],
-      [800, 1040, 'Paint studio', 0xFFF1D6, 0xF6E1BA, 0x9C7552],
-      [1040, 1280, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
-      [1280, 1520, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
-      [1520, 1760, 'Bedroom', 0xFFD3E2, 0xFFC1D6, 0x8C6A55],
+      [560, 800, 'Bedroom', 0xFFD3E2, 0xFFC1D6, 0x8C6A55],
+      [800, 1040, 'Kitchen', 0xBDE7D2, 0xA9DCC3, 0xD9CDB8],
+      [1040, 1280, 'Paint studio', 0xFFF1D6, 0xF6E1BA, 0x9C7552],
+      [1280, 1520, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
+      [1520, 1760, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
       [1760, 2040, 'Garage', 0xB5BAC4, 0xA4AAB6, 0x6E7280],
     ],
-    // x, kind, what Down does there
+    // x, kind, what Down does there (the bedroom is next to the shop so saving is quick)
     spots: [
       [440, 'shop', 'Parts shop'],
-      [612, 'snack', 'Have a snack'],
-      [920, 'paint', 'Paint the mural'],
-      [1160, 'piano', 'Play the piano'],
-      [1400, 'aqua', 'Swim with the fish'],
-      [1640, 'bed', 'Sleep and save'],
+      [852, 'snack', 'Have a snack'],
+      [1160, 'paint', 'Paint the mural'],
+      [1400, 'piano', 'Play the piano'],
+      [1640, 'aqua', 'Swim with the fish'],
+      [680, 'bed', 'Sleep and save'],
       [1900, 'cars', 'Race the cars'],
     ],
     // decorations that are only looked at: x, furniture frame
-    decor: [[120, 'tree'], [262, 'mailbox'], [690, 'stove'], [752, 'table'], [1010, 'plant'], [1240, 'drum'], [1480, 'plant'], [1720, 'lamp'], [2000, 'tools']],
+    decor: [[120, 'tree'], [262, 'mailbox'], [930, 'stove'], [992, 'table'], [1250, 'plant'], [1480, 'drum'], [1720, 'plant'], [760, 'lamp'], [2000, 'tools']],
   };
   // furniture, by name; each fits in 96x96 standing on (0, 0)
   const F = {};
