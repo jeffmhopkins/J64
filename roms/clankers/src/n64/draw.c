@@ -37,7 +37,7 @@ static void drop(int id) {
 static bool is_big(int id) {
     static const int big[] = { SPR_TITLE, SPR_SELECT_BG, SPR_JET_SKY, SPR_JET_HILLS, SPR_CRANE, SPR_INTRO_NIGHT,
                                SPR_INTRO_STORM, SPR_INTRO_DAWN, SPR_CUT_FLOAT, SPR_CUT_ROCKET,
-                               SPR_AQUA_BG, SPR_TRACK_BG, SPR_HOUSE_FURN };
+                               SPR_AQUA_BG, SPR_AQUA_WATER, SPR_HOUSE_FURN };
     for (unsigned i = 0; i < sizeof big / sizeof *big; i++) if (big[i] == id) return true;
     // one of each per world or film
     for (int k = 0; k < CK_WORLDS; k++)
@@ -1324,7 +1324,7 @@ static void house_hero(const ck_game *G, int slot, float x, float y, int pose, f
     hero_acc(wear_of(G, slot), hero, fr, x, y, 1, flip, t);
 }
 static void cloud(float x, float y) { shape(SPR_DOT, x, y, 12, 0xFFFFFF, 1); shape(SPR_DOT, x + 12, y - 4, 14, 0xFFFFFF, 1); shape(SPR_DOT, x + 26, y, 11, 0xFFFFFF, 1); }
-static void draw_rooms(float cam, float t) {
+static void draw_rooms(const ck_game *G, float cam, float t) {
     for (int i = 0; i < CK_HOUSE_ROOMS; i++) {
         const ck_room *r = &ck_rooms[i];
         float a = r->x0 - cam, b = r->x1 - cam;
@@ -1350,7 +1350,6 @@ static void draw_rooms(float cam, float t) {
         rect(mid - w / 2 + 2, 30, w - 4, 11, 0xC98A4B, 1);
         txt(F_SMALL, ST_CREAM, mid, 39, ALIGN_CENTER, "%s", r->name);
     }
-    rect(ck_rooms[1].x0 - 20 - cam, 0, 30, CK_HOUSE_CEIL + 4, 0xA8432F, 1);
     for (int i = 1; i < CK_HOUSE_ROOMS; i++) {
         float x = ck_rooms[i].x0 - cam - CK_HOUSE_PILLAR / 2;
         if (x < -10 || x > W) continue;
@@ -1361,7 +1360,7 @@ static void draw_rooms(float cam, float t) {
     for (int i = 0; i < CK_HOUSE_DECOR; i++) { float x = ck_decors[i].x - cam; if (x > -60 && x < W + 60) blit(SPR_HOUSE_FURN, ck_decors[i].furn, x, CK_HOUSE_FLOOR); }
     for (int i = 0; i < CK_HOUSE_SPOTS; i++) {
         float x = ck_spots[i].x - cam;
-        if (x < -60 || x > W + 60) continue;
+        if (x < -60 || x > W + 60 || !ck_spot_here(G, i)) continue;
         blit(SPR_HOUSE_FURN, ck_spots[i].furn, x, CK_HOUSE_FLOOR);
         if (ck_spots[i].kind == SPOT_AQUA)   // fish swimming in the tank
             for (int k = 0; k < 3; k++) {
@@ -1395,7 +1394,7 @@ static void draw_slots(const ck_game *G) {
 static void draw_house(const ck_game *G) {
     const ck_house *Hs = &G->house;
     float cam = Hs->cam, t = G->t;
-    draw_rooms(cam, t);
+    draw_rooms(G, cam, t);
     for (int i = 0; i < Hs->nbabies; i++) {
         const ck_hbaby *b = &Hs->babies[i];
         float x = b->x - cam;
@@ -1407,17 +1406,19 @@ static void draw_house(const ck_game *G) {
         float x = p->x - cam, tt = t + p->slot * 0.7f;
         int pose = p->eat > 0 || Hs->mode == HM_SLEEP ? HP_CHEER : !p->ground ? HP_JUMP : fabsf(p->vx) > 0.3f ? HP_RUN : HP_IDLE;
         house_hero(G, p->slot, x, p->y, pose, tt, p->face);
-        if (p->eat > 0) { shape(SPR_DOT, x + 6, p->y - 22, 4, 0xC98A4B, 1); shape(SPR_DOT, x + 6, p->y - 22, 2.4f, 0xE8B46A, 1); }
+        if (p->eat > 0 && p->col == 1) { shape(SPR_DOT, x + 6, p->y - 22, 4, 0xE04F4F, 1); rect(x + 5.5f, p->y - 28, 1.2f, 3, 0x6F4630, 1); }
+        else if (p->eat > 0) { shape(SPR_DOT, x + 6, p->y - 22, 4, 0xC98A4B, 1); shape(SPR_DOT, x + 6, p->y - 22, 2.4f, 0xE8B46A, 1); }
     }
     // what Down does where you stand
     int shown = -1;
     if (Hs->mode == HM_WALK)
         for (int i = 0; i < Hs->np; i++) {
-            int k = ck_house_near(&Hs->ps[i]);
+            int k = ck_house_near(G, &Hs->ps[i]);
             if (k < 0 || k == shown) continue;
             shown = k;
             char s[32];
-            snprintf(s, sizeof s, "v %s", ck_spots[k].label);
+            if (ck_spots[k].kind == SPOT_BACK) snprintf(s, sizeof s, "A  Back to World %d", G->worldNum - 1);
+            else snprintf(s, sizeof s, "A  %s", ck_spots[k].label);
             float w = txt_w(F_SMALL, s) + 14, x = ck_spots[k].x - cam;
             dark_panel(x - w / 2, 120, w, 15);
             txt(F_SMALL, ST_PLAIN, x, 131, ALIGN_CENTER, "%s", s);
@@ -1473,78 +1474,158 @@ static void draw_paint(const ck_game *G) {
     txt(F_SMALL, ST_CREAM, W / 2, 11, ALIGN_CENTER, "A up   v down   B paint   L R colour   START done");
 }
 
-// The aquarium: the baked backdrop, swaying weed, then shrimp, fish, crabs and the heroes (with a
-// diving bubble round the head while in the water).
+// The aquarium, three screens wide: two water tiles then the baked beach screen, swaying weed,
+// fish food, then shrimp, fish, crabs and the heroes (a diving bubble round the head in the water).
 static void draw_aqua(const ck_game *G) {
     const ck_house *Hs = &G->house;
-    float t = G->t;
-    blit(SPR_AQUA_BG, 0, 0, 0);
-    static const float weeds[4][2] = { { 30, 40 }, { 52, 28 }, { 176, 46 }, { 196, 30 } };
-    for (int k = 0; k < 4; k++) {
-        float x0 = weeds[k][0], y0 = CK_AQUA_SEABED;
-        for (float y = 0; y > -weeds[k][1]; y -= 6) {
+    float t = G->t, cam = Hs->gcam;
+    for (int k = 0; k < 2; k++) if (k * W - cam > -W && k * W - cam < W) blit(SPR_AQUA_WATER, 0, k * W - cam, 0);
+    blit(SPR_AQUA_BG, 0, 2 * W - cam, 0);
+    for (int k = 0; k < 8; k++) {
+        float x0 = 30 + k * 110 + (k % 2) * 22 - cam, y0 = CK_AQUA_SEABED, hgt = 28 + (k * 37 % 3) * 9;
+        if (x0 < -10 || x0 > W + 10 || x0 + cam > CK_AQUA_BEACH_X - 40) continue;
+        for (float y = 0; y > -hgt; y -= 6) {
             float xa = x0 + sinf(t * 2 + y * 0.15f) * 3, xb = x0 + sinf(t * 2 + (y - 6) * 0.15f) * 3;
             line(xa, y0 + y, xb, y0 + y - 6, 3, 0x2F9A5A, 1);
         }
     }
-    for (int i = 0; i < CK_AQUA_SHRIMP; i++) { const ck_shrimp *s = &Hs->shrimp[i]; blit_o(SPR_HOUSE_SHRIMP, (int)(t * 6 + i) % 2, s->x, s->y - 3, (bopt){ .flip = s->face < 0 }); }
-    for (int i = 0; i < CK_AQUA_FISH; i++) { const ck_fish *f = &Hs->fish[i]; blit_o(SPR_HOUSE_FISH, f->kind * 2 + (int)(t * 6 + f->ph) % 2, f->x, f->y, (bopt){ .flip = f->vx < 0 }); }
-    for (int i = 0; i < CK_AQUA_CRABS; i++) { const ck_crab *c = &Hs->crabs[i]; blit(SPR_HOUSE_CRAB, c->snap > 0 && (c->snap / 5) % 2 == 0, c->x, CK_AQUA_BEACH_Y - 5); }
+    for (int i = 0; i < Hs->nfood; i++) shape(SPR_DOT, Hs->food[i].x - cam, Hs->food[i].y, 1.6f, 0xE8B46A, 1);
+    for (int i = 0; i < CK_AQUA_SHRIMP; i++) { const ck_shrimp *s = &Hs->shrimp[i]; blit_o(SPR_HOUSE_SHRIMP, (int)(t * 6 + i) % 2, s->x - cam, s->y - 3, (bopt){ .flip = s->face < 0 }); }
+    for (int i = 0; i < CK_AQUA_FISH; i++) {
+        const ck_fish *f = &Hs->fish[i];
+        float x = f->x - cam, wig = f->happy > 0 ? sinf(f->happy * 0.8f) * 0.25f : 0;
+        if (x < -20 || x > W + 20) continue;
+        blit_o(SPR_HOUSE_FISH, f->kind * 2 + (int)(t * (f->happy > 0 ? 14 : 6) + f->ph) % 2, x, f->y, (bopt){ .flip = f->vx < 0, .rot = wig });
+        if (f->happy > 20) shape(SPR_STAR, x, f->y - 12, 3, 0xFF8FC7, 1);
+    }
+    for (int i = 0; i < CK_AQUA_CRABS; i++) { const ck_crab *c = &Hs->crabs[i]; blit(SPR_HOUSE_CRAB, c->snap > 0 && (c->snap / 5) % 2 == 0, c->x - cam, CK_AQUA_BEACH_Y - 5); }
     for (int i = 0; i < Hs->np; i++) {
         const ck_hhero *p = &Hs->gs[i];
-        float tt = t + p->slot * 0.7f;
+        float tt = t + p->slot * 0.7f, x = p->x - cam;
         int pose = p->land ? (!p->ground ? HP_JUMP : fabsf(p->vx) > 0.3f ? HP_RUN : HP_IDLE) : HP_JUMP;
-        house_hero(G, p->slot, p->x, p->y, pose, tt, p->face);
+        house_hero(G, p->slot, x, p->y, pose, tt, p->face);
         if (!p->land) {
             float hy = p->y - 24;
-            shape(SPR_DOT, p->x, hy, 12, 0xBFF0FF, 0.3f);
-            shape(SPR_RING, p->x, hy, 12, 0xE6FCFF, 0.95f);
-            shape(SPR_DOT, p->x - 5, hy - 5, 2, 0xFFFFFF, 1);
+            shape(SPR_DOT, x, hy, 12, 0xBFF0FF, 0.3f);
+            shape(SPR_RING, x, hy, 12, 0xE6FCFF, 0.95f);
+            shape(SPR_DOT, x - 5, hy - 5, 2, 0xFFFFFF, 1);
         }
     }
-    particles(G, 0);
-    txt(F_SMALL, ST_DARK, W / 2, 14, ALIGN_CENTER, "Stick swim   A up   B bubble   START out");
+    particles(G, cam);
+    txt(F_SMALL, ST_DARK, W / 2, 14, ALIGN_CENTER, "Stick swim   A up   B feed the fish   START out");
 }
 
-// The garage race: the baked track, the karts turned to their heading, laps and the clock.
+// The garage race, side on: a lane per player, boxes and circles only (raceLane and carSide in
+// web/lib/houseart.js draw the same picture).
+static void race_lane(float top, float h, float cam) {
+    float ground = top + h - 22;
+    rect(0, top, W, h, 0x8FD3FF, 1);
+    for (int k = 0; k < 4; k++) { float x = fmodf(fmodf(k * 140 - cam * 0.3f, 560) + 560, 560) - 70; shape(SPR_DOT, x, ground, 46, 0x7FCF86, 1); }
+    rect(0, ground, W, top + h - ground, 0x5A5E6A, 1);
+    rect(0, ground, W, 2, 0xFFF6D8, 1);
+    for (float x = -fmodf(cam, 40); x < W; x += 40) rect(x, ground + 11, 20, 2, 0xFFF6D8, 1);
+    float fx = CK_RACE_LEN - cam + CK_RACE_CAR_X;
+    if (fx > -10 && fx < W + 10) {
+        rect(fx - 1, ground - 46, 2, 46, 0xC9B8C7, 1);
+        rect(fx + 1, ground - 46, 16, 10, 0xE04F4F, 1);
+        for (float y = ground; y < top + h; y += 4)
+            for (int k = 0; k < 2; k++) rect(fx - 4 + k * 4, y, 4, 4, ((int)((y - ground) / 4) + k) % 2 ? 0xFFFFFF : 0x1B1426, 1);
+    }
+    for (int i = 0; i < CK_RACE_OBST; i++) {
+        float ox, w, hh; int kind;
+        ck_race_obst(i, &ox, &kind, &w, &hh);
+        float x = ox - cam + CK_RACE_CAR_X;
+        if (x < -20 || x > W + 20) continue;
+        if (kind == OBST_CONE) {
+            for (int r = 0; r < hh; r += 2) rect(x - w / 2 * (1 - r / hh), ground - r - 2, w * (1 - r / hh), 2, r == 6 ? 0xFFFFFF : 0xFF8A3D, 1);
+            rect(x - w / 2 - 2, ground - 2, w + 4, 2, 0xFF8A3D, 1);
+        } else {
+            rect(x - w / 2, ground - hh, w, hh, 0x8A5A3C, 1);
+            rect(x - w / 2 + 2, ground - hh + 2, w - 4, hh - 4, 0xC98A4B, 1);
+            rect(x - 1, ground - hh + 2, 2, hh - 4, 0x8A5A3C, 1);
+        }
+    }
+}
+static void car_side(float x, float y, uint32_t hex) {
+    rect(x - 17, y - 16, 34, 10, hex, 1); rect(x - 8, y - 24, 14, 8, hex, 1);
+    rect(x - 5, y - 22, 9, 5, 0xBFF0FF, 1); rect(x + 14, y - 14, 3, 3, 0xFFE066, 1);
+    for (int k = -1; k <= 1; k += 2) { shape(SPR_DOT, x + k * 10, y - 5, 5, 0x1B1426, 1); shape(SPR_DOT, x + k * 10, y - 5, 2, 0xC9B8C7, 1); }
+}
 static void draw_cars(const ck_game *G) {
     const ck_house *Hs = &G->house;
-    char c[12];
-    blit(SPR_TRACK_BG, 0, 0, 0);
-    for (int i = 0; i < Hs->np; i++) {
+    char c[12], s[32];
+    int n = Hs->np;
+    float LH = n > 1 ? H / 2 : H;
+    for (int i = 0; i < n; i++) {
         const ck_hhero *k = &Hs->gs[i];
+        float top = i * LH, ground = top + LH - 22;
+        race_lane(top, LH, k->x);
         int col = skin_col(G, k->slot);
-        uint32_t hex = col < CK_NCOLS ? ck_cols[col] : 0xFFFFFF;
-        blit_o(SPR_CAR_TOP, 0, k->x, k->y, skin_o((bopt){ .rot = k->a, .tinted = true, .tint = hexc(hex, 255) }, col, G->t));
-        shape(SPR_DOT, k->x - 1, k->y, 3.2f, hex, 1);
-        shape(SPR_DOT, k->x - 1, k->y, 2, 0xFFF6D8, 1);
+        uint32_t hex;
+        if (col < CK_NCOLS) hex = ck_cols[col];
+        else { color_t rc = rainbow_col(G->t * 0.8f, 255); hex = (uint32_t)rc.r << 16 | (uint32_t)rc.g << 8 | rc.b; }
+        if (k->rep <= 0 || (int)(G->t * 15) % 2) car_side(CK_RACE_CAR_X, ground + k->y, hex);
+        rect(10, top + 4, 300, 5, 0x1B1426, 0.7f);
+        rect(10 + 296 * fminf(1, k->x / CK_RACE_LEN), top + 3, 4, 7, k->slot ? 0x8FD3FF : 0xFFD23F, 1);
+        if (n > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, 14, top + 22, ALIGN_LEFT, "P%d", k->slot + 1);
     }
+    if (n > 1) rect(0, LH - 1, W, 2, 0x1B1426, 1);
     particles(G, 0);
-    for (int i = 0; i < Hs->np; i++) {
-        const ck_hhero *k = &Hs->gs[i];
-        float x = i ? W - 92 : 6;
-        int lap = k->laps + 1 > CK_RACE_LAPS ? CK_RACE_LAPS : k->laps + 1;
-        dark_panel(x, 4, 86, 16);
-        if (Hs->np > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, x + 43, 15, ALIGN_CENTER, "P%d  Lap %d/%d", k->slot + 1, lap, CK_RACE_LAPS);
-        else txt(F_SMALL, ST_YELLOW, x + 43, 15, ALIGN_CENTER, "Lap %d/%d", lap, CK_RACE_LAPS);
-    }
-    if (Hs->np == 1) { dark_panel(W / 2 - 34, 4, 68, 16); txt(F_SMALL, ST_PLAIN, W / 2, 15, ALIGN_CENTER, "%s", clock_str((int)(Hs->clock * 60), c)); }
-    char s[32];
+    if (n == 1) { dark_panel(W / 2 - 34, 14, 68, 16); txt(F_SMALL, ST_PLAIN, W / 2, 25, ALIGN_CENTER, "%s", clock_str((int)(Hs->clock * 60), c)); }
     if (Hs->count > 0) { snprintf(s, sizeof s, "%d", (int)ceilf(Hs->count)); banner(F_HUGE, ST_YELLOW, 0xFFD23F, 100, 60, 34, 126, s); }
     else if (Hs->win < 0 && Hs->clock < 0.8f) banner(F_HUGE, ST_GREEN, 0x49D17A, 100, 80, 34, 126, "GO!");
     if (Hs->win >= 0) {
-        if (Hs->np > 1) snprintf(s, sizeof s, "P%d WINS!", Hs->gs[Hs->win].slot + 1);
-        else snprintf(s, sizeof s, "FINISHED  %s", clock_str((int)(Hs->clock * 60), c));
+        if (n > 1) snprintf(s, sizeof s, "P%d WINS!", Hs->gs[Hs->win].slot + 1);
+        else snprintf(s, sizeof s, "FINISHED  %s", clock_str((int)(Hs->gs[0].best * 60), c));
         banner(F_BIG, ST_YELLOW, 0xFFD23F, 98, 120, 30, 119, s);
     }
-    txt(F_SMALL, ST_CREAM, W / 2, H - 6, ALIGN_CENTER, "A go   B brake   START out");
+    txt(F_SMALL, ST_CREAM, W / 2, H - 4, ALIGN_CENTER, "A jump   START out");
 }
 
 // The music room's piano: the keys (lit while they sound), notes floating up, and each hero
 // standing over the key under their hand.
+static void draw_drums(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    const ck_room *room = &ck_rooms[4];
+    rect(0, 0, W, H, room->wall, 1);
+    for (int x = 12; x < W; x += 24) rect(x, 0, 10, 200, room->stripe, 1);
+    rect(0, 200, W, 40, room->floor, 1);
+    for (int k = 0; k < CK_DRUMS; k++) {
+        const ck_drum *d = &ck_drums[k];
+        float lit = Hs->lit[k] / 10.0f, r = d->r * (1 + lit * 0.12f);
+        rect(d->x - 1, d->y, 2, 200 - d->y, 0x5A5560, 1);
+        if (d->kind == DRUM_DRUM) {
+            shape(SPR_DOT, d->x, d->y, r + 3, 0x2B2833, 1);
+            shape(SPR_DOT, d->x, d->y, r, d->col, 1);
+            shape(SPR_DOT, d->x, d->y, r * 0.62f, 0xFFF6E6, 1);
+        } else if (d->kind == DRUM_CYMBAL) {
+            rect(d->x - r - 2, d->y - 4 - lit * 3, r * 2 + 4, 8, 0x2B2833, 1);
+            rect(d->x - r, d->y - 2 - lit * 3, r * 2, 4, d->col, 1);
+        } else {
+            shape(SPR_DOT, d->x - 6 + lit * 4, d->y, r * 0.6f, d->col, 1);
+            shape(SPR_DOT, d->x + 6 - lit * 4, d->y, r * 0.6f, d->col, 1);
+        }
+        if (lit > 0) shape(SPR_DOT, d->x, d->y, r + 4, 0xFFFFFF, lit * 0.5f);
+        rect(d->x - 8, d->y + r + 4, 16, 13, 0x1B1426, 1);
+        txt(F_SMALL, ST_PLAIN, d->x, d->y + r + 14, ALIGN_CENTER, "%s", d->button);
+    }
+    for (int i = 0; i < Hs->nnotes; i++) {
+        const ck_note_fx *n = &Hs->notes[i];
+        float a = fminf(1, n->life / 20.0f);
+        shape(SPR_DOT, n->x, n->y, 3.5f, n->col, a);
+        rect(n->x + 2.5f, n->y - 12, 1.6f, 12, n->col, a);
+    }
+    for (int i = 0; i < Hs->np; i++) {
+        const ck_hhero *p = &Hs->gs[i];
+        float bob = p->bounce > 0 ? sinf(p->bounce / 10.0f * PI) * 6 : 0;
+        house_hero(G, p->slot, i ? 296 : 24, 222 - bob, p->bounce > 0 ? HP_CHEER : HP_IDLE, G->t + i, 1);
+    }
+    txt(F_SMALL, ST_CREAM, W / 2, 14, ALIGN_CENTER, "Every button is a drum   START done");
+}
 static void draw_piano(const ck_game *G) {
     const ck_house *Hs = &G->house;
-    const ck_room *room = &ck_rooms[5];
+    if (Hs->drums) { draw_drums(G); return; }
+    const ck_room *room = &ck_rooms[4];
     rect(0, 0, W, H, room->wall, 1);
     for (int x = 12; x < W; x += 24) rect(x, 0, 10, CK_KEYS_Y, room->stripe, 1);
     rect(CK_KEYS_X - 8, CK_KEYS_Y - 14, 14 * CK_KEYS_W + 16, CK_KEYS_H + 18, 0x2B2833, 1);

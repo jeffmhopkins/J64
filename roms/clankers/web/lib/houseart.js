@@ -9,30 +9,32 @@ const HOUSEART = (() => {
   const K = CK, P = Math.PI;
   const hx = h => '#' + h.toString(16).padStart(6, '0');
   const LAYOUT = {
-    W: 2040, FLOOR: 200, CEIL: 20, PILLAR: 8, DOOR_TOP: 120,
+    W: 1440, FLOOR: 200, CEIL: 20, PILLAR: 8, DOOR_TOP: 120,
     // x0, x1, name, wall, stripe, floor
     rooms: [
       [0, 320, 'The yard', 0x8FD3FF, 0xBDE8FF, 0x5DBB63],
-      [320, 560, 'Parts shop', 0xF3C77B, 0xE9B865, 0x8A5A3C],
-      [560, 800, 'Bedroom', 0xFFD3E2, 0xFFC1D6, 0x8C6A55],
-      [800, 1040, 'Kitchen', 0xBDE7D2, 0xA9DCC3, 0xD9CDB8],
-      [1040, 1280, 'Paint studio', 0xFFF1D6, 0xF6E1BA, 0x9C7552],
-      [1280, 1520, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
-      [1520, 1760, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
-      [1760, 2040, 'Garage', 0xB5BAC4, 0xA4AAB6, 0x6E7280],
+      [320, 500, 'Bedroom', 0xFFD3E2, 0xFFC1D6, 0x8C6A55],
+      [500, 680, 'Kitchen', 0xBDE7D2, 0xA9DCC3, 0xD9CDB8],
+      [680, 860, 'Paint studio', 0xFFF1D6, 0xF6E1BA, 0x9C7552],
+      [860, 1040, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
+      [1040, 1220, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
+      [1220, 1440, 'Garage', 0xB5BAC4, 0xA4AAB6, 0x6E7280],
     ],
-    // x, kind, what Down does there (the bedroom is next to the shop so saving is quick)
+    // x, kind, what A does there, in SPOT_* order (the bedroom is first so saving is quick)
     spots: [
-      [440, 'shop', 'Parts shop'],
-      [852, 'snack', 'Have a snack'],
-      [1160, 'paint', 'Paint the mural'],
-      [1400, 'piano', 'Play the piano'],
-      [1640, 'aqua', 'Swim with the fish'],
-      [680, 'bed', 'Sleep and save'],
-      [1900, 'cars', 'Race the cars'],
+      [535, 'snack', 'Have a snack'],
+      [770, 'paint', 'Paint the mural'],
+      [925, 'piano', 'Play the piano'],
+      [1130, 'aqua', 'Swim with the fish'],
+      [410, 'bed', 'Sleep and save'],
+      [1320, 'cars', 'Race the cars'],
+      [1005, 'drums', 'Play the drums'],
+      [262, 'mail', 'Check the mail'],
+      [120, 'tree', 'Pick an apple'],
+      [44, 'back', 'Back a world'],
     ],
     // decorations that are only looked at: x, furniture frame
-    decor: [[120, 'tree'], [262, 'mailbox'], [930, 'stove'], [992, 'table'], [1250, 'plant'], [1480, 'drum'], [1720, 'plant'], [760, 'lamp'], [2000, 'tools']],
+    decor: [[605, 'stove'], [648, 'table'], [840, 'plant'], [1205, 'plant'], [475, 'lamp'], [1410, 'tools']],
   };
   // furniture, by name; each fits in 96x96 standing on (0, 0)
   const F = {};
@@ -102,9 +104,11 @@ const HOUSEART = (() => {
   F.plant = g => { K.rr(-9, -16, 18, 16, 3, '#c9683f'); for (const [a, l] of [[-0.6, 22], [0, 28], [0.6, 22], [-0.3, 18], [0.3, 18]]) { g.save(); g.translate(0, -16); g.rotate(a); K.rr(-3, -l, 6, l, 3, '#3f9d4e'); g.restore(); } };
   F.drum = g => { K.rr(-16, -26, 32, 26, 5, '#e04f4f'); K.rr(-16, -28, 32, 5, 2, '#fff6d8'); for (let k = 0; k < 4; k++) K.rr(-14 + k * 9, -22, 2, 20, 1, '#ffd23f'); K.rr(-20, -40, 2, 14, 1, '#c9b8c7'); K.rr(-26, -42, 14, 3, 1, '#ffd23f'); };
   F.lamp = g => { K.rr(-2, -50, 4, 50, 1, '#7d8494'); K.rr(-10, -4, 20, 4, 2, '#7d8494'); g.fillStyle = '#ffe9a8'; g.beginPath(); g.moveTo(-12, -48); g.lineTo(12, -48); g.lineTo(7, -66); g.lineTo(-7, -66); g.fill(); };
+  // the yard's signpost back to the last world
+  F.sign = g => { K.rr(-2, -40, 4, 40, 1, '#8a5a3c'); K.rr(-20, -44, 36, 14, 3, '#c98a4b'); K.rr(-26, -42, 8, 10, 2, '#c98a4b'); K.rr(-17, -41, 30, 2, 1, '#e8b46a'); K.rr(-14, -37, 22, 2, 1, '#6f4630'); };
   F.tools = g => { K.rr(-26, -60, 52, 46, 3, '#8a7a6a'); for (let i = 0; i < 6; i++) K.circ(-20 + i * 8, -52, 1.2, '#5a4e42'); K.rr(-20, -48, 4, 18, 1, '#e04f4f'); K.rr(-12, -46, 12, 4, 1, '#9aa1b0'); K.rr(4, -50, 3, 20, 1, '#ffd23f'); K.rr(12, -44, 8, 8, 4, '#9aa1b0'); K.rr(-28, -14, 56, 14, 3, '#e04f4f'); K.rr(-28, -14, 56, 3, 1, '#ff8a8a'); };
-  const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools'];
-  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car' };
+  const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools', 'sign'];
+  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign' };
   function furn(g, name, x, y) { g.save(); g.translate(x, y); F[name](g); g.restore(); }
 
   // ---- the little creatures (drawn around (0, 0), facing right)
@@ -130,49 +134,87 @@ const HOUSEART = (() => {
   function weed(g, t, h) { g.strokeStyle = '#2f9a5a'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); for (let y = 0; y > -h; y -= 6) g.lineTo(Math.sin(t * 2 + y * 0.15) * 3, y - 6); g.stroke(); }
 
   // ---- the aquarium swim: water on the left, a dry sandy beach with crabs on the right
-  const AQUA = { WATER_TOP: 44, SEABED: 222, BEACH_X: 236, BEACH_Y: 182 };
-  function aquaBg(g) {
+  const AQUA = { W: 960, WATER_TOP: 44, SEABED: 222, BEACH_X: 876, BEACH_LX: 236, BEACH_Y: 182 };   // BEACH_LX: on the last screen
+  // the aquarium's last screen, with the beach (beach = false: one of the plain water screens before it)
+  function aquaBg(g, beach = true) {
+    const BX = beach ? AQUA.BEACH_LX : 330;
     const gr = g.createLinearGradient(0, 0, 0, 240); gr.addColorStop(0, '#bfe9ff'); gr.addColorStop(1, '#8fd3ff'); g.fillStyle = gr; g.fillRect(0, 0, 320, 240);
-    const w = g.createLinearGradient(0, AQUA.WATER_TOP, 0, 240); w.addColorStop(0, '#3fa9de'); w.addColorStop(1, '#1d5f9e'); g.fillStyle = w; g.fillRect(0, AQUA.WATER_TOP, AQUA.BEACH_X + 10, 240 - AQUA.WATER_TOP);
-    g.fillStyle = 'rgba(255,255,255,0.08)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(20 + i * 40, AQUA.WATER_TOP); g.lineTo(40 + i * 40, AQUA.WATER_TOP); g.lineTo(10 + i * 40, 230); g.lineTo(-10 + i * 40, 230); g.fill(); }
+    const w = g.createLinearGradient(0, AQUA.WATER_TOP, 0, 240); w.addColorStop(0, '#3fa9de'); w.addColorStop(1, '#1d5f9e'); g.fillStyle = w; g.fillRect(0, AQUA.WATER_TOP, BX + 10, 240 - AQUA.WATER_TOP);
+    g.fillStyle = 'rgba(255,255,255,0.08)'; for (let i = 0; i < (beach ? 6 : 8); i++) { g.beginPath(); g.moveTo(20 + i * 40, AQUA.WATER_TOP); g.lineTo(40 + i * 40, AQUA.WATER_TOP); g.lineTo(10 + i * 40, 230); g.lineTo(-10 + i * 40, 230); g.fill(); }
     g.fillStyle = '#e8c98a'; g.fillRect(0, AQUA.SEABED, 320, 240 - AQUA.SEABED);
-    // the beach rises out of the water
-    g.fillStyle = '#f0d49a'; g.beginPath(); g.moveTo(AQUA.BEACH_X - 30, AQUA.SEABED); g.lineTo(AQUA.BEACH_X, AQUA.BEACH_Y); g.lineTo(320, AQUA.BEACH_Y); g.lineTo(320, 240); g.lineTo(AQUA.BEACH_X - 30, 240); g.fill();
-    K.rr(AQUA.BEACH_X, AQUA.BEACH_Y, 84, 3, 1, '#ffe2a8');
-    for (const [x, y, r] of [[258, 182, 9], [300, 184, 12], [70, 222, 10], [160, 224, 8]]) { g.fillStyle = '#9a8f84'; g.beginPath(); g.ellipse(x, y, r, r * 0.7, 0, P, 0); g.fill(); }
-    // a palm on the beach, a treasure chest on the seabed
-    K.rr(300, 120, 6, 62, 3, '#8a5a3c'); for (const a of [-2.6, -2.0, -1.2, -0.5]) { g.save(); g.translate(303, 122); g.rotate(a); K.rr(0, -3, 26, 6, 3, '#3f9d4e'); g.restore(); }
-    K.rr(108, 208, 22, 14, 3, '#a8672f'); K.rr(108, 206, 22, 6, 3, '#c98a4b'); K.rr(117, 210, 4, 4, 1, '#ffd23f');
-    // the glass of the tank: a frame round the water
-    K.rr(0, AQUA.WATER_TOP - 6, AQUA.BEACH_X + 10, 4, 1, 'rgba(255,255,255,0.5)');
+    if (beach) {   // the beach rises out of the water, with a palm on it
+      g.fillStyle = '#f0d49a'; g.beginPath(); g.moveTo(BX - 30, AQUA.SEABED); g.lineTo(BX, AQUA.BEACH_Y); g.lineTo(320, AQUA.BEACH_Y); g.lineTo(320, 240); g.lineTo(BX - 30, 240); g.fill();
+      K.rr(BX, AQUA.BEACH_Y, 84, 3, 1, '#ffe2a8');
+      for (const [x, y, r] of [[258, 182, 9], [300, 184, 12], [70, 222, 10], [160, 224, 8]]) { g.fillStyle = '#9a8f84'; g.beginPath(); g.ellipse(x, y, r, r * 0.7, 0, P, 0); g.fill(); }
+      K.rr(300, 120, 6, 62, 3, '#8a5a3c'); for (const a of [-2.6, -2.0, -1.2, -0.5]) { g.save(); g.translate(303, 122); g.rotate(a); K.rr(0, -3, 26, 6, 3, '#3f9d4e'); g.restore(); }
+    } else {       // rocks, a treasure chest and a sunken bolt on the seabed
+      for (const [x, y, r] of [[40, 222, 12], [210, 223, 9], [290, 222, 14]]) { g.fillStyle = '#9a8f84'; g.beginPath(); g.ellipse(x, y, r, r * 0.7, 0, P, 0); g.fill(); }
+      K.rr(108, 208, 22, 14, 3, '#a8672f'); K.rr(108, 206, 22, 6, 3, '#c98a4b'); K.rr(117, 210, 4, 4, 1, '#ffd23f');
+      K.rr(250, 214, 14, 6, 2, '#c9b8c7'); K.rr(255, 210, 4, 12, 1, '#c9b8c7');
+    }
+    // the glass of the tank: a frame along the water's top
+    K.rr(0, AQUA.WATER_TOP - 6, Math.min(320, BX + 10), 4, 1, 'rgba(255,255,255,0.5)');
   }
-  // ---- the garage race: an oval track seen from above
-  const TRACK = { cx: 160, cy: 130, ox: 150, oy: 100, ix: 92, iy: 48 };
-  function trackBg(g) {
-    g.fillStyle = '#5dbb63'; g.fillRect(0, 0, 320, 240);
-    for (let i = 0; i < 60; i++) { const x = (i * 71) % 320, y = (i * 113) % 240; K.circ(x, y, 1.2, '#4fa856'); }
-    const T = TRACK;
-    g.fillStyle = '#e04f4f'; g.beginPath(); g.ellipse(T.cx, T.cy, T.ox + 4, T.oy + 4, 0, 0, P * 2); g.fill();
-    g.fillStyle = '#ffffff'; for (let a = 0; a < P * 2; a += P / 16) { g.beginPath(); g.ellipse(T.cx, T.cy, T.ox + 4, T.oy + 4, 0, a, a + P / 32); g.lineTo(T.cx, T.cy); g.fill(); }
-    g.fillStyle = '#5a5e6a'; g.beginPath(); g.ellipse(T.cx, T.cy, T.ox, T.oy, 0, 0, P * 2); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1.5; g.setLineDash([8, 8]); g.beginPath(); g.ellipse(T.cx, T.cy, (T.ox + T.ix) / 2, (T.oy + T.iy) / 2, 0, 0, P * 2); g.stroke(); g.setLineDash([]);
-    g.fillStyle = '#e04f4f'; g.beginPath(); g.ellipse(T.cx, T.cy, T.ix, T.iy, 0, 0, P * 2); g.fill();
-    g.fillStyle = '#5dbb63'; g.beginPath(); g.ellipse(T.cx, T.cy, T.ix - 4, T.iy - 4, 0, 0, P * 2); g.fill();
-    // the finish line across the top of the track, checkered
-    const y0 = T.cy - T.oy, y1 = T.cy - T.iy;
-    for (let y = y0; y < y1; y += 4) for (let k = 0; k < 2; k++) { g.fillStyle = ((y - y0) / 4 + k) % 2 ? '#ffffff' : '#1b1426'; g.fillRect(T.cx - 4 + k * 4, y, 4, 4); }
-    // a little stand of babies' flags in the middle
-    K.rr(120, 118, 80, 22, 4, '#c98a4b'); K.rr(124, 122, 72, 14, 3, '#e8b46a');
-    for (let i = 0; i < 5; i++) { K.rr(128 + i * 16, 104, 2, 16, 1, '#7d8494'); K.rr(130 + i * 16, 104, 9, 6, 1, ['#ff5a5a', '#ffd23f', '#49d17a', '#5ad1ff', '#c28bff'][i]); }
+
+  // ---- the garage race, side on: a lane per player (RACE.len long), cones and crates to jump.
+  // Only boxes and circles, so the N64 (draw_cars) draws the same picture.
+  const RACE = { len: 2400, obst: 12, carX: 80 };
+  const raceObst = i => { const kind = (i * 7) % 3 === 0 ? 'crate' : 'cone'; return { x: 360 + i * 170 + (i * 53 % 4) * 25, kind, w: kind === 'crate' ? 20 : 14, h: kind === 'crate' ? 20 : 14 }; };
+  const box = (g, x, y, w, h, c) => { g.fillStyle = typeof c === 'number' ? hx(c) : c; g.fillRect(x, y, w, h); };
+  const dot = (g, x, y, r, c) => { g.fillStyle = hx(c); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+  function raceLane(g, top, h, cam) {
+    const ground = top + h - 22;
+    box(g, 0, top, 320, h, 0x8FD3FF);
+    for (let k = 0; k < 4; k++) { const x = ((k * 140 - cam * 0.3) % 560 + 560) % 560 - 70; dot(g, x, ground, 46, 0x7FCF86); }
+    box(g, 0, ground, 320, top + h - ground, 0x5A5E6A);
+    box(g, 0, ground, 320, 2, 0xFFF6D8);
+    for (let x = -(cam % 40); x < 320; x += 40) box(g, x, ground + 11, 20, 2, 0xFFF6D8);
+    const fx = RACE.len - cam + RACE.carX;
+    if (fx > -10 && fx < 330) {
+      box(g, fx - 1, ground - 46, 2, 46, 0xC9B8C7); box(g, fx + 1, ground - 46, 16, 10, 0xE04F4F);
+      for (let y = ground; y < top + h; y += 4) for (let k = 0; k < 2; k++) box(g, fx - 4 + k * 4, y, 4, 4, ((y - ground) / 4 + k) % 2 ? 0xFFFFFF : 0x1B1426);
+    }
+    for (let i = 0; i < RACE.obst; i++) {
+      const o = raceObst(i), x = o.x - cam + RACE.carX;
+      if (x < -20 || x > 340) continue;
+      if (o.kind === 'cone') { for (let r = 0; r < o.h; r += 2) box(g, x - o.w / 2 * (1 - r / o.h), ground - r - 2, o.w * (1 - r / o.h), 2, r === 6 ? 0xFFFFFF : 0xFF8A3D); box(g, x - o.w / 2 - 2, ground - 2, o.w + 4, 2, 0xFF8A3D); }
+      else { box(g, x - o.w / 2, ground - o.h, o.w, o.h, 0x8A5A3C); box(g, x - o.w / 2 + 2, ground - o.h + 2, o.w - 4, o.h - 4, 0xC98A4B); box(g, x - 1, ground - o.h + 2, 2, o.h - 4, 0x8A5A3C); }
+    }
+    return ground;
   }
-  // a car from above, pointing right (+x), in white so it can be tinted; the driver's head on top
-  function carTop(g, hex) {
-    const c = hex == null ? '#ffffff' : hx(hex);
-    K.rr(-11, -8, 4, 4, 1, '#1b1426'); K.rr(5, -8, 4, 4, 1, '#1b1426'); K.rr(-11, 4, 4, 4, 1, '#1b1426'); K.rr(5, 4, 4, 4, 1, '#1b1426');
-    K.rr(-12, -6, 24, 12, 4, c); K.rr(6, -4, 6, 8, 2, c); K.rr(-12, -5, 3, 10, 1, '#d8d8d8');
-    K.rr(1, -4, 4, 8, 1, '#bff0ff');
+  // a car side on, facing right, standing on (x, y)
+  function carSide(g, x, y, hex) {
+    box(g, x - 17, y - 16, 34, 10, hex); box(g, x - 8, y - 24, 14, 8, hex);
+    box(g, x - 5, y - 22, 9, 5, 0xBFF0FF); box(g, x + 14, y - 14, 3, 3, 0xFFE066);
+    for (const wx of [-10, 10]) { dot(g, x + wx, y - 5, 5, 0x1B1426); dot(g, x + wx, y - 5, 2, 0xC9B8C7); }
   }
   // ---- the piano keyboard for the music game: 2 octaves from C4, 14 white keys
   const KEYS = { x: 20, y: 150, w: 20, h: 80, bw: 12, bh: 48, n: 14 };
-  return { LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, TRACK, trackBg, carTop, KEYS, hx };
+  // the drum kit (ck_drums in ck_house.c): btn is the button that hits it; x, y, r on the screen
+  const DRUMS = [
+    ['Kick', 'A', 'a', 'drum', 160, 172, 34, 0xE04F4F], ['Snare', 'B', 'b', 'drum', 104, 160, 20, 0xFFF6D8],
+    ['Hi-hat', 'C', 'c', 'cymbal', 62, 120, 22, 0xFFD23F], ['Crash', 'L', 'l', 'cymbal', 92, 72, 26, 0xFFD23F],
+    ['Cowbell', 'R', 'r', 'cymbal', 232, 72, 18, 0xC9B8C7], ['Tom', '^', 'up', 'drum', 136, 112, 18, 0x5AD1FF],
+    ['Tom', '<', 'left', 'drum', 184, 112, 18, 0x49D17A], ['Floor tom', 'v', 'down', 'drum', 226, 158, 24, 0xC28BFF],
+    ['Clap', '>', 'right', 'hands', 276, 120, 18, 0xFF8FC7],
+  ].map(([name, label, btn, kind, x, y, r, col]) => ({ name, label, btn, kind, x, y, r, col }));
+  // one piece; lit 0..1 brightens it after a hit (the N64 draws the same boxes and circles)
+  const drumPiece = (g, d, lit) => {
+    const c = hx(d.col), s = 1 + lit * 0.12, r = d.r * s;
+    g.fillStyle = '#5a5560'; g.fillRect(d.x - 1, d.y, 2, 200 - d.y);
+    if (d.kind === 'drum') {
+      g.fillStyle = '#2b2833'; g.beginPath(); g.arc(d.x, d.y, r + 3, 0, Math.PI * 2); g.fill();
+      g.fillStyle = c; g.beginPath(); g.arc(d.x, d.y, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fff6e6'; g.beginPath(); g.arc(d.x, d.y, r * 0.62, 0, Math.PI * 2); g.fill();
+    } else if (d.kind === 'cymbal') {
+      g.fillStyle = '#2b2833'; g.fillRect(d.x - r - 2, d.y - 4 - lit * 3, r * 2 + 4, 8);
+      g.fillStyle = c; g.fillRect(d.x - r, d.y - 2 - lit * 3, r * 2, 4);
+    } else {
+      g.fillStyle = c; g.beginPath(); g.arc(d.x - 6 + lit * 4, d.y, r * 0.6, 0, Math.PI * 2); g.arc(d.x + 6 - lit * 4, d.y, r * 0.6, 0, Math.PI * 2); g.fill();
+    }
+    if (lit > 0) { g.globalAlpha = lit * 0.5; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(d.x, d.y, r + 4, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
+    g.fillStyle = '#1b1426'; g.fillRect(d.x - 8, d.y + r + 4, 16, 13);
+    g.fillStyle = '#fff6d8'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.fillText(d.label, d.x, d.y + r + 14);
+  };
+  return { DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, RACE, raceObst, raceLane, carSide, KEYS, hx };
 })();

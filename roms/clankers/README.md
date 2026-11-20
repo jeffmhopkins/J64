@@ -57,7 +57,7 @@ progress, and a save from before Worlds 2 to 4 carries on as World 1.
 | Button | In a level | On the map |
 | --- | --- | --- |
 | Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
-| A | Jump (hold to jump higher), again in the air for a double jump; hold to glide (jetpack or flapping) | Enter a level or the parts shop; on the exit, go to the next world; at home, go back a world |
+| A | Jump (hold to jump higher), again in the air for a double jump; hold to glide (jetpack or flapping) | Enter a level, the parts shop or the house; on the exit, go to the next world |
 | B or C-left | Action: grab, throw, shoot (bubbles when the bubble gun is on) | |
 | C-up, C-down or C-right | With the bubble gun bought: switch between the gun and grab or kick | |
 | Start | Pause | Menu: keep playing, change heroes, let player 2 leave, or start a new game |
@@ -85,18 +85,19 @@ CRT scanlines on or off. A second controller plays the ostrich.
 <a id="house"></a>
 ## The house
 
-The house on each map is your home. You start in the yard and walk right through the rooms; Down
-uses what you stand at.
+Each world's map starts at the heroes' house. You start in the yard and walk right through the
+rooms; A uses what you stand at, and A anywhere else jumps. Walk off the yard's left edge to go
+back to the map.
 
-| Room | What Down does |
+| Room | What A does there |
 | --- | --- |
-| Store | Opens the parts shop |
+| Yard | Pick an apple off the tree, read a letter from the mailbox; from World 2 on, the signpost goes back a world |
 | Bedroom | Sleep, and save the game to a slot |
-| Kitchen | A snack |
-| Paint room | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall mural (hold B); L and R change colour |
-| Music room | A piano: the stick picks a key, A plays it, B jumps an octave |
-| Aquarium | Dive into the tank with a bubble helmet and swim with the fish; crabs walk the dry side |
-| Garage | A three-lap kart race, one or two players (A go, B brake) |
+| Kitchen | A snack fills the batteries |
+| Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall mural (hold B); L and R change colour |
+| Music room | The piano (the stick picks a key, A plays it, B jumps an octave) or the drums (every button is a different drum) |
+| Aquarium | Dive into a tank three screens wide with a bubble helmet; B feeds the fish, and swimming into one boops it; crabs walk the beach |
+| Garage | A side-on race, a lane each for two players: the cars drive themselves and A jumps the cones and crates |
 
 The babies you have rescued wander about the house. Two players can play every room together,
 and START leaves a game.
@@ -104,7 +105,7 @@ and START leaves a game.
 <a id="shop"></a>
 ## The parts shop
 
-The store in the house is the parts shop. Bolts buy 36 accessories in five slots: hats, face
+The shop on each map is the parts shop. Bolts buy 36 accessories in five slots: hats, face
 (glasses, goggles, a mustache), neck, outfits (with sleeves) and shoes. Each player has a cursor;
 A buys an item and puts it on, and on an owned item A puts it on or takes it off. Items in
 different slots stack, one per slot. The rainbow cap, disco suit and light-up shoes cycle through

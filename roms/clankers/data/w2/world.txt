@@ -9,10 +9,10 @@ babies: FFB347 8FD3FF C28BFF 49F08A
 boss-msg: Fixed! The mine lift is running
 
 # node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
-node home   2 3   home   "Factory gate"
+node home   2 3   home   "Our house"
 node l1     6 3   level  "Conveyor Corridor"          level=2-1
 node l2     6 8   level  "Gear Climb"                 level=2-2
-node shop   3 8   shop   "Our house"
+node shop   3 8   shop   "Parts shop"
 node l3     11 8  level  "Paint Shop"                 level=2-3
 node bonus  11 4  bonus  "Bonus · Spin Room"          level=bonus gate=3
 node boss   14 12 boss   "Big Glitch · The Stamper"   level=boss

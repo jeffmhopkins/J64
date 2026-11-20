@@ -50,6 +50,16 @@ const SND = (() => {
   }
   const fx = {
     jump: () => tone(330, 0.16, 'square', 0.18, 0, 2.2),
+    // the drum kit, in HOUSEART.DRUMS order (the same sounds as ck_audio.c)
+    drum0: () => { tone(150, 0.28, 'sine', 0.6, 0, 0.3); noise(0.02, 0.25, 0, 3000); },
+    drum1: () => { noise(0.18, 0.4, 0, 1500, undefined, 'highpass'); tone(190, 0.1, 'triangle', 0.25, 0, 0.7); },
+    drum2: () => noise(0.05, 0.25, 0, 7000, undefined, 'highpass'),
+    drum3: () => { noise(0.9, 0.3, 0, 5000, undefined, 'highpass'); noise(0.5, 0.15, 0, 3000); },
+    drum4: () => { tone(560, 0.25, 'square', 0.12); tone(845, 0.25, 'square', 0.1); },
+    drum5: () => tone(240, 0.3, 'sine', 0.45, 0, 0.6),
+    drum6: () => tone(170, 0.32, 'sine', 0.48, 0, 0.6),
+    drum7: () => tone(110, 0.4, 'sine', 0.5, 0, 0.6),
+    drum8: () => { for (const w of [0, 0.015, 0.03]) noise(0.02, 0.35, w, 1400); noise(0.15, 0.25, 0.045, 1400); },
     note: f => { tone(f, 0.7, 'triangle', 0.32); tone(f * 2, 0.25, 'sine', 0.06); },
     boost: () => { noise(0.3, 0.25, 0, 1800); tone(220, 0.22, 'sawtooth', 0.1, 0, 2.6); },
     flap: () => tone(520, 0.06, 'triangle', 0.14, 0, 1.5),
@@ -428,12 +438,12 @@ const mapScene = {
         const n = MAP.here(); if (!n) continue;
         prog.at = n.id; saveProg();
         if ((n.kind === 'level' || n.kind === 'boss' || n.kind === 'bonus') && LEVELS[n.id]) { SND.fx.confirm(); go(levelScene(n.id)); }
-        else if (n.kind === 'shop') { SND.fx.confirm(); go(houseScene()); }
+        else if (n.kind === 'shop') { SND.fx.confirm(); go(shopScene()); }
+        else if (n.kind === 'home') { SND.fx.confirm(); go(houseScene()); }
         else if (n.kind === 'exit') {
           if (WORLD_FILES[worldNum + 1] || worldNum >= 4) { SND.fx.confirm(); go(cutScene(worldNum)); }
           else { SND.fx.nope(); MAP.say('World ' + (worldNum + 1) + ' is coming soon!'); }
         }
-        else if (n.kind === 'home' && worldNum > 1) { SND.fx.confirm(); enterWorld(worldNum - 1, 'exit'); }
         else { MAP.say('Home sweet home'); }
       }
     }
@@ -658,26 +668,34 @@ function houseBabies() {
 // a little rng the N64 copies exactly, so the babies start in the same places
 const hrng = s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x80000000;
 function houseScene(from) {
-  const S = { song: 'select', t: 0, cam: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, snack: [false, false] };
+  const S = { song: 'select', t: 0, cam: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, snack: [false, false] };
   const team = activeParty(), q = hrng(7);
-  const spawnX = from === 'shop' ? HL.spots[0][0] : 200;
+  const spawnX = 200;
   S.ps = team.map((m, i) => ({ m, x: spawnX - 10 + i * 20, y: HL.FLOOR, vx: 0, vy: 0, face: 1, ground: true, anim: 0, eatT: 0 }));
   S.babies = houseBabies().map((hex, i) => {
     const r = i % (HL.rooms.length), [x0, x1] = HL.rooms[r];
     return { hex, x: x0 + 30 + q() * (x1 - x0 - 60), x0: x0 + 14, x1: x1 - 14, vx: (q() < 0.5 ? -1 : 1) * (0.3 + q() * 0.3), hopT: 0, vy: 0, y: 0, wait: Math.floor(q() * 120) };
   });
-  const near = p => HL.spots.findIndex(([x]) => Math.abs(p.x - x) < 22);
+  const here = k => HL.spots[k][1] !== 'back' || worldNum > 1;   // the signpost is there from World 2 on
+  const near = p => HL.spots.findIndex(([x], k) => here(k) && Math.abs(p.x - x) < 22);
   const leave = () => { SND.fx.select(); saveProg(); go(mapScene); };
   function useSpot(k, p, i) {
     const kind = HL.spots[k][1];
-    if (kind === 'shop') { SND.fx.confirm(); go(shopScene(() => go(houseScene('shop')))); }
+    if (kind === 'back') { SND.fx.confirm(); saveProg(); enterWorld(worldNum - 1, 'exit'); }
+    else if (kind === 'mail') {
+      SND.fx.open();
+      const letters = ['Love from the babies!', 'Clanky Crane says sorry', 'Race you in the garage!', 'The fish say blub blub', 'Paint us a picture!', 'Bolts buy cool hats!'];
+      S.msg = { text: letters[S.letter++ % 6], t: 100 };
+    }
+    else if (kind === 'tree') { p.eatT = 50; p.apple = true; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 30, 6, '#ff5a5a'); S.msg = { text: 'Crunch! A juicy apple!', t: 100 }; }
     else if (kind === 'snack') {
-      p.eatT = 70; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 20, 8, '#ffd23f');
+      p.eatT = 70; p.apple = false; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 20, 8, '#ffd23f');
       const full = (prog.lives ?? 3) >= 3; prog.lives = 3; saveProg();
       S.msg = { text: full ? 'Yum! Crunchy bolts!' : 'Yum! Batteries full!', t: 100 };
     }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
     else if (kind === 'piano') { SND.fx.open(); go(pianoScene(S)); }
+    else if (kind === 'drums') { SND.fx.open(); go(drumScene(S)); }
     else if (kind === 'aqua') { SND.fx.open(); go(aquaScene(S)); }
     else if (kind === 'cars') { SND.fx.open(); go(carsScene(S)); }
     else if (kind === 'bed') { SND.fx.select(); S.mode = 'slots'; S.pick = saveSlot - 1; }
@@ -702,8 +720,10 @@ function houseScene(from) {
       if (p.eatT > 0) { p.eatT--; p.vx = 0; }
       else {
         p.vx += (want * HOUSE_SPEED - p.vx) * 0.3; if (want) p.face = want;
-        if (hit(sl, 'a') && p.ground) { p.vy = HOUSE_JUMP; p.ground = false; SND.fx.jump(); }
-        if (hit(sl, 'down') && p.ground) { const k = near(p); if (k >= 0) { useSpot(k, p, i); if (scene !== S) return; } }
+        // A (or down) at a room's thing uses it; A anywhere else jumps
+        const k = p.ground ? near(p) : -1;
+        if (k >= 0 && (hit(sl, 'a') || hit(sl, 'down'))) { useSpot(k, p, i); if (scene !== S || S.mode !== 'walk') return; }
+        else if (hit(sl, 'a') && p.ground) { p.vy = HOUSE_JUMP; p.ground = false; SND.fx.jump(); }
       }
       p.vy += HOUSE_GRAV; p.x += p.vx; p.y += p.vy;
       if (p.y >= HL.FLOOR) { p.y = HL.FLOOR; p.vy = 0; p.ground = true; }
@@ -713,7 +733,7 @@ function houseScene(from) {
     // the camera follows the middle of the party; two players stay on screen together
     const mid = S.ps.reduce((a, p) => a + p.x, 0) / S.ps.length;
     S.cam = clamp(mid - W / 2, 0, HL.W - W);
-    if (S.ps.length > 1) for (const p of S.ps) p.x = clamp(p.x, S.cam + 8, S.cam + W - 8);
+    if (S.ps.length > 1) for (const p of S.ps) p.x = clamp(p.x, S.cam > 0 ? S.cam + 8 : -4, S.cam + W - 8);
     for (const b of S.babies) {
       if (b.wait > 0) { b.wait--; continue; }
       b.x += b.vx;
@@ -730,18 +750,19 @@ function houseScene(from) {
       const x = p.x - S.cam, t = S.t + p.m.slot * 0.7;
       const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : !p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle';
       drawHeroPose(p.m, x, p.y, st, st === 'run' ? p.anim / 11 : t, p.face);
-      if (p.eatT > 0) { K.circ(x + 6, p.y - 22, 4, '#c98a4b'); K.circ(x + 6, p.y - 22, 2.4, '#e8b46a'); }
+      if (p.eatT > 0 && p.apple) { K.circ(x + 6, p.y - 22, 4, '#e04f4f'); K.rr(x + 5.5, p.y - 28, 1.2, 3, 0.5, '#6f4630'); }
+      else if (p.eatT > 0) { K.circ(x + 6, p.y - 22, 4, '#c98a4b'); K.circ(x + 6, p.y - 22, 2.4, '#e8b46a'); }
     }
     // what Down does where you stand
     const shown = new Set();
-    for (const p of S.ps) { const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k); const [x, , label] = HL.spots[k], s = '↓ ' + label, w = textW(s, 8) + 14; panel(x - S.cam - w / 2, 120, w, 15); text(s, x - S.cam, 131, 8, '#fff6d8', 'center', null); }
+    for (const p of S.ps) { const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k); const [x, kind, label] = HL.spots[k], s = 'A  ' + (kind === 'back' ? 'Back to World ' + (worldNum - 1) : label), w = textW(s, 8) + 14; panel(x - S.cam - w / 2, 120, w, 15); text(s, x - S.cam, 131, 8, '#fff6d8', 'center', null); }
     drawParticles(0);
     if (S.cam < 40) text('← Map', 18 - S.cam, 186, 8, '#fff6d8', 'left');
     livesHud(4, 4, S.t);
     if (S.msg) { fitPanel(S.msg.text, 10, 0, 26, 18, '#ffd23f'); text(S.msg.text, W / 2, 39, 10, '#2b2230', 'center', null); }
     if (S.mode === 'sleep') {
       g.fillStyle = 'rgba(12,8,30,' + Math.min(0.75, S.sleepT * 0.6) + ')'; g.fillRect(0, 0, W, H);
-      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', HL.spots[5][0] - S.cam + 10 + u * 20, 150 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
+      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', HL.spots[4][0] - S.cam + 10 + u * 20, 150 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
     }
     if (S.mode === 'slots') drawSlotPicker('SLEEP AND SAVE', 'Which save slot?', S.pick);
   };
@@ -770,14 +791,44 @@ function drawHouse(cam, t) {
     const mid = (a + b) / 2, w = textW(name, 8) + 16; K.rr(mid - w / 2, 28, w, 15, 3, '#6f4630'); K.rr(mid - w / 2 + 2, 30, w - 4, 11, 2, '#c98a4b'); text(name, mid, 39, 8, '#fff6d8', 'center', '#3a2618');
   }
   // the roof over the front of the house, and the pillars of the doorways between rooms
-  K.rr(L.rooms[1][0] - 20 - cam, 0, 30, L.CEIL + 4, 2, '#a8432f');
   for (let i = 1; i < L.rooms.length; i++) { const x = L.rooms[i][0] - cam - L.PILLAR / 2; if (x < -10 || x > W) continue; K.rr(x, L.CEIL, L.PILLAR, L.DOOR_TOP - L.CEIL, 1, '#6f4630'); K.rr(x - 2, L.DOOR_TOP - 4, L.PILLAR + 4, 6, 2, '#5a3f2e'); }
   K.rr(L.W - 8 - cam, L.CEIL, 8, L.FLOOR - L.CEIL, 0, '#6f4630');
   for (const [x, name] of L.decor) if (x - cam > -60 && x - cam < W + 60) HOUSEART.furn(g, name, x - cam, L.FLOOR);
-  for (const [x, kind] of L.spots) if (x - cam > -60 && x - cam < W + 60) {
+  for (const [x, kind] of L.spots) if ((kind !== 'back' || worldNum > 1) && x - cam > -60 && x - cam < W + 60) {
     HOUSEART.furn(g, HOUSEART.SPOT_FURN[kind], x - cam, L.FLOOR);
     if (kind === 'aqua') for (let k = 0; k < 3; k++) { const u = t * (0.3 + k * 0.1) + k * 2, fx = x - cam + Math.sin(u) * 30, fy = L.FLOOR - 70 + k * 12; g.save(); g.translate(fx, fy); g.scale(Math.cos(u) > 0 ? 0.7 : -0.7, 0.7); HOUSEART.fish(g, k, t); g.restore(); }
   }
+}
+
+// ---- the drum kit in the music room: every button hits its own piece, for both players.
+function drumScene(house) {
+  const S = { song: null, t: 0, lit: new Array(9).fill(0), notes: [] }, DR = HOUSEART.DRUMS;
+  S.ps = house.ps.map(h => ({ m: h.m, bounce: 0 }));
+  SND.stopSong();
+  S.update = function () {
+    S.t += 1 / 60;
+    if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
+    for (const p of S.ps) {
+      DR.forEach((dr, k) => {
+        if (!hit(p.m.slot, dr.btn)) return;
+        SND.fx['drum' + k](); S.lit[k] = 10; p.bounce = 10;
+        S.notes.push({ x: dr.x, y: dr.y - dr.r, vy: -0.8, life: 40, col: dr.col });
+      });
+      if (p.bounce > 0) p.bounce--;
+    }
+    for (let i = 0; i < 9; i++) if (S.lit[i] > 0) S.lit[i]--;
+    for (const n of S.notes) { n.y += n.vy; n.life--; } S.notes = S.notes.filter(n => n.life > 0);
+  };
+  S.draw = function () {
+    K.g = g; const room = HL.rooms[4];
+    g.fillStyle = hexStr(room[3]); g.fillRect(0, 0, W, H); g.fillStyle = hexStr(room[4]); for (let x = 12; x < W; x += 24) g.fillRect(x, 0, 10, 200);
+    g.fillStyle = hexStr(room[5]); g.fillRect(0, 200, W, 40);
+    DR.forEach((dr, k) => HOUSEART.drumPiece(g, dr, S.lit[k] / 10));
+    for (const n of S.notes) { g.globalAlpha = Math.min(1, n.life / 20); K.circ(n.x, n.y, 3.5, hexStr(n.col)); K.rr(n.x + 2.5, n.y - 12, 1.6, 12, 0.5, hexStr(n.col)); g.globalAlpha = 1; }
+    for (const [j, p] of S.ps.entries()) drawHeroPose(p.m, j ? 296 : 24, 222 - (p.bounce > 0 ? Math.sin(p.bounce / 10 * P) * 6 : 0), p.bounce > 0 ? 'cheer' : 'idle', S.t + j);
+    text('Every button is a drum   START done', W / 2, 14, 7, '#fff6d8', 'center', '#1b1426');
+  };
+  return S;
 }
 
 // ---- save slots: three saves, picked at the title and written by sleeping in the bed
@@ -869,11 +920,11 @@ function paintScene(house) {
 // ---- the aquarium: swim round the tank with the fish and shrimp in a diving bubble, or climb out
 // onto the sandy beach where the crabs live. A swims up, B blows a bubble, START gets out.
 function aquaScene(house) {
-  const A = HOUSEART.AQUA, S = { song: 'select', t: 0 }, q = hrng(11);
+  const A = HOUSEART.AQUA, S = { song: 'select', t: 0, cam: 0, food: [] }, q = hrng(11);
   S.ps = house.ps.map((h, i) => ({ m: h.m, x: 60 + i * 40, y: 120, vx: 0, vy: 0, face: 1, land: false, ground: false, bubT: 0 }));
-  S.fish = Array.from({ length: 7 }, (_, i) => ({ kind: i % 3, x: 20 + q() * 190, y: 70 + q() * 130, vx: (q() < 0.5 ? -1 : 1) * (0.4 + q() * 0.5), scare: 0, ph: q() * 6 }));
-  S.shrimp = Array.from({ length: 4 }, () => ({ x: 20 + q() * 170, y: A.SEABED - 2, vx: 0, vy: 0, face: q() < 0.5 ? -1 : 1, rest: Math.floor(q() * 200) }));
-  S.crabs = Array.from({ length: 3 }, (_, i) => ({ x: 250 + i * 22, vx: (i % 2 ? -1 : 1) * 0.5, snap: 0, wait: 0 }));
+  S.fish = Array.from({ length: 14 }, (_, i) => ({ kind: i % 3, x: 20 + q() * (A.BEACH_X - 60), y: 70 + q() * 130, vx: (q() < 0.5 ? -1 : 1) * (0.4 + q() * 0.5), scare: 0, happy: 0, ph: q() * 6 }));
+  S.shrimp = Array.from({ length: 8 }, () => ({ x: 20 + q() * (A.BEACH_X - 70), y: A.SEABED - 2, vx: 0, vy: 0, face: q() < 0.5 ? -1 : 1, rest: Math.floor(q() * 200) }));
+  S.crabs = Array.from({ length: 3 }, (_, i) => ({ x: A.BEACH_X + 14 + i * 22, vx: (i % 2 ? -1 : 1) * 0.5, snap: 0, wait: 0 }));
   const floorAt = x => x >= A.BEACH_X ? A.BEACH_Y : x > A.BEACH_X - 30 ? A.SEABED - (x - (A.BEACH_X - 30)) / 30 * (A.SEABED - A.BEACH_Y) : A.SEABED;
   S.update = function () {
     S.t += 1 / 60; stepParticles();
@@ -890,18 +941,37 @@ function aquaScene(house) {
         p.vx = clamp((p.vx + dx * 0.14) * 0.95, -2, 2); p.vy = clamp((p.vy + dy * 0.14) * 0.95 + 0.01, -2.4, 2);
         if (hit(sl, 'a')) { p.vy -= 1.6; SND.fx.flap(); puff(p.x, p.y - 26, 3, 'rgba(220,250,255,0.9)'); }
       }
-      if (hit(sl, 'b')) { SND.fx.pop(); particles.push({ x: p.x + p.face * 8, y: p.y - 22, vx: p.face * 0.6, vy: -0.8, life: 60, max: 60, r: 4, col: 'rgba(220,250,255,0.85)', kind: 'puff' }); }
-      p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
+      // B sprinkles fish food from the hand; the fish come and eat it
+      if (hit(sl, 'b')) { SND.fx.pop(); for (let k = 0; k < 3 && S.food.length < 12; k++) S.food.push({ x: p.x + p.face * (8 + k * 4), y: p.y - 20 + k * 2, life: 600 }); }
+      p.x = clamp(p.x + p.vx, 10, A.W - 10); p.y += p.vy;
       const fl = floorAt(p.x);
       p.ground = false; if (p.y >= fl) { p.y = fl; p.vy = 0; p.ground = true; }
       if (!p.land && p.y < A.WATER_TOP + 22) { p.y = A.WATER_TOP + 22; p.vy = Math.max(0, p.vy); }
       if (!p.land && p.x > A.BEACH_X - 2 && p.y > A.BEACH_Y + 4) p.x = A.BEACH_X - 2;   // the sand bank's side
       if (!p.land && --p.bubT <= 0) { p.bubT = 40 + Math.floor(Math.random() * 30); particles.push({ x: p.x, y: p.y - 30, vx: 0, vy: -0.7, life: 70, max: 70, r: 1.8, col: 'rgba(220,250,255,0.9)', kind: 'puff' }); }
     }
+    // the camera follows the heroes; with two, it keeps them both on screen
+    const mid = S.ps.reduce((a, p) => a + p.x, 0) / Math.max(1, S.ps.length);
+    S.cam = clamp(mid - W / 2, 0, A.W - W);
+    if (S.ps.length > 1) for (const p of S.ps) p.x = clamp(p.x, S.cam + 8, S.cam + W - 8);
+    for (const f of S.food) { if (f.y < A.SEABED - 3) f.y += 0.25; f.life--; }
+    S.food = S.food.filter(f => f.life > 0);
     for (const f of S.fish) {
-      let fear = null; for (const p of S.ps) if (!p.land && Math.hypot(p.x - f.x, p.y - 18 - f.y) < 34) fear = p;
-      if (fear) { f.vx = (f.x > fear.x ? 1 : -1) * 1.6; f.scare = 40; }
-      else if (f.scare > 0 && --f.scare === 0) f.vx = Math.sign(f.vx) * 0.6;
+      let best = -1, bd = 120;
+      S.food.forEach((fd, k) => { const dd = Math.hypot(fd.x - f.x, fd.y - f.y); if (dd < bd) { bd = dd; best = k; } });
+      if (best >= 0) {   // swim to the nearest flake and gobble it
+        const fd = S.food[best];
+        f.vx = clamp((fd.x - f.x) * 0.08, -1.4, 1.4); if (Math.abs(f.vx) < 0.2) f.vx = f.vx < 0 ? -0.2 : 0.2;
+        f.y += clamp((fd.y - f.y) * 0.08, -1, 1);
+        if (bd < 6) { S.food.splice(best, 1); f.happy = 40; SND.fx.bolt(); sparks(f.x, f.y, 4, '#ff8fc7'); }
+      } else if (f.scare > 0 && --f.scare === 0) f.vx = Math.sign(f.vx) * 0.6;
+      // swimming into a fish boops it: a wiggle and a bubble
+      for (const p of S.ps) {
+        if (p.land || f.happy > 0 || Math.hypot(p.x - f.x, p.y - 18 - f.y) > 14) continue;
+        f.happy = 40; f.vx = (f.x > p.x ? 1 : -1) * 1.2; f.scare = 30; SND.fx.boing();
+        particles.push({ x: f.x, y: f.y - 6, vx: 0, vy: -0.8, life: 50, max: 50, r: 3, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
+      }
+      if (f.happy > 0) f.happy--;
       f.x += f.vx; f.y += Math.sin(S.t * 1.5 + f.ph) * 0.25;
       if (f.x < 12) { f.x = 12; f.vx = Math.abs(f.vx); } if (f.x > A.BEACH_X - 16) { f.x = A.BEACH_X - 16; f.vx = -Math.abs(f.vx); }
       f.y = clamp(f.y, A.WATER_TOP + 14, A.SEABED - 14);
@@ -917,75 +987,78 @@ function aquaScene(house) {
       if (close && c.snap <= 0) { c.snap = 30; SND.fx.tick(); }
       if (c.snap > 0) c.snap--;
       if (c.wait > 0) { c.wait--; continue; }
-      c.x += c.vx; if (c.x < A.BEACH_X + 10 || c.x > W - 12) c.vx = -c.vx;
+      c.x += c.vx; if (c.x < A.BEACH_X + 10 || c.x > A.W - 12) c.vx = -c.vx;
       if (Math.random() < 0.01) c.wait = 30 + Math.floor(Math.random() * 60);
     }
   };
   S.draw = function () {
-    K.g = g; HOUSEART.aquaBg(g);
-    for (const [x, h] of [[30, 40], [52, 28], [176, 46], [196, 30]]) { g.save(); g.translate(x, A.SEABED); HOUSEART.weed(g, S.t, h); g.restore(); }
+    K.g = g;
+    for (let k = 0; k < 3; k++) { g.save(); g.translate(k * W - S.cam, 0); HOUSEART.aquaBg(g, k === 2); g.restore(); }
+    g.save(); g.translate(-S.cam, 0);
+    for (let k = 0; k < 8; k++) { const x = 30 + k * 110 + (k % 2) * 22; if (x > A.BEACH_X - 40) continue; g.save(); g.translate(x, A.SEABED); HOUSEART.weed(g, S.t, 28 + (k * 37 % 3) * 9); g.restore(); }
+    for (const f of S.food) K.circ(f.x, f.y, 1.6, '#e8b46a');
     for (const s of S.shrimp) { g.save(); g.translate(s.x, s.y - 3); g.scale(s.face, 1); HOUSEART.shrimp(g, S.t); g.restore(); }
-    for (const f of S.fish) { g.save(); g.translate(f.x, f.y); g.scale(f.vx > 0 ? 1 : -1, 1); HOUSEART.fish(g, f.kind, S.t + f.ph); g.restore(); }
+    for (const f of S.fish) { g.save(); g.translate(f.x, f.y); g.rotate(f.happy > 0 ? Math.sin(f.happy * 0.8) * 0.25 : 0); g.scale(f.vx > 0 ? 1 : -1, 1); HOUSEART.fish(g, f.kind, (S.t + f.ph) * (f.happy > 0 ? 2.3 : 1)); g.restore(); if (f.happy > 20) K.star(f.x, f.y - 12, 3, '#ff8fc7'); }
     for (const c of S.crabs) { g.save(); g.translate(c.x, A.BEACH_Y - 5); HOUSEART.crab(g, c.wait > 0 ? 0 : S.t, c.snap > 0 && Math.floor(c.snap / 5) % 2 === 0); g.restore(); }
     for (const p of S.ps) {
       const t = S.t + p.m.slot * 0.7, st = p.land ? (!p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle') : 'jump';
       drawHeroPose(p.m, p.x, p.y, st, st === 'run' ? S.t * 1.6 : t, p.face);
       if (!p.land) { const hy = p.y - 24; g.globalAlpha = 0.3; K.circ(p.x, hy, 12, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = 'rgba(230,252,255,0.95)'; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, hy, 12, 0, P * 2); g.stroke(); K.circ(p.x - 5, hy - 5, 2, '#ffffff'); }
     }
-    drawParticles(0);
-    text('Stick swim   A up   B bubble   START out', W / 2, 14, 7, '#2b2230', 'center', null);
+    g.restore();
+    drawParticles(S.cam);
+    text('Stick swim   A up   B feed the fish   START out', W / 2, 14, 7, '#2b2230', 'center', null);
   };
   return S;
 }
 
 // ---- the garage: a go-kart race round an oval, seen from above. A goes, B brakes and reverses,
 // the stick steers. Three laps; with two players the first one home wins.
-const RACE_LAPS = 3;
 function carsScene(house) {
-  const T = HOUSEART.TRACK, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
-  const lane = T.cy - (T.oy + T.iy) / 2;
-  const reset = () => { S.cars = house.ps.map((h, i) => ({ m: h.m, x: T.cx - 22, y: lane + (house.ps.length > 1 ? (i ? 9 : -9) : 0), a: 0, s: 0, laps: 0, half: false, lapT: 0, best: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
+  const R = HOUSEART.RACE, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
+  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, y: 0, vy: 0, s: 0, ground: true, bump: 0, hit: 0, done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
   reset();
-  const ell = (x, y, rx, ry) => ((x - T.cx) / rx) ** 2 + ((y - T.cy) / ry) ** 2;
   S.update = function () {
     S.t += 1 / 60; stepParticles();
     if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
     if (S.count > 0) { const was = Math.ceil(S.count); S.count -= 1 / 60; if (Math.ceil(S.count) !== was) SND.fx[S.count <= 0 ? 'confirm' : 'tick'](); return; }
-    if (S.win >= 0) { if ((S.endT += 1 / 60) > 4) reset(); return; }
+    if (S.win >= 0) {   // the others get 4 seconds to finish too
+      if ((S.endT += 1 / 60) > 4) { reset(); return; }
+      if (S.cars.every(c => c.done)) return;
+    }
     S.clock += 1 / 60;
-    for (const c of S.cars) {
-      const sl = c.m.slot, steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
-      c.a += steer * 0.055 * clamp(c.s / 1.5, -1, 1);
-      if (held(sl, 'a')) c.s = Math.min(3.2, c.s + 0.07); else if (held(sl, 'b')) c.s = Math.max(-1.2, c.s - 0.09); else c.s *= 0.985;
-      const px = c.x;
-      c.x += Math.cos(c.a) * c.s; c.y += Math.sin(c.a) * c.s;
-      const eo = ell(c.x, c.y, T.ox, T.oy), ei = ell(c.x, c.y, T.ix, T.iy);
-      if (eo > 1 || ei < 1) { c.s = clamp(c.s * 0.94, -1.2, 1.3); if (S.t * 60 % 8 < 1) puff(c.x, c.y, 1, 'rgba(120,200,120,0.8)'); }
-      if (eo > 1.18) { const k = Math.sqrt(1.18 / eo); c.x = T.cx + (c.x - T.cx) * k; c.y = T.cy + (c.y - T.cy) * k; }
-      if (ei < 0.75) { const k = Math.sqrt(0.75 / ei); c.x = T.cx + (c.x - T.cx) * k; c.y = T.cy + (c.y - T.cy) * k; }
-      // laps: past the bottom of the oval, then over the line at the top going right
-      if (c.y > T.cy && px >= T.cx && c.x < T.cx) c.half = true;
-      c.lapT += 1 / 60;
-      if (c.y < T.cy && px < T.cx && c.x >= T.cx && c.half) {
-        c.half = false; c.laps++; c.best = c.best ? Math.min(c.best, c.lapT) : c.lapT; c.lapT = 0; SND.fx.gear();
-        if (c.laps >= RACE_LAPS && S.win < 0) { S.win = S.cars.indexOf(c); SND.fx.flag(); confetti(160, 40, 40); }
+    S.cars.forEach((c, i) => {
+      const sl = c.m.slot;
+      if (c.bump > 0) { c.bump--; c.s = 0.8; } else c.s += (3 - c.s) * 0.03;
+      if (hit(sl, 'a') && c.ground) { c.vy = -5; c.ground = false; SND.fx.jump(); }
+      c.vy += 0.28; c.y += c.vy;
+      if (c.y >= 0) { c.y = 0; c.vy = 0; c.ground = true; }
+      c.x += c.s;
+      for (let k = 0; k < R.obst; k++) {
+        const o = HOUSEART.raceObst(k);
+        if (c.hit & (1 << k) || Math.abs(c.x - o.x) > o.w / 2 + 12 || -c.y > o.h) continue;
+        c.hit |= 1 << k; c.bump = 40; c.s = 0.5; SND.fx.clank();
       }
-    }
-    if (S.cars.length > 1) {   // karts bump each other
-      const [a, b] = S.cars, d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (d < 14 && d > 0.01) { const k = (14 - d) / 2 / d; a.x += (a.x - b.x) * k; a.y += (a.y - b.y) * k; b.x -= (a.x - b.x) * k; b.y -= (a.y - b.y) * k; a.s *= 0.9; b.s *= 0.9; SND.fx.kick(); }
-    }
+      if (!c.done && c.x >= R.len) { c.done = true; c.time = S.clock; SND.fx.gear(); if (S.win < 0) { S.win = i; SND.fx.flag(); confetti(160, 40, 40); } }
+    });
   };
   S.draw = function () {
-    K.g = g; HOUSEART.trackBg(g);
-    for (const c of S.cars) { g.save(); g.translate(c.x, c.y); g.rotate(c.a); HOUSEART.carTop(g, c.m.hex); g.restore(); K.circ(c.x - 1, c.y, 3.2, hexStr(c.m.hex)); K.circ(c.x - 1, c.y, 2, '#fff6d8'); }
+    K.g = g;
+    const n = S.cars.length, LH = n > 1 ? H / 2 : H;
+    S.cars.forEach((c, i) => {
+      const top = i * LH, ground = HOUSEART.raceLane(g, top, LH, c.x);
+      if (c.bump <= 0 || Math.floor(S.t * 15) % 2) HOUSEART.carSide(g, R.carX, ground + c.y, c.m.hex);
+      g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(10, top + 4, 300, 5);
+      g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(10 + 296 * Math.min(1, c.x / R.len), top + 3, 4, 7);
+      if (n > 1) text('P' + (c.m.slot + 1), 14, top + 22, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', 'left');
+    });
+    if (n > 1) { g.fillStyle = '#1b1426'; g.fillRect(0, LH - 1, W, 2); }
     drawParticles(0);
-    S.cars.forEach((c, i) => { const x = i ? W - 92 : 6; panel(x, 4, 86, 16); text((S.cars.length > 1 ? 'P' + (c.m.slot + 1) + '  ' : '') + 'Lap ' + Math.min(RACE_LAPS, c.laps + 1) + '/' + RACE_LAPS, x + 43, 15, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', 'center', null); });
-    if (S.cars.length === 1) { panel(W / 2 - 34, 4, 68, 16); text(clock(Math.round(S.clock * 60)), W / 2, 15, 8, '#fff6d8', 'center', null); }
-    if (S.count > 0) { const n = Math.ceil(S.count); fitPanel(String(n), 20, 60, 100, 34, '#ffd23f'); text(String(n), W / 2, 126, 20, '#2b2230', 'center', null); }
-    else if (S.count > -0.8 && S.win < 0 && S.clock < 0.8) { fitPanel('GO!', 20, 80, 100, 34, '#49d17a'); text('GO!', W / 2, 126, 20, '#ffffff', 'center', null); }
-    if (S.win >= 0) { const s = S.cars.length > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.clock * 60)); fitPanel(s, 14, 120, 98, 30, '#ffd23f'); text(s, W / 2, 119, 14, '#2b2230', 'center', null); }
-    text('A go   B brake   START out', W / 2, H - 6, 7, '#fff6d8', 'center', '#1b1426');
+    if (n === 1) { panel(W / 2 - 34, 14, 68, 16); text(clock(Math.round(S.clock * 60)), W / 2, 25, 8, '#fff6d8', 'center', null); }
+    if (S.count > 0) { const k = Math.ceil(S.count); fitPanel(String(k), 20, 60, 100, 34, '#ffd23f'); text(String(k), W / 2, 126, 20, '#2b2230', 'center', null); }
+    else if (S.win < 0 && S.clock < 0.8) { fitPanel('GO!', 20, 80, 100, 34, '#49d17a'); text('GO!', W / 2, 126, 20, '#ffffff', 'center', null); }
+    if (S.win >= 0) { const s = n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)); fitPanel(s, 14, 120, 98, 30, '#ffd23f'); text(s, W / 2, 119, 14, '#2b2230', 'center', null); }
+    text('A jump   START out', W / 2, H - 4, 7, '#fff6d8', 'center', '#1b1426');
   };
   return S;
 }
@@ -1022,7 +1095,7 @@ function pianoScene(house) {
     for (const n of S.notes) { n.y += n.vy; n.life--; } S.notes = S.notes.filter(n => n.life > 0);
   };
   S.draw = function () {
-    K.g = g; const KY = HOUSEART.KEYS, room = HL.rooms[5];
+    K.g = g; const KY = HOUSEART.KEYS, room = HL.rooms[4];
     g.fillStyle = hexStr(room[3]); g.fillRect(0, 0, W, H); g.fillStyle = hexStr(room[4]); for (let x = 12; x < W; x += 24) g.fillRect(x, 0, 10, KY.y);
     g.fillStyle = '#2b2833'; g.fillRect(KY.x - 8, KY.y - 14, KY.n * KY.w + 16, KY.h + 18);
     for (let w = 0; w < KY.n; w++) { K.rr(KY.x + w * KY.w + 1, KY.y, KY.w - 2, KY.h, 3, '#fff6d8'); }

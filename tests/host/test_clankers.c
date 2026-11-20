@@ -428,11 +428,16 @@ static void test_new_worlds(void) {
             if (L->kind == CK_KIND_LEVEL) { EXPECT_EQ_INT(pad, 1); EXPECT_EQ_INT(gears, 3); }
         }
     }
-    // the home node takes you back a world, to that world's exit
+    // the home node is the house; its yard's signpost takes you back a world, to that world's exit
     G->prog.at = (uint8_t)ck_world_node(&G->world, "home");
     G->keepMap = false;
     ck_map_reset(G);
     ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    ck_game_step(G, 0, 0);
+    for (int i = 0; i < 400 && ck_house_near(G, &G->house.ps[0]) != SPOT_BACK; i++) ck_game_step(G, CK_LEFT, 0);
+    for (int i = 0; i < 20; i++) ck_game_step(G, 0, 0);
     ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->worldNum, 3);
     EXPECT_EQ_INT(G->world.nodes[G->prog.at].kind, CK_NODE_EXIT);
@@ -912,18 +917,11 @@ static void test_house(void) {
     // walk to the kitchen fridge: a snack fills the batteries
     G->prog.lives = 1;
     walk_to(G, ck_spots[SPOT_SNACK].x);
-    EXPECT_EQ_INT(ck_house_near(&G->house.ps[0]), SPOT_SNACK);
+    EXPECT_EQ_INT(ck_house_near(G, &G->house.ps[0]), SPOT_SNACK);
     press(G, CK_DOWN, 0);
     EXPECT_EQ_INT(G->prog.lives, 3);
     EXPECT_EQ_INT(G->house.ps[0].eat > 0, 1);
     hold(G, 80, 0, 0);
-    // the shop counter opens the parts shop, and leaving it comes back to the house
-    walk_to(G, ck_spots[SPOT_SHOP].x);
-    press(G, CK_DOWN, 0);
-    EXPECT_EQ_INT(G->scene, SC_SHOP);
-    press(G, CK_B, 0);
-    EXPECT_EQ_INT(G->scene, SC_HOUSE);
-    EXPECT_EQ_INT(fabsf(G->house.ps[0].x - ck_spots[SPOT_SHOP].x) < 30, 1);
     // the paint studio: fly up with A, hold B to paint, R changes colour
     walk_to(G, ck_spots[SPOT_PAINT].x);
     press(G, CK_DOWN, 0);
@@ -948,8 +946,18 @@ static void test_house(void) {
     float y0 = G->house.gs[0].y;
     hold(G, 40, CK_DOWN, 0);
     EXPECT_EQ_INT(G->house.gs[0].y > y0 + 10, 1);
-    hold(G, 400, CK_RIGHT | CK_UP, 0);
+    // feeding: B sprinkles food, and a fish swims over and eats it
+    hold(G, 60, 0, 0);
+    int fed = 0;
+    for (int n = 0; n < 6 && !fed; n++) {
+        press(G, CK_B, 0);
+        for (int i = 0; i < 300 && !fed; i++) { ck_game_step(G, 0, 0); for (int k = 0; k < CK_AQUA_FISH; k++) fed += G->house.fish[k].happy > 0; }
+    }
+    EXPECT_EQ_INT(fed > 0, 1);
+    // the tank scrolls: the beach is three screens along
+    hold(G, 700, CK_RIGHT | CK_UP, 0);
     hold(G, 100, CK_RIGHT, 0);
+    EXPECT_EQ_INT(G->house.gcam > 600, 1);
     EXPECT_EQ_INT(G->house.gs[0].land, 1);
     EXPECT_EQ_INT(G->house.gs[0].y, CK_AQUA_BEACH_Y);
     for (int i = 0; i < 600; i++) {
@@ -957,23 +965,35 @@ static void test_house(void) {
         for (int k = 0; k < CK_AQUA_FISH; k++) EXPECT_EQ_INT(G->house.fish[k].x >= 12 && G->house.fish[k].x <= CK_AQUA_BEACH_X - 16, 1);
     }
     press(G, CK_START, 0);
-    // the garage: a three-lap race; a scripted driver steers round the oval
+    // the garage: a side-on race; a scripted driver jumps every cone and crate
     walk_to(G, ck_spots[SPOT_CARS].x);
-    press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_CARS);
     hold(G, 200, 0, 0);   // the countdown
     EXPECT_EQ_INT(G->house.count <= 0, 1);
-    for (int i = 0; i < 60 * 90 && G->house.win < 0; i++) {
+    bool was_a = false;
+    for (int i = 0; i < 60 * 60 && G->house.win < 0; i++) {
         const ck_hhero *c = &G->house.gs[0];
-        // aim at a point a little ahead round the middle of the ring (clockwise on screen)
-        float ang = atan2f((c->y - CK_TRACK_CY) / ((CK_TRACK_OY + CK_TRACK_IY) / 2.0f), (c->x - CK_TRACK_CX) / ((CK_TRACK_OX + CK_TRACK_IX) / 2.0f)) + 0.35f;
-        float tx = CK_TRACK_CX + cosf(ang) * (CK_TRACK_OX + CK_TRACK_IX) / 2.0f, ty = CK_TRACK_CY + sinf(ang) * (CK_TRACK_OY + CK_TRACK_IY) / 2.0f;
-        float want = atan2f(ty - c->y, tx - c->x), d = remainderf(want - c->a, 2 * 3.14159265f);
-        uint16_t pad = CK_A | (d > 0.05f ? CK_RIGHT : d < -0.05f ? CK_LEFT : 0);
-        ck_game_step(G, pad, 0);
+        bool jump = false;
+        for (int k = 0; k < CK_RACE_OBST; k++) {
+            float ox, w, h; int kind;
+            ck_race_obst(k, &ox, &kind, &w, &h);
+            float dx = ox - c->x;
+            if (dx > 36 && dx < 55 && c->ground) jump = true;
+        }
+        jump = jump && !was_a;
+        was_a = jump;
+        ck_game_step(G, jump ? CK_A : 0, 0);
     }
     EXPECT_EQ_INT(G->house.win, 0);
-    EXPECT_EQ_INT(G->house.gs[0].laps, CK_RACE_LAPS);
+    EXPECT_EQ_INT(G->house.gs[0].key, 0);   // no bumps
+    EXPECT_EQ_INT(G->house.gs[0].best < 15, 1);
+    // a driver who never jumps bumps into everything and is much slower
+    hold(G, 60 * 5, 0, 0);
+    EXPECT_EQ_INT(G->house.win, -1);
+    for (int i = 0; i < 60 * 90 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(G->house.gs[0].key, (1 << CK_RACE_OBST) - 1);
+    EXPECT_EQ_INT(G->house.gs[0].best > 20, 1);
     press(G, CK_START, 0);
     // the piano: A plays the key under the hand, the stick moves along the keys
     walk_to(G, ck_spots[SPOT_PIANO].x);
@@ -987,6 +1007,29 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->house.gs[0].key, 8);
     for (int i = 0; i < CK_KEYS_N; i++) { float x; bool b; ck_piano_key(i, &x, &b); EXPECT_EQ_INT(x > CK_KEYS_X && x < CK_KEYS_X + 14 * CK_KEYS_W, 1); }
     press(G, CK_START, 0);
+    // the drums: each button is its own hit
+    walk_to(G, ck_spots[SPOT_DRUMS].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_PIANO);
+    EXPECT_EQ_INT(G->house.drums, 1);
+    for (int k = 0; k < CK_DRUMS; k++) {
+        ck_game_step(G, ck_drums[k].btn, 0);
+        bool heard = false;
+        for (int i = 0; i < G->nsfx; i++) heard |= G->sfx[i] == SFX_DRUM0 + k;
+        EXPECT_EQ_INT(heard, 1);
+        ck_game_step(G, 0, 0);
+    }
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    // the mailbox has a letter, and the tree an apple
+    walk_to(G, ck_spots[SPOT_MAIL].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.msgT > 0, 1);
+    EXPECT_EQ_INT(G->house.ps[0].ground, 1);   // A there reads the mail, it does not jump
+    walk_to(G, ck_spots[SPOT_TREE].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.ps[0].eat > 0 && G->house.ps[0].col == 1, 1);
+    hold(G, 60, 0, 0);
     // the bed saves this game into a slot of your choice
     walk_to(G, ck_spots[SPOT_BED].x);
     press(G, CK_DOWN, 0);

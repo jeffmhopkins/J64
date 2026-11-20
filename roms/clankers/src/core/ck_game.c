@@ -475,7 +475,8 @@ static void map_update(ck_game *G) {
                 G->scene = SC_LEVEL;
                 ck_level_start(G, n, false, false);
                 return;
-            } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); ck_house_enter(G, false); return; }
+            } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); G->shopFromHouse = false; ck_go(G, SC_SHOP); return; }
+            else if (k == CK_NODE_HOME) { ck_sfx(G, SFX_CONFIRM); ck_house_enter(G, false); return; }
             else if (k == CK_NODE_EXIT) {
                 // through the gate to the next world, with its little film first
                 if (G->worldNum >= CK_WORLDS || world_exists(G, G->worldNum + 1)) { ck_sfx(G, SFX_CONFIRM); ck_save(G); ck_cut_start(G, G->worldNum); return; }

@@ -44,7 +44,8 @@ enum {
     SFX_SHRINK, SFX_BLOW, SFX_STOMP, SFX_HATCH, SFX_OUCH, SFX_POP, SFX_TICK, SFX_STAR0,
     SFX_STAR1, SFX_STAR2, SFX_RECORD, SFX_FLAG, SFX_SLIDE, SFX_THUNDER, SFX_WHOOSH,
     SFX_HOP2, SFX_HOVER, SFX_BUY,
-    SFX_COUNT
+    SFX_DRUM0,   // the drum kit's hits, in ck_drums order
+    SFX_COUNT = SFX_DRUM0 + 9
 };
 enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
@@ -390,19 +391,19 @@ typedef struct {
 // The shop node on every map is the heroes' house: the yard, then rooms in a row along one floor
 // (web/lib/houseart.js has the same layout). Down at a room's thing uses it; some open a little
 // game of their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO). Rescued baby bots wander about.
-#define CK_HOUSE_W 2040
+#define CK_HOUSE_W 1440
 #define CK_HOUSE_FLOOR 200
 #define CK_HOUSE_CEIL 20
 #define CK_HOUSE_PILLAR 8
 #define CK_HOUSE_DOOR_TOP 120
-#define CK_HOUSE_ROOMS 8
-#define CK_HOUSE_SPOTS 7
-#define CK_HOUSE_DECOR 9
+#define CK_HOUSE_ROOMS 7
+#define CK_HOUSE_SPOTS 10
+#define CK_HOUSE_DECOR 6
 #define CK_HOUSE_BABIES 16
-enum { SPOT_SHOP, SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS };
+enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK };
 // furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
 enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
-       FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_COUNT };
+       FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN, FURN_COUNT };
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
 typedef struct { int x, kind, furn; const char *label; } ck_spot;
 typedef struct { int x, furn; } ck_decor;
@@ -419,21 +420,25 @@ extern const ck_decor ck_decors[CK_HOUSE_DECOR];
 #define CK_MURAL_ERASER CK_MURAL_PAL   // the last choice rubs paint out
 extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 // the aquarium: water on the left, a beach on the right
+// The aquarium is three screens wide: water, then a beach on the right (its last screen is the
+// baked aqua_bg, the two before it the aqua_water tile).
+#define CK_AQUA_W 960
 #define CK_AQUA_TOP 44
 #define CK_AQUA_SEABED 222
-#define CK_AQUA_BEACH_X 236
+#define CK_AQUA_BEACH_X 876       // world x (236 on the last screen)
 #define CK_AQUA_BEACH_Y 182
-#define CK_AQUA_FISH 7
-#define CK_AQUA_SHRIMP 4
+#define CK_AQUA_FISH 14
+#define CK_AQUA_SHRIMP 8
 #define CK_AQUA_CRABS 3
+#define CK_AQUA_FOOD 12           // fish food flakes sinking at once
 // the garage's race track: an oval ring seen from above
-#define CK_TRACK_CX 160
-#define CK_TRACK_CY 130
-#define CK_TRACK_OX 150
-#define CK_TRACK_OY 100
-#define CK_TRACK_IX 92
-#define CK_TRACK_IY 48
-#define CK_RACE_LAPS 3
+// The garage race: side on, each player in their own lane (two lanes stacked when two play).
+// The cars drive themselves; A jumps the cones and crates, and a bump slows you right down.
+#define CK_RACE_LEN 2400
+#define CK_RACE_OBST 12
+#define CK_RACE_CAR_X 80          // where the car sits on the screen
+enum { OBST_CONE, OBST_CRATE };
+void ck_race_obst(int i, float *x, int *kind, float *w, float *h);
 // the piano: two octaves from middle C, 14 white keys
 #define CK_KEYS_X 20
 #define CK_KEYS_Y 150
@@ -442,7 +447,12 @@ extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 #define CK_KEYS_BW 12
 #define CK_KEYS_BH 48
 #define CK_KEYS_N 24
-void ck_piano_key(int i, float *x, bool *black);   // semitone 0..23: the key's middle and colour
+void ck_piano_key(int i, float *x, bool *black);
+// The music room's drum kit (SC_PIANO with house.drums set): each button hits its own piece.
+#define CK_DRUMS 9
+enum { DRUM_DRUM, DRUM_CYMBAL, DRUM_HANDS };
+typedef struct { const char *name, *button; uint16_t btn; int kind; float x, y, r; uint32_t col; } ck_drum;
+extern const ck_drum ck_drums[CK_DRUMS];   // semitone 0..23: the key's middle and colour
 // One hero in the house or one of its games (not every game uses every field).
 typedef struct {
     int slot;                  // player slot 0 or 1
@@ -451,12 +461,13 @@ typedef struct {
     bool ground, land, jet, brush;
     int eat, bubT, col;        // house: snack time; aqua: next bubble; paint: palette choice
     float bx, by;              // paint: where the brush was last frame
-    float a, s, lapT, best;    // cars: heading, speed, this lap, best lap
+    float a, s, lapT, best;    // cars: (unused), speed, (unused), finish time
     int laps, key, rep, bounce;
     bool half;
 } ck_hhero;
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
-typedef struct { int kind; float x, y, vx, ph; int scare; } ck_fish;
+typedef struct { int kind; float x, y, vx, ph; int scare; int happy; } ck_fish;   // happy: frames of a happy wiggle
+typedef struct { float x, y; int life; } ck_food;
 typedef struct { float x, y, vx, vy; int face, rest; } ck_shrimp;
 typedef struct { float x, vx; int snap, wait; } ck_crab;
 typedef struct { float x, y; int life; uint32_t col; } ck_note_fx;
@@ -476,11 +487,16 @@ typedef struct {
     ck_fish fish[CK_AQUA_FISH];
     ck_shrimp shrimp[CK_AQUA_SHRIMP];
     ck_crab crabs[CK_AQUA_CRABS];
+    ck_food food[CK_AQUA_FOOD];
+    int nfood;
+    float gcam;                // the camera in a game that scrolls (the aquarium)
     float count, endT, clock;  // cars: the countdown, the time since the winner got home, the race clock
     int win;                   // cars: the winner's index, or -1
     uint8_t lit[CK_KEYS_N];    // piano: frames a key stays lit
     ck_note_fx notes[16];
     int nnotes;
+    int letter;                // the next letter in the mailbox
+    bool drums;                // SC_PIANO shows the drum kit instead of the piano
 } ck_house;
 #define CK_SLOTS 3
 typedef struct { bool used; int world, bolts; } ck_slot_info;
@@ -614,7 +630,9 @@ int ck_menu_items(const ck_game *G, int *out);    // the map menu's rows (up to 
 void ck_game_slots(ck_game *G, const ck_saves *slots);
 ck_slot_info ck_slot_summary(const ck_game *G, int k);
 // Which spot (an index into ck_spots) a hero in the house stands at, or -1.
-int ck_house_near(const ck_hhero *p);
+int ck_house_near(const ck_game *G, const ck_hhero *p);
+// The yard's signpost (SPOT_BACK) is only there from World 2 on: it goes back a world.
+bool ck_spot_here(const ck_game *G, int k);
 // One 60 Hz tick. Clears and refills G->sfx.
 void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2);
 
