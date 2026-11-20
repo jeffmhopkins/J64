@@ -205,7 +205,7 @@ static uint16_t fuzz_pad(int *hold, uint16_t *cur) {
     return *cur;
 }
 static void fuzz_check(const ck_game *G) {
-    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_CUT, 1);
+    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_MENU, 1);
     EXPECT_EQ_INT(G->worldNum >= 1 && G->worldNum <= CK_WORLDS, 1);
     EXPECT_EQ_INT(G->nparts >= 0 && G->nparts <= CK_MAXPARTS, 1);
     EXPECT_EQ_INT(G->nsfx >= 0 && G->nsfx <= CK_MAXSFX, 1);
@@ -738,6 +738,58 @@ static void test_song_lengths(void) {
     }
 }
 
+// The parts shop: buy with bolts, one item per slot, items in different slots stack, both players.
+static void press(ck_game *G, uint16_t p1, uint16_t p2) { ck_game_step(G, p1, p2); ck_game_step(G, 0, 0); }
+static void test_shop(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    EXPECT_EQ_INT(ACC_COUNT, 36);
+    for (int a = 0; a < ACC_COUNT; a++) EXPECT_EQ_INT(!!(ck_acc[a].cost > 0 && ck_acc[a].slot < SLOT_COUNT && ck_acc[a].name[0]), 1);
+    G->prog.joined[0] = G->prog.joined[1] = true;
+    G->prog.bolts = 100;
+    G->scene = SC_SHOP;
+    G->shopCur[0] = ACC_PARTY; G->shopCur[1] = ACC_BOWTIE;
+    press(G, CK_A, 0);   // P1 buys the party hat and puts it on
+    EXPECT_EQ_INT(!!(CK_OWNS(&G->saves.closet, ACC_PARTY)), 1);
+    EXPECT_EQ_INT(G->prog.bolts, 100 - ck_acc[ACC_PARTY].cost);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    press(G, 0, CK_A);   // P2 buys a bow tie
+    EXPECT_EQ_INT(ck_wearing(G, 1, SLOT_NECK), ACC_BOWTIE);
+    EXPECT_EQ_INT(ck_wearing(G, 1, SLOT_HEAD), -1);
+    // P1 walks to the bow tie (already owned): wearing it is free and stacks with the hat
+    G->shopCur[0] = ACC_BOWTIE;
+    int bolts = G->prog.bolts;
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->prog.bolts, bolts);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_NECK), ACC_BOWTIE);
+    press(G, CK_A, 0);   // and A again takes it off
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_NECK), -1);
+    // too few bolts: nothing changes
+    G->shopCur[0] = ACC_DISCO;
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_DISCO)), 1);
+    EXPECT_EQ_INT(!!(G->shopMsgT > 0), 1);
+    // the grid is 9 wide: down moves a row, right steps one
+    G->shopCur[0] = 0;
+    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], 9);
+    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], 10);
+    // a high item past bit 31 still saves and stacks
+    G->prog.bolts = 500;
+    G->shopCur[0] = ACC_LIGHTUP; press(G, CK_A, 0);
+    G->shopCur[0] = ACC_DISCO; press(G, CK_A, 0);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), ACC_LIGHTUP);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_BODY), ACC_DISCO);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    // B leaves to the map; a new game empties the closet
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+    ck_game_new_game(G);
+    EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_PARTY) && !CK_OWNS(&G->saves.closet, ACC_LIGHTUP)), 1);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), -1);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), -1);
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -756,4 +808,5 @@ void test_clankers(void) {
     test_new_bot_runs();
     test_movement();
     test_song_lengths();
+    test_shop();
 }

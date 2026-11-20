@@ -182,11 +182,34 @@ void ck_prog_fresh(ck_prog *p);
 // have not been to yet has magic 0. An older save (one ck_prog with magic "CK01" at the start)
 // becomes World 1's progress.
 #define CK_SAVES_MAGIC 0x434B3032u  // "CK02"
+
+// Accessories from the parts shop, the same list as K.ACC in web/lib/draw.js. Bought once with
+// bolts for the whole family; each player picks what to wear in each slot.
+enum {
+    ACC_PARTY, ACC_FLOWER, ACC_BEANIE, ACC_BASEBALL, ACC_CHEF, ACC_PROPELLER, ACC_COWBOY, ACC_PIRATE, ACC_TOPHAT, ACC_WIZARD, ACC_CROWN, ACC_RAINBOWCAP,
+    ACC_GLASSES, ACC_SHADES, ACC_HEARTS, ACC_STARS, ACC_GOGGLES, ACC_MUSTACHE, ACC_MONOCLE,
+    ACC_BOWTIE, ACC_SCARF, ACC_NECKTIE, ACC_BANDANA, ACC_MEDAL,
+    ACC_SWEATER, ACC_OVERALLS, ACC_JERSEY, ACC_TUX, ACC_SUPER, ACC_DISCO,
+    ACC_SNEAKERS, ACC_BOOTS, ACC_RAINBOOTS, ACC_FLIPPERS, ACC_SKATES, ACC_LIGHTUP,
+    ACC_COUNT
+};
+enum { SLOT_HEAD, SLOT_FACE, SLOT_NECK, SLOT_BODY, SLOT_FEET, SLOT_COUNT };
+typedef struct { const char *name; uint8_t slot; uint8_t rainbow; uint16_t cost; } ck_accdef;   // rainbow: cycles colour
+extern const ck_accdef ck_acc[ACC_COUNT];
+#define CK_OWNS(c, a) (((c)->own[(a) >> 3] >> ((a) & 7)) & 1)
+#define CK_CLOSET_MAGIC 0xC2
+typedef struct {
+    uint8_t magic;                   // CK_CLOSET_MAGIC, or the closet starts empty (older saves)
+    uint8_t own[(ACC_COUNT + 7) / 8];  // bit per accessory
+    uint8_t wear[2][SLOT_COUNT];       // per player and slot: 0 nothing, else accessory + 1
+} ck_closet;
+
 typedef struct {
     uint32_t magic;
     uint8_t world;                   // 1..CK_WORLDS
     uint8_t pad[3];
     ck_prog w[CK_WORLDS];
+    ck_closet closet;                // added after the worlds, so older saves still line up
 } ck_saves;
 // Read a save from raw EEPROM bytes (at least sizeof(ck_saves)); anything unknown starts fresh.
 void ck_saves_read(ck_saves *s, const void *raw);
@@ -337,7 +360,7 @@ typedef struct {
 } ck_map;
 
 // ---------------------------------------------------------------------------- the whole game
-enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT };
+enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU };
 enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
 
 // The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine
@@ -408,6 +431,14 @@ typedef struct ck_game {
     ck_snap snap;
     ck_intro intro;
 
+    // START on the map: Keep playing, Change heroes, New game (asks once more first)
+    int menuPick;
+    bool menuAsk;
+    // the parts shop: a cursor per player, and a short message
+    int shopCur[2];
+    char shopMsg[32];
+    int shopMsgT;
+
     ck_input in;
     ck_part parts[CK_MAXPARTS];
     int nparts;
@@ -430,6 +461,10 @@ const ck_saves *ck_game_saves(ck_game *G);
 bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved);
 // Level text for the node whose level= is `stem`. Returns false if no node uses it.
 bool ck_game_add_level(ck_game *G, const char *stem, const char *text);
+// Wipe every world, bolt, star and accessory and start again in World 1 (the heroes stay).
+void ck_game_new_game(ck_game *G);
+// What player slot s wears in each slot: an accessory id, or -1.
+int ck_wearing(const ck_game *G, int s, int slot);
 // One 60 Hz tick. Clears and refills G->sfx.
 void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2);
 

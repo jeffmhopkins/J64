@@ -27,7 +27,7 @@ uint16_t ck_bot(const ck_level *lv) {
 }
 
 const char *ck_scene_name(int scene) {
-    static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro", "cut" };
+    static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro", "cut", "menu" };
     return scene >= 0 && scene < (int)(sizeof names / sizeof *names) ? names[scene] : "?";
 }
 

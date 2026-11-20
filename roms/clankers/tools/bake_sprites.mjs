@@ -102,6 +102,56 @@ function bakeAll() {
     for (let c = 0; c < COLS.length; c++)
       strip(`hero_${hero}_${c}`, 64, 56, 32, 44, 32, (g, i) => heroFrame(hero, COLS[c], i), 'rgba16', 8);
 
+  // ---- accessories from the parts shop. The hero views call K.onWear(kind, where) as they draw:
+  // 'head' (hats, face and neck pieces hang off the head's top middle), 'body' (the torso box) and
+  // 'foot' (each foot). Where those land in every hero frame goes into sprites.h as ACC_AT; each
+  // item is drawn once per view (robot front, robot side, ostrich front, ostrich side) into a strip
+  // per slot, anchored at the same point, and the N64 places, turns and stretches it to match.
+  // Items that cycle colour are drawn white (K.plain) so the N64 can tint them.
+  const ACC_AT = [], REF = {};
+  const pt = (m, x, y, s0) => { const q = m.transformPoint(new DOMPoint(x, y)); return { x: q.x, y: q.y, rot: Math.atan2(m.b, m.a), sx: Math.hypot(m.a, m.b) / s0, sy: Math.hypot(m.c, m.d) / s0 }; };
+  for (const hero of ['robot', 'ostrich']) {
+    const s0 = hero === 'robot' ? 0.074 : 0.071, rows = [];
+    for (let i = 0; i < 32; i++) {
+      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 56;
+      const g = cv.getContext('2d'); g.translate(32, 44); K.g = g;
+      const base = g.getTransform().inverse(), at = { head: null, body: null, feet: [], side: 0 };
+      K.onWear = (kind, a) => {
+        const m = base.multiply(g.getTransform()), side = a.side ? 1 : 0, key = hero + side;
+        REF[key] = REF[key] || {};
+        if (kind === 'head') { at.head = pt(m, a.cx, a.top, s0); at.side = side; REF[key].head = REF[key].head || a; }
+        else if (kind === 'body') { at.body = pt(m, a.x + a.w / 2, a.y + a.h / 2, s0); REF[key].body = REF[key].body || a; }
+        else if (kind === 'foot' && at.feet.length < 2) { at.feet.push(Object.assign(pt(m, a.x, a.y, s0), { far: a.far ? 1 : 0 })); REF[key].foot = REF[key].foot || a; }
+      };
+      heroFrame(hero, COLS[0], i);
+      K.onWear = null;
+      rows.push(at);
+    }
+    ACC_AT.push(rows);
+  }
+  // one strip per slot: frame = view * (items in the slot) + item, view = hero * 2 + side
+  const SLOT_FRAME = { head: [32, 20, 16, 15], face: [28, 16, 14, 0], neck: [28, 24, 14, 0], body: [18, 16, 9, 8], feet: [12, 10, 6, 5] };
+  for (const slot of K.ACC_SLOTS) {
+    const items = K.ACC.filter(it => it.slot === slot), [fw, fh, ax, ay] = SLOT_FRAME[slot];
+    strip('acc_' + slot, fw, fh, ax, ay, 4 * items.length, (g, i) => {
+      const it = items[i % items.length], view = Math.floor(i / items.length), hero = view < 2 ? 'robot' : 'ostrich', R = REF[hero + (view % 2)];
+      if (!R) return;
+      const s0 = hero === 'robot' ? 0.074 : 0.071;
+      K.plain = !!it.rainbow;
+      g.scale(s0, s0);
+      if (slot === 'body') { const b = R.body; g.translate(-(b.x + b.w / 2), -(b.y + b.h / 2)); K.wearBody(it.id, b, 0.3, !!b.side); }
+      else if (slot === 'feet') { const f = R.foot; g.translate(-f.x, -f.y); K.wearFoot(it.id, f.x, f.y, f.s, 0.3, f.side, false); }
+      else {
+        const a = R.head; g.translate(-a.cx, -a.top);
+        if (slot === 'head') K.wearHead(it.id, a.cx, a.top, a.w, 0.3, a.side);
+        else if (slot === 'face') K.wearFace(it.id, a.eyes, a.side);
+        else K.wearNeck(it.id, a.neck[0], a.neck[1], a.neck[2], a.side ? 1 : 0);
+      }
+      K.plain = false;
+    }, 'rgba16', items.length);
+  }
+  out.accAt = ACC_AT;
+
   // ---- Glitchies: 8 frames per row of 32x36, feet at (16, 32)
   // rows: bumble, sprocket, grumble (frames 0-5 glitchy, 6-7 happy), then the shut Grumble Crate
   // (0-3 shut with dizzy stars, 4 kicked along the ground, 5 kicked in the air)
@@ -315,7 +365,7 @@ function bakeAll() {
     else if (kind === 'bubble') { g.globalAlpha = 0.35; K.circ(x, y, 4.5, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = '#8fd3ff'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 4.5, 0, P * 2); g.stroke(); K.circ(x - 1.6, y - 1.6, 1.2, '#fff'); K.circ(x + 4.5, y - 4, 1.3, '#bff0ff'); }
     else if (kind === 'magnet') { g.strokeStyle = '#e04f4f'; g.lineWidth = 3; g.beginPath(); g.arc(x, y - 0.5, 3.5, 0, P); g.stroke(); g.fillStyle = '#e8e4f0'; g.fillRect(x - 5, y - 3.5, 3, 3); g.fillRect(x + 2, y - 3.5, 3, 3); }
   }
-  return out;
+  return { sheets: out, accAt: out.accAt };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -328,7 +378,7 @@ await page.evaluate(async (b64) => {
   await f.load(); document.fonts.add(f);
 }, font);
 await page.addScriptTag({ content: engine + '\nconst DATA = ' + JSON.stringify(files) + ';\n' + bakeAll.toString() });
-const sheets = await page.evaluate(() => bakeAll());
+const { sheets, accAt } = await page.evaluate(() => bakeAll());
 await browser.close();
 
 fs.mkdirSync(path.join(ASSETS, 'rgba16'), { recursive: true });
@@ -345,6 +395,16 @@ const lines = [
   'enum {', ...sheets.map(s => `    ${id(s.name)},`), '    SPR_COUNT', '};', '',
   'static const spr_info SPR_INFO[SPR_COUNT] = {',
   ...sheets.map(s => `    [${id(s.name)}] = { "rom:/${s.name}.sprite", ${s.fw}, ${s.fh}, ${s.cols}, ${s.n}, ${s.ax}, ${s.ay} },`),
+  '};', '',
+  '// Where each hero frame (robot, ostrich) wears its accessories, from the feet anchor: the head\'s',
+  '// top middle (hats, face and neck pieces), the middle of the body, and up to two feet (the far',
+  '// one marked), each with its turn in radians and stretch; side is 1 for a side view.',
+  'typedef struct { float x, y, rot, sx, sy; } acc_pt;',
+  'typedef struct { acc_pt head, body, foot[2]; unsigned char side, has_body, nfeet, far[2]; } acc_at;',
+  'static const acc_at ACC_AT[2][32] = {',
+  ...accAt.map(rows => '    {\n' + rows.map(a => { const P = (p) => `{ ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, ${p.rot.toFixed(3)}f, ${p.sx.toFixed(3)}f, ${p.sy.toFixed(3)}f }`, Z = { x: 0, y: -30, rot: 0, sx: 1, sy: 1 };
+    const f = [a.feet[0] || Z, a.feet[1] || Z];
+    return `        { ${P(a.head || Z)}, ${P(a.body || Z)}, { ${P(f[0])}, ${P(f[1])} }, ${a.side}, ${a.body ? 1 : 0}, ${a.feet.length}, { ${a.feet[0]?.far ? 1 : 0}, ${a.feet[1]?.far ? 1 : 0} } },`; }).join('\n') + '\n    },'),
   '};', '', '#endif', '',
 ];
 fs.writeFileSync(path.join(ROM, 'src', 'n64', 'sprites.h'), lines.join('\n'));

@@ -116,13 +116,70 @@ static void sanitize(ck_game *G) {
 
 _Static_assert(sizeof(ck_saves) <= 512, "the save must fit a 4K EEPROM");
 
+const ck_accdef ck_acc[ACC_COUNT] = {
+    [ACC_PARTY] = { "Party hat", SLOT_HEAD, 0, 15 },
+    [ACC_FLOWER] = { "Flower", SLOT_HEAD, 0, 15 },
+    [ACC_BEANIE] = { "Beanie", SLOT_HEAD, 0, 20 },
+    [ACC_BASEBALL] = { "Ball cap", SLOT_HEAD, 0, 20 },
+    [ACC_CHEF] = { "Chef hat", SLOT_HEAD, 0, 25 },
+    [ACC_PROPELLER] = { "Propeller cap", SLOT_HEAD, 0, 30 },
+    [ACC_COWBOY] = { "Cowboy hat", SLOT_HEAD, 0, 30 },
+    [ACC_PIRATE] = { "Pirate hat", SLOT_HEAD, 0, 35 },
+    [ACC_TOPHAT] = { "Top hat", SLOT_HEAD, 0, 40 },
+    [ACC_WIZARD] = { "Wizard hat", SLOT_HEAD, 0, 45 },
+    [ACC_CROWN] = { "Crown", SLOT_HEAD, 0, 60 },
+    [ACC_RAINBOWCAP] = { "Rainbow cap", SLOT_HEAD, 1, 80 },
+    [ACC_GLASSES] = { "Eyeglasses", SLOT_FACE, 0, 15 },
+    [ACC_SHADES] = { "Cool shades", SLOT_FACE, 0, 25 },
+    [ACC_HEARTS] = { "Heart glasses", SLOT_FACE, 0, 25 },
+    [ACC_STARS] = { "Star glasses", SLOT_FACE, 0, 25 },
+    [ACC_GOGGLES] = { "Goggles", SLOT_FACE, 0, 30 },
+    [ACC_MUSTACHE] = { "Mustache", SLOT_FACE, 0, 20 },
+    [ACC_MONOCLE] = { "Monocle", SLOT_FACE, 0, 35 },
+    [ACC_BOWTIE] = { "Bow tie", SLOT_NECK, 0, 15 },
+    [ACC_SCARF] = { "Scarf", SLOT_NECK, 0, 20 },
+    [ACC_NECKTIE] = { "Necktie", SLOT_NECK, 0, 20 },
+    [ACC_BANDANA] = { "Bandana", SLOT_NECK, 0, 20 },
+    [ACC_MEDAL] = { "Gold medal", SLOT_NECK, 0, 50 },
+    [ACC_SWEATER] = { "Stripy sweater", SLOT_BODY, 0, 30 },
+    [ACC_OVERALLS] = { "Overalls", SLOT_BODY, 0, 30 },
+    [ACC_JERSEY] = { "Team jersey", SLOT_BODY, 0, 35 },
+    [ACC_TUX] = { "Fancy suit", SLOT_BODY, 0, 50 },
+    [ACC_SUPER] = { "Super suit", SLOT_BODY, 0, 60 },
+    [ACC_DISCO] = { "Disco suit", SLOT_BODY, 1, 90 },
+    [ACC_SNEAKERS] = { "Sneakers", SLOT_FEET, 0, 20 },
+    [ACC_BOOTS] = { "Boots", SLOT_FEET, 0, 25 },
+    [ACC_RAINBOOTS] = { "Rain boots", SLOT_FEET, 0, 25 },
+    [ACC_FLIPPERS] = { "Flippers", SLOT_FEET, 0, 30 },
+    [ACC_SKATES] = { "Roller skates", SLOT_FEET, 0, 40 },
+    [ACC_LIGHTUP] = { "Light-up shoes", SLOT_FEET, 1, 70 },
+};
+
+// An older save has no closet, and a damaged one may wear what it does not own: keep it sane.
+static void sanitize_closet(ck_closet *c) {
+    if (c->magic != CK_CLOSET_MAGIC) { memset(c, 0, sizeof *c); c->magic = CK_CLOSET_MAGIC; }
+    for (int a = ACC_COUNT; a < (int)sizeof c->own * 8; a++) c->own[a >> 3] &= (uint8_t)~(1u << (a & 7));
+    for (int s = 0; s < 2; s++)
+        for (int k = 0; k < SLOT_COUNT; k++) {
+            int a = c->wear[s][k] - 1;
+            if (a < 0 || a >= ACC_COUNT || ck_acc[a].slot != k || !CK_OWNS(c, a)) c->wear[s][k] = 0;
+        }
+}
+
+int ck_wearing(const ck_game *G, int s, int slot) {
+    if (s < 0 || s > 1 || slot < 0 || slot >= SLOT_COUNT) return -1;
+    return (int)G->saves.closet.wear[s][slot] - 1;
+}
+
 void ck_saves_read(ck_saves *s, const void *raw) {
     uint32_t magic;
     memcpy(&magic, raw, sizeof magic);
     memset(s, 0, sizeof *s);
     if (magic == CK_SAVES_MAGIC) memcpy(s, raw, sizeof *s);
     else if (magic == CK_SAVE_MAGIC) memcpy(&s->w[0], raw, sizeof s->w[0]);   // a save from before Worlds 2 to 4
+    if (magic != CK_SAVES_MAGIC) memset(&s->closet, 0, sizeof s->closet);
     s->magic = CK_SAVES_MAGIC;
+    sanitize_closet(&s->closet);
     if (s->world < 1 || s->world > CK_WORLDS) s->world = 1;
     for (int i = 0; i < CK_WORLDS; i++)
         if (s->w[i].magic != CK_SAVE_MAGIC) memset(&s->w[i], 0, sizeof s->w[i]);
@@ -141,6 +198,7 @@ bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
     G->worldNum = 1;
     G->saves.magic = CK_SAVES_MAGIC;
     G->saves.world = 1;
+    sanitize_closet(&G->saves.closet);
     if (!ck_parse_world(world_text, &G->world)) return false;
     if (saved && saved->magic == CK_SAVE_MAGIC) G->prog = *saved;
     else ck_prog_fresh(&G->prog);
@@ -204,6 +262,7 @@ bool ck_game_boot(ck_game *G, ck_loader load, void *user, const ck_saves *saved)
     G->loadUser = user;
     if (saved) G->saves = *saved;
     if (G->saves.magic != CK_SAVES_MAGIC) { memset(&G->saves, 0, sizeof G->saves); G->saves.magic = CK_SAVES_MAGIC; }
+    sanitize_closet(&G->saves.closet);
     int n = G->saves.world >= 1 && G->saves.world <= CK_WORLDS ? G->saves.world : 1;
     if (!load_world(G, n) && (n == 1 || !load_world(G, (n = 1)))) return false;
     // the heroes come from whichever world was saved last
@@ -241,6 +300,22 @@ bool ck_game_enter_world(ck_game *G, int n, int at) {
     return true;
 }
 
+void ck_game_new_game(ck_game *G) {
+    ck_prog was = G->prog;
+    memset(G->saves.w, 0, sizeof G->saves.w);
+    memset(&G->saves.closet, 0, sizeof G->saves.closet);
+    sanitize_closet(&G->saves.closet);
+    if (G->worldNum != 1) load_world(G, 1);
+    G->saves.world = 1;
+    ck_prog_fresh(&G->prog);
+    memcpy(G->prog.hero, was.hero, 2); memcpy(G->prog.col, was.col, 2); memcpy(G->prog.joined, was.joined, 2);
+    G->prog.little = was.little;
+    sanitize(G);
+    G->snap.valid = false;
+    ck_map_reset(G);
+    ck_save(G);
+}
+
 bool ck_game_add_level(ck_game *G, const char *stem, const char *text) {
     bool any = false;
     for (int i = 0; i < G->world.nnodes; i++) {
@@ -261,7 +336,11 @@ static void go(ck_game *G, int scene) {
         else ck_map_reset(G);
         ck_play(G, G->world.song ? G->world.song : SONG_MAP);
         break;
-    case SC_SHOP: ck_play(G, G->world.song ? G->world.song : SONG_MAP); break;
+    case SC_SHOP:
+        G->shopMsgT = 0;
+        ck_play(G, G->world.song ? G->world.song : SONG_MAP);
+        break;
+    case SC_MENU: G->menuPick = 0; G->menuAsk = false; break;
     }
 }
 
@@ -295,7 +374,8 @@ static void map_update(ck_game *G) {
     for (int i = 0; i < 2; i++) {
         for (int d = 0; d < 4; d++)
             if (HIT(G, i, dirs[d]) && ck_map_step(G, dirs[d])) ck_sfx(G, SFX_STEP);
-        if (HIT(G, i, CK_A) || HIT(G, i, CK_START)) {
+        if (HIT(G, i, CK_START)) { ck_sfx(G, SFX_SELECT); go(G, SC_MENU); return; }   // START opens the map menu
+        if (HIT(G, i, CK_A)) {
             int n = ck_map_here(G);
             if (n < 0) continue;
             G->prog.at = (uint8_t)n;
@@ -321,6 +401,70 @@ static void map_update(ck_game *G) {
     ck_map_update(G, G->map.now + 1.0f / 60);
     int n = ck_map_here(G);
     if (n >= 0 && G->prog.at != n) { G->prog.at = (uint8_t)n; ck_save(G); }
+}
+
+// START on the map: Keep playing, Change heroes, or New game (which asks once more first).
+#define MENU_ITEMS 3
+static void back_to_map(ck_game *G) { G->keepMap = true; go(G, SC_MAP); }
+static void menu_update(ck_game *G) {
+    ck_map_update(G, G->map.now + 1.0f / 60);
+    int n = G->menuAsk ? 2 : MENU_ITEMS;
+    if (ANYHIT(G, CK_UP)) { G->menuPick = (G->menuPick + n - 1) % n; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_DOWN)) { G->menuPick = (G->menuPick + 1) % n; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_B) || (ANYHIT(G, CK_START) && !G->menuAsk)) {
+        ck_sfx(G, SFX_SELECT);
+        if (G->menuAsk) { G->menuAsk = false; G->menuPick = 2; } else back_to_map(G);
+        return;
+    }
+    if (!ANYHIT(G, CK_A) && !ANYHIT(G, CK_START)) return;
+    if (G->menuAsk) {
+        if (G->menuPick == 1) { ck_sfx(G, SFX_OPEN); ck_game_new_game(G); go(G, SC_SELECT); }
+        else { ck_sfx(G, SFX_SELECT); G->menuAsk = false; G->menuPick = 2; }
+        return;
+    }
+    if (G->menuPick == 0) { ck_sfx(G, SFX_SELECT); back_to_map(G); }
+    else if (G->menuPick == 1) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SELECT); }
+    else { ck_sfx(G, SFX_NOPE); G->menuAsk = true; G->menuPick = 0; }
+}
+
+// The parts shop: each player moves their own cursor; A buys an accessory, then wears or takes it off.
+#define SHOP_COLS 9   // the same grid as the web shop: 4 rows of 9
+static void shop_act(ck_game *G, int s) {
+    int a = G->shopCur[s];
+    ck_closet *c = &G->saves.closet;
+    const ck_accdef *d = &ck_acc[a];
+    if (!CK_OWNS(c, a)) {
+        if (G->prog.bolts < d->cost) {
+            ck_sfx(G, SFX_NOPE);
+            snprintf(G->shopMsg, sizeof G->shopMsg, "Need %d more bolts", d->cost - G->prog.bolts);
+            G->shopMsgT = 90;
+            return;
+        }
+        G->prog.bolts = (uint16_t)(G->prog.bolts - d->cost);
+        G->map.bolts = G->prog.bolts;
+        c->own[a >> 3] |= (uint8_t)(1u << (a & 7));
+        c->wear[s][d->slot] = (uint8_t)(a + 1);
+        ck_sfx(G, SFX_BUY);
+        snprintf(G->shopMsg, sizeof G->shopMsg, "%s!", d->name);
+        G->shopMsgT = 90;
+    } else if (c->wear[s][d->slot] == a + 1) { c->wear[s][d->slot] = 0; ck_sfx(G, SFX_SELECT); }
+    else { c->wear[s][d->slot] = (uint8_t)(a + 1); ck_sfx(G, SFX_CONFIRM); }
+    ck_save(G);
+}
+static void shop_update(ck_game *G) {
+    ck_map_update(G, G->map.now + 1.0f / 60);
+    for (int s = 0; s < 2; s++) {
+        if (!G->prog.joined[s]) continue;
+        int *cur = &G->shopCur[s];
+        if (*cur < 0 || *cur >= ACC_COUNT) *cur = 0;
+        if (HIT(G, s, CK_LEFT)) { *cur = (*cur + ACC_COUNT - 1) % ACC_COUNT; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_RIGHT)) { *cur = (*cur + 1) % ACC_COUNT; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_UP) && *cur >= SHOP_COLS) { *cur -= SHOP_COLS; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_DOWN) && *cur + SHOP_COLS < ACC_COUNT) { *cur += SHOP_COLS; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_A)) shop_act(G, s);
+        if (HIT(G, s, CK_B) || HIT(G, s, CK_START)) { ck_sfx(G, SFX_SELECT); ck_save(G); back_to_map(G); return; }
+    }
+    if (G->shopMsgT > 0) G->shopMsgT--;
 }
 
 static void level_update(ck_game *G) {
@@ -389,10 +533,8 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
         break;
     case SC_SELECT: select_update(G); break;
     case SC_MAP: map_update(G); break;
-    case SC_SHOP:
-        ck_map_update(G, G->map.now + 1.0f / 60);
-        if (ANYHIT(G, CK_A) || ANYHIT(G, CK_B) || ANYHIT(G, CK_START)) { ck_sfx(G, SFX_SELECT); G->keepMap = true; go(G, SC_MAP); }
-        break;
+    case SC_SHOP: shop_update(G); break;
+    case SC_MENU: menu_update(G); break;
     case SC_LEVEL: level_update(G); break;
     case SC_CUT:
         if (ck_cut_update(G)) {

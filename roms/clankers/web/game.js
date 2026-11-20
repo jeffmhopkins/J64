@@ -217,7 +217,7 @@ let closet = store.get('closet', freshCloset());
 function cleanCloset(c) {   // a damaged or old save never breaks the game
   const out = freshCloset();
   if (c && Array.isArray(c.own)) out.own = c.own.filter(id => ACC_IDS.has(id));
-  if (c && Array.isArray(c.wear)) for (let i = 0; i < 2; i++) { const w = c.wear[i] || {}; for (const sl of ['head', 'face', 'neck']) if (out.own.includes(w[sl]) && accOf(w[sl]).slot === sl) out.wear[i][sl] = w[sl]; }
+  if (c && Array.isArray(c.wear)) for (let i = 0; i < 2; i++) { const w = c.wear[i] || {}; for (const sl of K.ACC_SLOTS) if (out.own.includes(w[sl]) && accOf(w[sl]).slot === sl) out.wear[i][sl] = w[sl]; }
   return out;
 }
 closet = cleanCloset(closet);
@@ -497,18 +497,28 @@ function mapMenu() {
 function shopScene() {
   const S = { song: mapScene.song, t: 0, cur: [0, 0], msg: null };
   const team = activeParty();
-  const COLS_N = 5, cell = (k) => ({ x: 34 + (k % COLS_N) * 52, y: 46 + Math.floor(k / COLS_N) * 46 });
+  const COLS_N = 9, TW = 30, TH = 30, cell = (k) => ({ x: 16 + (k % COLS_N) * 32, y: 36 + Math.floor(k / COLS_N) * 32 });
+  const TINT = { head: 'rgba(255,210,63,0.13)', face: 'rgba(90,209,255,0.13)', neck: 'rgba(255,143,199,0.13)', body: 'rgba(194,139,255,0.15)', feet: 'rgba(73,209,122,0.13)' };
   const leave = () => { saveProg(); go(mapScene); };
   function act(slot) {
     const it = K.ACC[S.cur[slot]], wear = closet.wear[slot];
     if (!closet.own.includes(it.id)) {
       if ((prog.bolts || 0) < it.cost) { SND.fx.nope(); S.msg = { text: 'Need ' + (it.cost - (prog.bolts || 0)) + ' more bolts', t: 90 }; return; }
       prog.bolts -= it.cost; saveProg(); closet.own.push(it.id); wear[it.slot] = it.id; saveCloset();
-      SND.fx.buy(); sparks(cell(S.cur[slot]).x + 22, cell(S.cur[slot]).y + 20, 14, '#ffd23f'); S.msg = { text: it.name + '!', t: 90 };
+      SND.fx.buy(); sparks(cell(S.cur[slot]).x + TW / 2, cell(S.cur[slot]).y + TH / 2, 14, '#ffd23f'); S.msg = { text: it.name + '!', t: 90 };
       return;
     }
     if (wear[it.slot] === it.id) { delete wear[it.slot]; SND.fx.select(); } else { wear[it.slot] = it.id; SND.fx.confirm(); }
     saveCloset();
+  }
+  // one item drawn small inside its tile, on a grey stand-in head, body or pair of feet
+  function icon(it, x, y, t) {
+    const hx = x + TW / 2;
+    if (it.slot === 'head') { K.rr(hx - 9, y + 17, 18, 12, 5, '#9aa1b0'); K.wearHead(it.id, hx, y + 17, 18, t); }
+    else if (it.slot === 'face') { K.rr(hx - 12, y + 4, 24, 20, 6, '#9aa1b0'); K.wearFace(it.id, [[hx - 5.5, y + 12, 3.6, 4.2], [hx + 5.5, y + 12, 3.6, 4.2]]); }
+    else if (it.slot === 'neck') { K.rr(hx - 11, y + 2, 22, 13, 5, '#9aa1b0'); K.circ(hx - 5, y + 8, 1.8, '#2b2230'); K.circ(hx + 5, y + 8, 1.8, '#2b2230'); K.wearNeck(it.id, hx, y + 16, 24); }
+    else if (it.slot === 'body') { const b = { x: x + 6, y: y + 3, w: 18, h: 19, r: 6 }; K.rr(b.x, b.y, b.w, b.h, b.r, '#9aa1b0'); K.wearBody(it.id, b, t); }
+    else { K.wearFoot(it.id, hx - 6, y + 15, 8, t); K.wearFoot(it.id, hx + 6, y + 15, 8, t); }
   }
   S.update = function () {
     S.t += 1 / 60;
@@ -528,38 +538,33 @@ function shopScene() {
     K.g = g; MAP.frame(S.t + mapScene.t);
     g.fillStyle = 'rgba(15,10,25,0.65)'; g.fillRect(0, 0, W, H);
     panel(8, 6, W - 16, H - 12, '#3b2a5c');
-    text('PARTS SHOP', 20, 28, 14, '#ffd23f', 'left');
-    panel(W - 86, 14, 70, 18, 'rgba(27,20,38,0.9)'); K.nut(W - 74, 23, 5, S.t, '#ffd23f'); text('×' + (prog.bolts || 0), W - 64, 28, 10, '#fff6d8', 'left', null);
+    text('PARTS SHOP', 20, 26, 14, '#ffd23f', 'left');
+    panel(W - 86, 12, 70, 18, 'rgba(27,20,38,0.9)'); K.nut(W - 74, 21, 5, S.t, '#ffd23f'); text('×' + (prog.bolts || 0), W - 64, 26, 10, '#fff6d8', 'left', null);
     K.ACC.forEach((it, k) => {
       const { x, y } = cell(k), own = closet.own.includes(it.id), worn = team.some(m => closet.wear[m.slot][it.slot] === it.id);
-      K.rr(x, y, 44, 40, 6, worn ? 'rgba(73,209,122,0.35)' : 'rgba(255,255,255,0.08)');
-      // the item on a little grey head so you can see it
-      const hx = x + 22, top = y + (it.slot === 'head' ? 24 : 10);
-      if (it.slot !== 'neck') K.rr(hx - 12, top, 24, 20, 6, '#9aa1b0');
-      if (it.slot === 'head') K.wearHead(it.id, hx, top, 24, S.t);
-      else if (it.slot === 'face') K.wearFace(it.id, [[hx - 5.5, top + 8, 4, 4.6], [hx + 5.5, top + 8, 4, 4.6]]);
-      else { K.rr(hx - 12, y + 2, 24, 16, 6, '#9aa1b0'); K.circ(hx - 5.5, y + 9, 2, '#2b2230'); K.circ(hx + 5.5, y + 9, 2, '#2b2230'); K.wearNeck(it.id, hx, y + 21, 28); }
-      if (own) { K.circ(x + 38, y + 6, 5, '#49d17a'); text('✓', x + 38, y + 9, 7, '#fff', 'center', null); }
-      else { K.rr(x + 2, y + 30, 40, 9, 3, 'rgba(27,20,38,0.85)'); K.nut(x + 10, y + 34.5, 3, 0, '#ffd23f'); text(String(it.cost), x + 25, y + 38, 7, (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'center', null); }
+      K.rr(x, y, TW, TH, 5, worn ? 'rgba(73,209,122,0.4)' : TINT[it.slot]);
+      icon(it, x, y, S.t);
+      if (own) { K.circ(x + TW - 4, y + 4, 4, '#49d17a'); text('✓', x + TW - 4, y + 6.5, 6, '#fff', 'center', null); }
+      else { K.rr(x + 1, y + TH - 8, TW - 2, 8, 3, 'rgba(27,20,38,0.88)'); K.nut(x + 6, y + TH - 4, 2.5, 0, '#ffd23f'); text(String(it.cost), x + 18, y + TH - 1, 7, (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'center', null); }
     });
     // cursors, one per player
     team.forEach((m, j) => {
       const { x, y } = cell(S.cur[m.slot]), c = m.slot ? '#8fd3ff' : '#ffd23f', o = j * 2;
-      g.strokeStyle = c; g.lineWidth = 2; g.strokeRect(x - 2 - o, y - 2 - o, 48 + o * 2, 44 + o * 2);
-      if (team.length > 1) text('P' + (m.slot + 1), x + (j ? 40 : 4), y - 3 - o, 7, c);
+      g.strokeStyle = c; g.lineWidth = 2; g.strokeRect(x - 1 - o, y - 1 - o, TW + 2 + o * 2, TH + 2 + o * 2);
+      if (team.length > 1) text('P' + (m.slot + 1), x + (j ? TW - 3 : 3), y - 2 - o, 7, c);
     });
-    // the heroes trying on what their cursor is on
+    // the heroes trying on what their cursor is on, on top of everything they already wear
     team.forEach((m, j) => {
       const it = K.ACC[S.cur[m.slot]], worn = closet.wear[m.slot], tryOn = Object.assign({}, worn, { [it.slot]: it.id });
-      const x = team.length > 1 ? 110 + j * 100 : 160, y = 218, t = S.t + j;
-      K.rr(x - 26, y - 2, 52, 6, 3, 'rgba(255,255,255,0.12)');
-      if (m.hero === 'robot') K.robot(x, y, 0.13, m.hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
-      else K.ostrich(x, y, 0.12, m.hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: 0.6 }, acc: tryOn });
+      const x = team.length > 1 ? 80 + j * 160 : 160, y = 230, t = S.t + j;
+      K.rr(x - 22, y - 2, 44, 5, 2.5, 'rgba(255,255,255,0.12)');
+      if (m.hero === 'robot') K.robot(x, y, 0.11, m.hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
+      else K.ostrich(x, y, 0.1, m.hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: 0.6 }, acc: tryOn });
       const own = closet.own.includes(it.id), how = !own ? 'A buy' : worn[it.slot] === it.id ? 'A take off' : 'A wear';
-      text(it.name, x, y - 72, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'center'); text(how, x, y - 62, 7, '#fff6d8', 'center');
+      text(it.name, x, 174, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'center'); text(how, x, 184, 7, '#fff6d8', 'center');
     });
     drawParticles(0);
-    if (S.msg) { fitPanel(S.msg.text, 10, 0, 14, 18, '#ffd23f'); text(S.msg.text, W / 2, 27, 10, '#2b2230', 'center', null); }
+    if (S.msg) { fitPanel(S.msg.text, 10, 0, 12, 18, '#ffd23f'); text(S.msg.text, W / 2, 25, 10, '#2b2230', 'center', null); }
     text('B leave', W - 20, H - 14, 7, '#a49db4', 'right', null);
   };
   particles = [];

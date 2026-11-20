@@ -53,9 +53,9 @@ carries on as World 1.
 | Button | In a level | On the map |
 | --- | --- | --- |
 | Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
-| A | Jump (hold to jump higher, again to boost or flap) | Enter a level; on the exit, go to the next world; at home, go back a world |
+| A | Jump (hold to jump higher), again in the air for a double jump; hold to glide (jetpack or flapping) | Enter a level or the parts shop; on the exit, go to the next world; at home, go back a world |
 | B or C-left | Action: grab, throw, shoot | |
-| Start | Pause | Enter a level |
+| Start | Pause | Menu: keep playing, change heroes, or start a new game |
 
 <a id="worlds"></a>
 ## The four worlds
@@ -73,6 +73,19 @@ plays the parade home and THE END. A or START skips a film after the first secon
 
 In the pause menu, Start or A goes back to the level, B goes back to the map, and Z turns the
 CRT scanlines on or off. A second controller plays the ostrich.
+
+<a id="shop"></a>
+## The parts shop
+
+The house on each map is the parts shop. Bolts buy 36 accessories in five slots: hats, face
+(glasses, goggles, a mustache), neck, outfits and shoes. Each player has a cursor; A buys an item
+and puts it on, and on an owned item A puts it on or takes it off. Items in different slots stack,
+one per slot. The rainbow cap, disco suit and light-up shoes cycle through colours. What you own
+is shared by both players and saved with the game; a new game from the map menu empties it.
+
+> [!NOTE]
+> On the N64 each accessory is a small sprite drawn over the hero sprite, placed per frame from
+> `ACC_AT` in `src/n64/sprites.h`, so it can sit a pixel off where the browser draws it.
 
 <a id="sprites"></a>
 ## Redrawing the sprites
