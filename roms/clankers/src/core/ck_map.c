@@ -47,6 +47,20 @@ void ck_map_reset(ck_game *G) {
     M->hx = (float)G->world.nodes[M->at].x;
     M->hy = (float)G->world.nodes[M->at].y - 6;
     M->hdir = 1;
+    M->ntrail = 0;
+}
+
+// Baby i of the rescued line: on the path the hero walked, 14 px back and 9 px apart, so they
+// follow round bends like a little train. Before the hero has walked, they line up behind.
+void ck_map_baby_pos(const ck_game *G, int i, float *x, float *y) {
+    const ck_map *M = &G->map;
+    float want = 14 + i * 9, px = M->hx, py = M->hy, got = 0;
+    for (int k = 0; k < M->ntrail; k++) {
+        float qx = M->trail[k][0], qy = M->trail[k][1], d = sqrtf((qx - px) * (qx - px) + (qy - py) * (qy - py));
+        if (got + d >= want && d > 0) { float u = (want - got) / d; *x = px + (qx - px) * u; *y = py + (qy - py) * u; return; }
+        got += d; px = qx; py = qy;
+    }
+    *x = px - M->hdir * (want - got); *y = py;
 }
 
 // Breadth-first route over open roads. Fills legs; returns the number of legs, or -1.
@@ -149,6 +163,13 @@ void ck_map_update(ck_game *G, float now) {
     } else {
         M->hx = (float)W->nodes[M->at].x;
         M->hy = (float)W->nodes[M->at].y - 6;
+    }
+    // the trail for the babies: a new point once the hero is 2 px from the last one
+    if (!M->ntrail || fabsf(M->hx - M->trail[0][0]) + fabsf(M->hy - M->trail[0][1]) >= 2) {
+        int n = M->ntrail < CK_TRAIL ? M->ntrail + 1 : CK_TRAIL;
+        memmove(M->trail[1], M->trail[0], sizeof M->trail[0] * (size_t)(n - 1));
+        M->trail[0][0] = M->hx; M->trail[0][1] = M->hy;
+        M->ntrail = n;
     }
     int keep = 0;
     for (int k = 0; k < M->nreveal; k++)

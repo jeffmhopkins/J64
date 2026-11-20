@@ -69,7 +69,7 @@ THEMES.factory = (W) => {
       const lift = ok ? Math.sin(t * 2) * 2 : 0;
       K.rr(n.x - 7, n.y - 8 + lift, 14, 14, 2, ok ? '#49d17a' : '#8c8496');
       g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1; for (let i = -4; i <= 4; i += 4) { g.beginPath(); g.moveTo(n.x + i, n.y - 8 + lift); g.lineTo(n.x + i, n.y + 6 + lift); g.stroke(); }
-      g.font = '7px "Titan One", sans-serif'; g.fillStyle = '#2b2230'; g.textAlign = 'center'; g.fillText('W3', n.x, n.y + 2 + lift);
+      g.font = '7px "Titan One", sans-serif'; g.textAlign = 'center'; g.lineJoin = 'round'; g.strokeStyle = '#1b1426'; g.lineWidth = 2; g.strokeText('W3', n.x, n.y + 2 + lift); g.fillStyle = '#fff6d8'; g.fillText('W3', n.x, n.y + 2 + lift);
       g.strokeStyle = '#3a3346'; g.beginPath(); g.moveTo(n.x, n.y - 24); g.lineTo(n.x, n.y - 8 + lift); g.stroke();
       g.restore();
     },

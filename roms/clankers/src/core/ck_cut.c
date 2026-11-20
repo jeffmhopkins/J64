@@ -35,21 +35,21 @@ void ck_cut_cast(const ck_game *G, ck_cut_view *v) {
     v->nbabies = nb;
     const float GR = CK_CUT_GROUND;
     if (k == 1) {
-        float lx = t < 0.8f ? -20 : t < 7.5f ? -20 + 30 * (t - 0.8f) : 181 + 34 * (t - 7.5f);
-        bool walk = t > 0.8f && t < 10.6f;
+        float lx = t < 0.8f ? -20 : t < 7.5f ? -20 + 30 * (t - 0.8f) : 181 + 44 * (t - 7.5f);
+        bool walk = t > 0.8f && t < 11.2f;
         for (int i = 0; i < np; i++) { float x = lx - i * 18; v->heroes[i] = (ck_cut_actor){ x, GR, fade_door(x), walk }; }
-        for (int j = 0; j < nb; j++) { float x = lx - np * 18 - 6 - j * 14; v->babies[j] = (ck_cut_actor){ x, GR, fade_door(x), walk }; }
-        v->gate = ck_clampf((t - 5.5f) / 1.5f, 0, 1) - ck_clampf((t - 10.4f) / 1, 0, 1);
+        for (int j = 0; j < nb; j++) { float x = lx - np * 18 - 2 - j * 8; v->babies[j] = (ck_cut_actor){ x, GR, fade_door(x), walk }; }
+        v->gate = ck_clampf((t - 5.5f) / 1.5f, 0, 1) - ck_clampf((t - 11.0f) / 1, 0, 1);
     } else if (k == 2) {
         float lx = t < 0.5f ? -20 : -20 + 90 * (t - 0.5f), cy = cage_y(t);
         float out = t < 9.8f ? 0 : ck_minf(102, 60 * (t - 9.8f));
         for (int i = 0; i < np; i++) {
-            float x = ck_minf(lx - i * 16, 176 - i * 14);
-            v->heroes[i] = (ck_cut_actor){ x + out, cy, 1, (x < 176 - i * 14 && t > 0.5f) || (out > 0 && out < 102) };
+            float x = ck_minf(lx - i * 16, 166 - i * 16);
+            v->heroes[i] = (ck_cut_actor){ x + out, cy, 1, (x < 166 - i * 16 && t > 0.5f) || (out > 0 && out < 102) };
         }
         for (int j = 0; j < nb; j++) {
-            float x = ck_minf(lx - np * 16 - 4 - j * 12, 152 - j * 7);
-            v->babies[j] = (ck_cut_actor){ x + out, cy, 1, x < 152 - j * 7 && t > 0.5f };
+            float x = ck_minf(lx - np * 16 - 4 - j * 12, 171 - j * 8.5f);
+            v->babies[j] = (ck_cut_actor){ x + out, cy, 1, x < 171 - j * 8.5f && t > 0.5f };
         }
         v->cageY = cy;
     } else if (k == 3) {
@@ -110,7 +110,7 @@ bool ck_cut_update(ck_game *G) {
     int k = G->cut;
     float t = G->t, was = t - 1.0f / 60;
 #define AT(w) (was < (w) && t >= (w))
-    if (k == 1 && (AT(5.5f) || AT(10.4f))) ck_sfx(G, SFX_DOOR);
+    if (k == 1 && (AT(5.5f) || AT(11.0f))) ck_sfx(G, SFX_DOOR);
     if (k == 2 && (AT(3.5f) || AT(9.5f))) ck_sfx(G, SFX_CLANK);
     if (k == 3) {
         if (AT(4.5f) || AT(5.5f) || AT(6.5f)) ck_sfx(G, SFX_TICK);

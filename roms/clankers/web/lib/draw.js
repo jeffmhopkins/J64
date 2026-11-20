@@ -116,9 +116,10 @@ const CK = (() => {
     if (p.jet) { K.flame(lf[0], lf[1] + 16, 60, 26, t); K.flame(rf[0], rf[1] + 16, 60, 26, t + 0.3); }
     g.translate(0, bob);
     const armL = p.armL ?? 22, armR = p.armR ?? -22;
-    if (Math.abs(armL) <= 95) limb(-66, 6, armL, 74, 28, lim);
+    const arm = (ax, deg) => { limb(ax, 6, deg, 74, 28, lim); wearArm(p, ax, 6, deg, 74, 28, false); };
+    if (Math.abs(armL) <= 95) arm(-66, armL);
     let clawEnd = null;
-    if (Math.abs(armR) <= 95 && !p.grab) limb(66, 6, armR, 74, 28, lim);
+    if (Math.abs(armR) <= 95 && !p.grab) arm(66, armR);
     rr(-72, -26, 144, 132, 40, torso);
     rr(-26, 10, 52, 40, 12, plate);
     wearBody(p, { x: -72, y: -26, w: 144, h: 132, r: 40 });
@@ -128,8 +129,8 @@ const CK = (() => {
     eye(tilt - ex, ey, 52, 60, dark, col, Object.assign({}, eo, { angry: eo.angry ? 1 : 0 }));
     eye(tilt + ex, ey, 52, 60, dark, col, Object.assign({}, eo, { angry: eo.angry ? -1 : 0 }));
     K.mouth(p.mouth || 'smile', tilt, HY + HH * 0.52 - 16, 30, 9, dark);
-    if (Math.abs(armL) > 95) limb(-66, 6, armL, 74, 28, lim);
-    if (Math.abs(armR) > 95 && !p.grab) limb(66, 6, armR, 74, 28, lim);
+    if (Math.abs(armL) > 95) arm(-66, armL);
+    if (Math.abs(armR) > 95 && !p.grab) arm(66, armR);
     if (p.grab) {
       // grabber arm: a telescoping arm with a two-finger claw
       const len = 74 + (p.reach ?? 60);
@@ -237,7 +238,7 @@ const CK = (() => {
     wearFoot(p, bf[0], bf[1] + 2, 34, true, true);
     if (p.jet) K.flame(bf[0], bf[1] + 16, 60, 26, t + 0.3);
     g.translate(0, bob);
-    limb(-8, 6, p.armB ?? 10, 74, 28, far);
+    limb(-8, 6, p.armB ?? 10, 74, 28, far); wearArm(p, -8, 6, p.armB ?? 10, 74, 28, true);
     rr(-54, -26, 108, 132, 36, torso);
     rr(30, 10, 20, 40, 8, plate);
     wearBody(p, { x: -54, y: -26, w: 108, h: 132, r: 36, side: true });
@@ -267,7 +268,7 @@ const CK = (() => {
     wearFoot(p, ff[0], ff[1] + 2, 34, true, false);
     if (p.jet) K.flame(ff[0], ff[1] + 16, 60, 26, t);
     g.translate(0, bob);
-    if (!p.grab) limb(8, 6, p.armF ?? -10, 74, 28, lim);
+    if (!p.grab) { limb(8, 6, p.armF ?? -10, 74, 28, lim); wearArm(p, 8, 6, p.armF ?? -10, 74, 28, false); }
     if (p.stars) K.stars(0, HY - HH - 30, 90, t);
     g.restore();
     return end;
@@ -576,6 +577,21 @@ const CK = (() => {
     if (acc.head) K.wearHead(acc.head, a.cx, a.top, a.w, p.t ?? 0, a.side);
   }
   function wearBody(p, b) { if (K.onWear) K.onWear('body', b); if (p.acc && p.acc.body) K.wearBody(p.acc.body, b, p.t ?? 0, b.side); }
+  // sleeves: outfits with arms cover the robot's upper arms too (the ostrich has wings, not arms)
+  K.SLEEVE = { sweater: '#e0564f', jersey: '#49d17a', tux: '#2b2833', super: '#3a6fc0', disco: 'rainbow' };
+  K.wearSleeve = (id, x, y, deg, ln, w, t = 0, far = false) => {
+    const c0 = K.SLEEVE[id]; if (!c0) return;
+    const g = K.g, a = deg * P / 180, ex = -Math.sin(a), ey = Math.cos(a), l = ln * 0.72;
+    let c = c0 === 'rainbow' ? rb(t * 2, 3, 58) : c0;
+    if (far && c0 !== 'rainbow') c = K.shade(c, 0.75);
+    g.strokeStyle = c; g.lineWidth = w * 1.3; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + ex * l, y + ey * l); g.stroke();
+    if (id === 'sweater' || id === 'tux') { g.strokeStyle = id === 'tux' ? '#f5f1e8' : '#ffffff'; g.lineWidth = w * 1.3; g.lineCap = 'butt'; g.beginPath(); g.moveTo(x + ex * l * 0.86, y + ey * l * 0.86); g.lineTo(x + ex * l * 1.02, y + ey * l * 1.02); g.stroke(); }
+  };
+  function wearArm(p, x, y, deg, ln, w, far) {
+    if (K.onWear) K.onWear('arm', { x, y, deg, ln, w, far });
+    if (p.acc && p.acc.body) K.wearSleeve(p.acc.body, x, y, deg, ln, w, p.t ?? 0, far);
+  }
   function wearFoot(p, x, y, s, side, far) { if (K.onWear) K.onWear('foot', { x, y, s, side, far }); if (p.acc && p.acc.feet) K.wearFoot(p.acc.feet, x, y, s, p.t ?? 0, side, far); }
 
   // Poses in one place so the mocks and the game agree. kind: idle|run|jump|special|wobble

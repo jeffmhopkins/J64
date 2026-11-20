@@ -115,12 +115,17 @@ function bakeAll() {
     for (let i = 0; i < 32; i++) {
       const cv = document.createElement('canvas'); cv.width = 64; cv.height = 56;
       const g = cv.getContext('2d'); g.translate(32, 44); K.g = g;
-      const base = g.getTransform().inverse(), at = { head: null, body: null, feet: [], side: 0 };
+      const base = g.getTransform().inverse(), at = { head: null, body: null, feet: [], arms: [], side: 0 };
       K.onWear = (kind, a) => {
         const m = base.multiply(g.getTransform()), side = a.side ? 1 : 0, key = hero + side;
         REF[key] = REF[key] || {};
         if (kind === 'head') { at.head = pt(m, a.cx, a.top, s0); at.side = side; REF[key].head = REF[key].head || a; }
         else if (kind === 'body') { at.body = pt(m, a.x + a.w / 2, a.y + a.h / 2, s0); REF[key].body = REF[key].body || a; }
+        else if (kind === 'arm' && at.arms.length < 2) {
+          // a sleeve: the same stroke K.wearSleeve draws, from the shoulder 72% down the arm
+          const r = a.deg * Math.PI / 180, l = a.ln * 0.72, p0 = m.transformPoint(new DOMPoint(a.x, a.y)), p1 = m.transformPoint(new DOMPoint(a.x - Math.sin(r) * l, a.y + Math.cos(r) * l));
+          at.arms.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, w: a.w * 1.3 * Math.hypot(m.a, m.b), far: a.far ? 1 : 0 });
+        }
         else if (kind === 'foot' && at.feet.length < 2) { at.feet.push(Object.assign(pt(m, a.x, a.y, s0), { far: a.far ? 1 : 0 })); REF[key].foot = REF[key].foot || a; }
       };
       heroFrame(hero, COLS[0], i);
@@ -183,7 +188,7 @@ function bakeAll() {
   strip('bolt', 14, 14, 7, 7, 1, () => K.nut(0, 0, 4.2, 0, '#ffd23f'));   // anchored at the centre, so it can spin
   strip('gear', 20, 20, 10, 10, 1, () => K.gear(0, 0, 7, 10, 0, '#ffd23f', '#b8860b'));
   strip('power', 16, 16, 2, 2, 4, (g, i) => { K.rr(0, 0, 12, 12, 5, '#e8e4f0'); K.rr(1, 1, 10, 10, 4, '#3b2a5c'); powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet'][i], 6, 6, 0); });
-  strip('picon', 14, 14, 7, 7, 4, (g, i) => powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet'][i], 0, 0, 0));
+  strip('picon', 14, 14, 7, 7, 5, (g, i) => powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet', 'gun'][i], 0, 0, 0));
   strip('tyre', 16, 10, 0, 1, 3, (g, i) => { const sq = i / 2, hh = 9 * (1 - sq * 0.4); K.rr(0, 9 - hh, 16, hh, hh / 2, '#2b2833'); K.rr(4, 9 - hh + hh * 0.3, 8, hh * 0.4, 2, '#4a4652'); g.fillStyle = '#5b5666'; g.fillRect(2, 9 - hh + 1, 12, 1); });
   strip('lever', 24, 26, 7, 12, 2, (g, i) => {
     K.rr(-1, 8, 12, 6, 1.5, '#5d566a');
@@ -279,7 +284,7 @@ function bakeAll() {
   const node = (world, kind) => world.nodes.find(n => n.kind === kind);
   worlds.forEach((world, k) => strip('map_boss_' + (k + 1), 48, 52, 24, 44, 2, (g, i) => world.drawBoss(g, { x: 0, y: 0 }, 0.4, i === 1)));
   strip('map_shop', 32, 24, 16, 20, 2, (g, i) => { g.globalAlpha = i ? 0.5 : 1; K.rr(-11, -9, 22, 14, 2, '#7a5aa6'); g.fillStyle = '#5b3f86'; g.beginPath(); g.moveTo(-14, -8); g.lineTo(0, -19); g.lineTo(14, -8); g.fill(); K.rr(-4, -3, 8, 8, 1, '#2b2230'); K.gear(0, -13, 4, 8, 0, '#ffd23f', '#5b3f86'); g.globalAlpha = 1; }, 'rgba32');
-  worlds.forEach((world, k) => strip('map_exit_' + (k + 1), 20, 20, 10, 10, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0)));
+  worlds.forEach((world, k) => strip('map_exit_' + (k + 1), 40, 56, 20, 34, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0)));
 
   // ---- full-screen pictures (RGBA16)
   function picture(name, w, h, draw) { strip(name, w, h, 0, 0, 1, draw, 'rgba16'); }
@@ -363,6 +368,7 @@ function bakeAll() {
       g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(x + 0.8, y - 3); g.lineTo(x - 1.6, y + 0.8); g.lineTo(x, y + 0.8); g.lineTo(x - 0.8, y + 3.6); g.lineTo(x + 1.8, y - 0.4); g.lineTo(x + 0.2, y - 0.4); g.fill(); }
     else if (kind === 'rainbow') K.star(x, y, 5.5, '#ffd23f');
     else if (kind === 'bubble') { g.globalAlpha = 0.35; K.circ(x, y, 4.5, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = '#8fd3ff'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 4.5, 0, P * 2); g.stroke(); K.circ(x - 1.6, y - 1.6, 1.2, '#fff'); K.circ(x + 4.5, y - 4, 1.3, '#bff0ff'); }
+    else if (kind === 'gun') { K.rr(x - 5, y - 2, 8, 4, 1.5, '#9aa1b0'); K.rr(x - 4, y, 3, 4, 1, '#5d566a'); g.globalAlpha = 0.5; K.circ(x + 4, y - 3, 2.6, '#bff0ff'); g.globalAlpha = 1; K.circ(x + 3.4, y - 3.6, 0.8, '#fff'); }
     else if (kind === 'magnet') { g.strokeStyle = '#e04f4f'; g.lineWidth = 3; g.beginPath(); g.arc(x, y - 0.5, 3.5, 0, P); g.stroke(); g.fillStyle = '#e8e4f0'; g.fillRect(x - 5, y - 3.5, 3, 3); g.fillRect(x + 2, y - 3.5, 3, 3); }
   }
   return { sheets: out, accAt: out.accAt };
@@ -398,13 +404,15 @@ const lines = [
   '};', '',
   '// Where each hero frame (robot, ostrich) wears its accessories, from the feet anchor: the head\'s',
   '// top middle (hats, face and neck pieces), the middle of the body, and up to two feet (the far',
-  '// one marked), each with its turn in radians and stretch; side is 1 for a side view.',
+  '// one marked), each with its turn in radians and stretch; side is 1 for a side view. Arms are the',
+  '// sleeve strokes of body items: shoulder, end, width (the far arm marked).',
   'typedef struct { float x, y, rot, sx, sy; } acc_pt;',
-  'typedef struct { acc_pt head, body, foot[2]; unsigned char side, has_body, nfeet, far[2]; } acc_at;',
+  'typedef struct { float x0, y0, x1, y1, w; unsigned char far; } acc_arm;',
+  'typedef struct { acc_pt head, body, foot[2]; unsigned char side, has_body, nfeet, far[2]; unsigned char narms; acc_arm arm[2]; } acc_at;',
   'static const acc_at ACC_AT[2][32] = {',
   ...accAt.map(rows => '    {\n' + rows.map(a => { const P = (p) => `{ ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, ${p.rot.toFixed(3)}f, ${p.sx.toFixed(3)}f, ${p.sy.toFixed(3)}f }`, Z = { x: 0, y: -30, rot: 0, sx: 1, sy: 1 };
     const f = [a.feet[0] || Z, a.feet[1] || Z];
-    return `        { ${P(a.head || Z)}, ${P(a.body || Z)}, { ${P(f[0])}, ${P(f[1])} }, ${a.side}, ${a.body ? 1 : 0}, ${a.feet.length}, { ${a.feet[0]?.far ? 1 : 0}, ${a.feet[1]?.far ? 1 : 0} } },`; }).join('\n') + '\n    },'),
+    return `        { ${P(a.head || Z)}, ${P(a.body || Z)}, { ${P(f[0])}, ${P(f[1])} }, ${a.side}, ${a.body ? 1 : 0}, ${a.feet.length}, { ${a.feet[0]?.far ? 1 : 0}, ${a.feet[1]?.far ? 1 : 0} }, ${a.arms.length}, { ${[0, 1].map(k => { const r = a.arms[k] || { x0: 0, y0: 0, x1: 0, y1: 0, w: 0, far: 0 }; return `{ ${r.x0.toFixed(2)}f, ${r.y0.toFixed(2)}f, ${r.x1.toFixed(2)}f, ${r.y1.toFixed(2)}f, ${r.w.toFixed(2)}f, ${r.far} }`; }).join(', ')} } },`; }).join('\n') + '\n    },'),
   '};', '', '#endif', '',
 ];
 fs.writeFileSync(path.join(ROM, 'src', 'n64', 'sprites.h'), lines.join('\n'));

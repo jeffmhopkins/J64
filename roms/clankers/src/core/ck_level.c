@@ -168,6 +168,9 @@ static void build(ck_game *G, int node) {
     for (int k = 0; k < 3; k++) { lv->got[k] = (G->prog.got[node] >> k) & 1; lv->gotNow[k] = false; }
 }
 
+bool ck_gun_on(const ck_game *G, int slot) {
+    return slot >= 0 && slot < 2 && G->gunOn[slot] && (G->saves.closet.gear & CK_GEAR_GUN);
+}
 bool ck_has(const ck_player *p, int power) {
     for (int k = 0; k < p->nstack; k++) if (p->stack[k] == power) return true;
     return false;
@@ -692,7 +695,7 @@ static void update_players(ck_game *G, int *outcome) {
         float fullH = base_h(p);
         if (HELD(G, i, CK_DOWN) && p->ground && p->wob <= 0 && !p->low) {
             if (ck_absf(p->vx) > 1.1f) { p->slideT = 36; p->vx = p->face * 3.2f; ck_sfx(G, SFX_SLIDE); }
-            set_h(p, ck_has(p, PW_MEGA) ? 20 : 14);
+            set_h(p, 14);   // big heroes squeeze down too, so a 1-tile gap after a mega power-up never blocks you
             p->low = true;
         }
         if (p->low) {
@@ -723,8 +726,9 @@ static void update_players(ck_game *G, int *outcome) {
         if (!HELD(G, i, CK_A) && p->vy < -2.2f * CK_JK && p->jetT <= 0 && !p->spring) p->vy = -2.2f * CK_JK;
         p->flapping = false;
         // Hold A while falling to glide: the ostrich flaps, the robot hovers on its jetpack.
-        if (HELD(G, i, CK_A) && p->vy > 0.6f && !p->ground) {
-            p->vy = 0.6f; p->flapping = true;
+        float glide = (G->saves.closet.gear & CK_GEAR_JET) ? CK_SUPERGLIDE_VY : CK_GLIDE_VY;   // the super jetpack glides almost level
+        if (HELD(G, i, CK_A) && p->vy > glide && !p->ground) {
+            p->vy = glide; p->flapping = true;
             if (p->flapT-- <= 0) { ck_sfx(G, p->hero == HERO_ROBOT ? SFX_HOVER : SFX_FLAP); p->flapT = 14; }
         }
         float grav = lv->def->grav > 0 ? lv->def->grav : CK_GRAV;
@@ -738,6 +742,11 @@ static void update_players(ck_game *G, int *outcome) {
                 ck_ent *e = &lv->ents[k];
                 if (e->type == E_ENEMY && e->state == ES_SHELL && !e->dead && overlap_r(R(&e->body), reach)) { nearCrate = e; break; }
             }
+        }
+        // C switches between the kick or grab and the bubble gun, once the gun is bought
+        if (HIT(G, i, CK_C) && (G->saves.closet.gear & CK_GEAR_GUN) && p->slot >= 0 && p->slot < 2) {
+            G->gunOn[p->slot] = !G->gunOn[p->slot];
+            ck_sfx(G, SFX_SELECT);
         }
         if (p->carry && HIT(G, i, CK_B)) {
             ck_ent *e = p->carry;
@@ -753,7 +762,7 @@ static void update_players(ck_game *G, int *outcome) {
             p->carry = nearCrate; nearCrate->state = ES_CARRIED; nearCrate->vx = 0;
             ck_sfx(G, SFX_GRAB);
             p->actT = 8; p->shoot = true;
-        } else if (HIT(G, i, CK_B) && p->actT <= 0 && p->wob <= 0 && ck_has(p, PW_BUBBLE)) {
+        } else if (HIT(G, i, CK_B) && p->actT <= 0 && p->wob <= 0 && (ck_has(p, PW_BUBBLE) || ck_gun_on(G, p->slot))) {
             int mine = 0;
             for (int k = 0; k < lv->nents; k++) if (lv->ents[k].type == E_SHOT && !lv->ents[k].dead && lv->ents[k].owner == p->slot) mine++;
             if (mine < 2) {

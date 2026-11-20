@@ -54,8 +54,9 @@ carries on as World 1.
 | --- | --- | --- |
 | Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
 | A | Jump (hold to jump higher), again in the air for a double jump; hold to glide (jetpack or flapping) | Enter a level or the parts shop; on the exit, go to the next world; at home, go back a world |
-| B or C-left | Action: grab, throw, shoot | |
-| Start | Pause | Menu: keep playing, change heroes, or start a new game |
+| B or C-left | Action: grab, throw, shoot (bubbles when the bubble gun is on) | |
+| C-up, C-down or C-right | With the bubble gun bought: switch between the gun and grab or kick | |
+| Start | Pause | Menu: keep playing, change heroes, let player 2 leave, or start a new game |
 
 <a id="worlds"></a>
 ## The four worlds
@@ -78,10 +79,22 @@ CRT scanlines on or off. A second controller plays the ostrich.
 ## The parts shop
 
 The house on each map is the parts shop. Bolts buy 36 accessories in five slots: hats, face
-(glasses, goggles, a mustache), neck, outfits and shoes. Each player has a cursor; A buys an item
-and puts it on, and on an owned item A puts it on or takes it off. Items in different slots stack,
-one per slot. The rainbow cap, disco suit and light-up shoes cycle through colours. What you own
-is shared by both players and saved with the game; a new game from the map menu empties it.
+(glasses, goggles, a mustache), neck, outfits (with sleeves) and shoes. Each player has a cursor;
+A buys an item and puts it on, and on an owned item A puts it on or takes it off. Items in
+different slots stack, one per slot. The rainbow cap, disco suit and light-up shoes cycle through
+colours.
+
+The bottom row has the rest:
+
+| Item | Cost | What it does |
+| --- | --- | --- |
+| Robot, Robot ostrich | free | Swap your hero |
+| Paint pots | 30 each (the first two are free) | Paint your hero; the select screen offers only paints you own |
+| Bubble gun | 100 | C switches B between the gun and grab or kick |
+| Super jetpack | 300 | Glides almost level, so you can glide much further |
+
+What you own is shared by both players and saved with the game; a new game from the map menu
+empties it.
 
 > [!NOTE]
 > On the N64 each accessory is a small sprite drawn over the hero sprite, placed per frame from

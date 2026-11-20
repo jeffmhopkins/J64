@@ -1,6 +1,7 @@
 // Host tests for the Clankers game core (roms/clankers/src/core): the data files parse the way
 // the browser reads them, and the rules behave (bolts, stomps, lives, the map opening up).
 // Runs from the repo root so it reads the real data files.
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -326,6 +327,13 @@ static void test_flow(void) {
     steps(G, 120, 0);
     EXPECT_EQ_INT(G->map.walking, 0);
     EXPECT_EQ_INT(G->map.at, ck_world_node(&G->world, "l1"));
+    {   // the first baby follows 14 px back along the path walked
+        float bx, by;
+        ck_map_baby_pos(G, 0, &bx, &by);
+        float d = sqrtf((bx - G->map.hx) * (bx - G->map.hx) + (by - G->map.hy) * (by - G->map.hy));
+        if (!(d > 8 && d < 14.5f)) printf("baby d=%f n=%d\n", d, G->map.ntrail);
+        EXPECT_EQ_INT(d > 8 && d < 14.5f, 1);
+    }
     ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_LEVEL);
     steps(G, 30, 0);
@@ -770,10 +778,24 @@ static void test_shop(void) {
     press(G, CK_A, 0);
     EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_DISCO)), 1);
     EXPECT_EQ_INT(!!(G->shopMsgT > 0), 1);
-    // the grid is 9 wide: down moves a row, right steps one
+    // the grid is 12 wide: down moves a row, right steps one
     G->shopCur[0] = 0;
-    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], 9);
-    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], 10);
+    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], 12);
+    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], 13);
+    // the last row: heroes swap for free, paint pots are bought then worn, the bubble gun is bought once
+    EXPECT_EQ_INT(SHOP_COUNT, 48);
+    G->prog.hero[1] = HERO_ROBOT;
+    G->shopCur[1] = SHOP_OSTRICH; bolts = G->prog.bolts;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(G->prog.hero[1], HERO_OSTRICH);
+    EXPECT_EQ_INT(G->prog.bolts, bolts);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 0), 1);   // the first two colours are free
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 0);
+    G->shopCur[1] = SHOP_PAINT0 + 4;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 1);
+    EXPECT_EQ_INT(G->prog.col[1], 4);
+    EXPECT_EQ_INT(G->prog.bolts, bolts - CK_PAINT_COST);
     // a high item past bit 31 still saves and stacks
     G->prog.bolts = 500;
     G->shopCur[0] = ACC_LIGHTUP; press(G, CK_A, 0);
@@ -781,6 +803,11 @@ static void test_shop(void) {
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), ACC_LIGHTUP);
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_BODY), ACC_DISCO);
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    G->prog.bolts = 500;
+    G->shopCur[0] = SHOP_GUN;
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_GUN), 1);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
     // B leaves to the map; a new game empties the closet
     press(G, CK_B, 0);
     EXPECT_EQ_INT(G->scene, SC_MAP);
@@ -788,6 +815,59 @@ static void test_shop(void) {
     EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_PARTY) && !CK_OWNS(&G->saves.closet, ACC_LIGHTUP)), 1);
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), -1);
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), -1);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_GUN), 0);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 0);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 1), 1);
+}
+
+// The bubble gun: C switches to it once bought, and then B fires bubbles instead of kicking.
+static void test_bubble_gun(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.joined[0] = true; G->prog.joined[1] = false; G->prog.hero[0] = HERO_ROBOT;
+    G->scene = SC_LEVEL;
+    ck_level_start(G, ck_world_node(&G->world, "l1"), false, false);
+    steps(G, 60, 0);
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);   // not bought yet
+    G->saves.closet.gear |= CK_GEAR_GUN;
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 1);
+    int shots = 0;
+    ck_game_step(G, CK_B, 0);
+    for (int k = 0; k < G->lv.nents; k++) if (G->lv.ents[k].type == E_SHOT && !G->lv.ents[k].dead) shots++;
+    EXPECT_EQ_INT(shots, 1);
+    steps(G, 30, 0);
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
+    // the super jetpack: holding A in the air sinks almost level
+    G->saves.closet.gear |= CK_GEAR_JET;
+    steps(G, 30, 0);
+    ck_game_step(G, CK_A, 0);
+    int f = 0;
+    while (G->lv.players[0].vy <= 0 && f++ < 120) ck_game_step(G, CK_A, 0);
+    steps(G, 10, CK_A);
+    EXPECT_EQ_INT(G->lv.players[0].ground, 0);
+    EXPECT_EQ_INT(G->lv.players[0].vy <= CK_SUPERGLIDE_VY + CK_GRAV + 0.001f, 1);   // capped, then one frame of gravity
+}
+
+// The map menu lets player 2 leave; the row only shows while two are playing.
+static void test_drop_player2(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.joined[0] = G->prog.joined[1] = true;
+    G->scene = SC_MAP;
+    int items[4];
+    EXPECT_EQ_INT(ck_menu_items(G, items), 4);
+    EXPECT_EQ_INT(items[2], MENU_DROP);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_MENU);
+    press(G, CK_DOWN, 0); press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->prog.joined[1], 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+    EXPECT_EQ_INT(ck_menu_items(G, items), 3);
+    EXPECT_EQ_INT(items[2], MENU_NEW);
 }
 
 void test_clankers(void) {
@@ -809,4 +889,6 @@ void test_clankers(void) {
     test_movement();
     test_song_lengths();
     test_shop();
+    test_bubble_gun();
+    test_drop_player2();
 }

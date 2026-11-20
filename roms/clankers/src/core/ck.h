@@ -30,6 +30,7 @@
 enum {
     CK_LEFT = 1 << 0, CK_RIGHT = 1 << 1, CK_UP = 1 << 2, CK_DOWN = 1 << 3,
     CK_A = 1 << 4, CK_B = 1 << 5, CK_START = 1 << 6,
+    CK_C = 1 << 7,   // C-up, C-down or C-right: switch between the action and the bubble gun
 };
 typedef struct { uint16_t held[2], prev[2]; } ck_input;
 
@@ -103,6 +104,7 @@ enum { CK_KIND_LEVEL, CK_KIND_BOSS, CK_KIND_BONUS };
 enum { BOSS_CRANE, BOSS_STAMPER, BOSS_BOULDER, BOSS_HAULER, CK_BOSS_COUNT };
 enum { THEME_JUNKYARD, THEME_FACTORY, THEME_MOUNTAIN, THEME_MOON, CK_THEME_COUNT };
 #define CK_WORLDS 4
+#define CK_TRAIL 40
 
 typedef struct {
     char name[40];
@@ -202,7 +204,26 @@ typedef struct {
     uint8_t magic;                   // CK_CLOSET_MAGIC, or the closet starts empty (older saves)
     uint8_t own[(ACC_COUNT + 7) / 8];  // bit per accessory
     uint8_t wear[2][SLOT_COUNT];       // per player and slot: 0 nothing, else accessory + 1
+    // added later: paint pots and gear, valid when magic2 is CK_CLOSET_MAGIC2 (else they start fresh)
+    uint8_t magic2;
+    uint8_t paints;                    // bit per hero colour owned (the first two are free)
+    uint8_t gear;                      // CK_GEAR_* bits
+    uint8_t pad2;
 } ck_closet;
+#define CK_CLOSET_MAGIC2 0xC3
+#define CK_FREE_PAINTS 0x03
+enum { CK_GEAR_GUN = 1, CK_GEAR_JET = 2 };   // the bubble gun; the super jetpack (near-level glide)
+// The shop sells the accessories, then (on its last row) the two heroes (free to swap), a paint pot
+// per colour and the bubble gun.
+enum { SHOP_ROBOT = ACC_COUNT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_GUN = SHOP_PAINT0 + CK_NCOLS, SHOP_JET, SHOP_COUNT };
+#define CK_PAINT_COST 30
+#define CK_GUN_COST 100
+#define CK_JET_COST 300
+#define CK_GLIDE_VY 0.6f       // how fast a glide sinks
+#define CK_SUPERGLIDE_VY 0.12f // with the super jetpack: almost level
+int ck_shop_cost(int item);              // 0 for the heroes
+const char *ck_shop_name(int item, char *buf, int n);
+
 
 typedef struct {
     uint32_t magic;
@@ -357,6 +378,9 @@ typedef struct {
     float hx, hy;
     int hdir;
     float now;
+    // where the hero has walked, newest first, a point every 2 px: the babies follow it like a train
+    float trail[CK_TRAIL][2];
+    int ntrail;
 } ck_map;
 
 // ---------------------------------------------------------------------------- the whole game
@@ -436,6 +460,7 @@ typedef struct ck_game {
     bool menuAsk;
     // the parts shop: a cursor per player, and a short message
     int shopCur[2];
+    bool gunOn[2];                   // per player: B fires the bubble gun instead of the kick or grab
     char shopMsg[32];
     int shopMsgT;
 
@@ -465,6 +490,11 @@ bool ck_game_add_level(ck_game *G, const char *stem, const char *text);
 void ck_game_new_game(ck_game *G);
 // What player slot s wears in each slot: an accessory id, or -1.
 int ck_wearing(const ck_game *G, int s, int slot);
+bool ck_shop_owns(const ck_game *G, int item);     // any shop item, SHOP_* included
+bool ck_gun_on(const ck_game *G, int slot);        // that player's B fires the bubble gun
+void ck_map_baby_pos(const ck_game *G, int i, float *x, float *y);
+enum { MENU_KEEP, MENU_HEROES, MENU_DROP, MENU_NEW };
+int ck_menu_items(const ck_game *G, int *out);    // the map menu's rows (up to 4), MENU_*
 // One 60 Hz tick. Clears and refills G->sfx.
 void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2);
 

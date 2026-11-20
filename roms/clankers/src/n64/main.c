@@ -76,6 +76,7 @@ __attribute__((unused)) static uint16_t read_pad(joypad_port_t port) {
     if (in.btn.a) b |= CK_A;
     if (in.btn.b || in.btn.c_left) b |= CK_B;
     if (in.btn.start) b |= CK_START;
+    if (in.btn.c_up || in.btn.c_down || in.btn.c_right) b |= CK_C;
     return b;
 }
 

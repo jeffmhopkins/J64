@@ -83,6 +83,8 @@ const OW = (() => {
       for (const id of st.beaten) openFrom(id, false);   // gear gates may now open
     }
     // --- drawing ---
+    // pad numbers: light with a dark outline, readable on every pad colour (and on a TV)
+    function label(s, x, y) { g.lineJoin = 'round'; g.strokeStyle = '#1b1426'; g.lineWidth = 2.5; g.strokeText(s, x, y); g.fillStyle = '#fff6d8'; g.fillText(s, x, y); }
     function road(e, upto) {
       if (world.grid) return gridRoad(e, upto, true);
       const steps = 28, cut = Math.max(0, Math.min(1, upto));
@@ -129,7 +131,7 @@ const OW = (() => {
       if (n.kind === 'bonus') K.gear(n.x, n.y, r * 0.7, 8, t, '#b8860b', fill);
       else {
         g.font = `${n.kind === 'boss' ? 9 : 8}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillStyle = '#2b2230'; g.fillText(n.kind === 'boss' ? '!' : String(n.num), n.x, n.y + 0.5); g.textBaseline = 'alphabetic';
+        label(n.kind === 'boss' ? '!' : String(n.num), n.x, n.y + 0.5); g.textBaseline = 'alphabetic';
       }
       g.restore();
       if (beaten && n.kind !== 'bonus') {
@@ -153,7 +155,7 @@ const OW = (() => {
       g.textAlign = 'center'; g.textBaseline = 'middle';
       if (n.kind === 'bonus') K.gear(n.x, n.y, 5, 8, t, '#8a5d00', fill);
       else if (!reachable && n.kind === 'level') { K.rr(n.x - 3.5, n.y - 1, 7, 5.5, 1, '#5d566a'); K.arc(n.x, n.y - 1.5, 2.4, P, 0, 1.5, '#5d566a'); }
-      else { g.font = `${n.kind === 'boss' ? 10 : 9}px ${FONT}`; g.fillStyle = '#2b2230'; g.fillText(n.kind === 'boss' ? '!' : String(n.num), n.x, n.y + 1); }
+      else { g.font = `${n.kind === 'boss' ? 10 : 9}px ${FONT}`; label(n.kind === 'boss' ? '!' : String(n.num), n.x, n.y + 1); }
       g.textBaseline = 'alphabetic';
       if (beaten && n.kind !== 'bonus') {
         g.fillStyle = '#efe7da'; g.fillRect(x + sz - 1, y - 9, 1.5, 10);
@@ -180,11 +182,19 @@ const OW = (() => {
         dir = x2 >= x ? 1 : -1; moving = true;
         if (u >= 1) { st.at = leg.rev ? leg.e[0] : leg.e[1]; w.i++; w.t0 = now; if (w.i >= w.legs.length) st.walk = null; }
       } else { x = here.x; y = here.y - 6; }
-      // rescued babies trail behind (on the map they bob in a little line)
+      // rescued babies follow the path walked like a little train (a point every 2 px, newest first)
+      const tr = st.trail || (st.trail = []);
+      if (!tr.length || Math.abs(x - tr[0][0]) + Math.abs(y - tr[0][1]) >= 2) { tr.unshift([x, y]); if (tr.length > 40) tr.pop(); }
+      if (moving) st.dir = dir;
+      const babyAt = i => {
+        let want = 14 + i * 9, px = x, py = y, got = 0;
+        for (const [qx, qy] of tr) { const d = Math.hypot(qx - px, qy - py); if (d > 0 && got + d >= want) { const u = (want - got) / d; return [px + (qx - px) * u, py + (qy - py) * u]; } got += d; px = qx; py = qy; }
+        return [px - (st.dir || 1) * (want - got), py];
+      };
       const nb = Math.min(st.babies, 4);
-      for (let i = 0; i < nb; i++) {
-        const hop = Math.abs(Math.sin(t * 6 + i)) * (moving ? 2 : 0.6);
-        K.baby(x - dir * (16 + i * 6), y - 2 - hop, 0.032, world.babyHexes[i % world.babyHexes.length], { t: t + i * 0.7 });
+      for (let i = nb - 1; i >= 0; i--) {
+        const hop = Math.abs(Math.sin(t * 6 + i)) * (moving ? 2 : 0.6), [bx, by] = babyAt(i);
+        K.baby(bx, by - 2 - hop, 0.032, world.babyHexes[i % world.babyHexes.length], { t: t + i * 0.7 });
       }
       const s = 0.062, party = opts.party || [{ hero: 'robot', hex: 0x5AD1FF }, { hero: 'ostrich', hex: 0xFFD23F }];
       party.forEach((m, i) => {
