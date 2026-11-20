@@ -584,12 +584,8 @@ static void draw_shop(const ck_game *G) {
         for (int s = 0; s < 2; s++) if (G->prog.joined[s] && c->wear[s][slot] == a + 1) worn = true;
         rect(x, y, 30, 30, worn ? 0x49D17A : tint[slot], worn ? 0.4f : 0.14f);
         acc_icon(a, x, y, t);
+        // prices would cover the items at this size: owned ones get a green dot, the price shows below
         if (own) shape(SPR_DOT, x + 26, y + 4, 3.5f, 0x49D17A, 1);
-        else {
-            rect(x + 1, y + 22, 28, 8, 0x1B1426, 0.9f);
-            blit_o(SPR_BOLT, 0, x + 6, y + 26, (bopt){ .sx = 2.5f / 4.2f, .sy = 2.5f / 4.2f });
-            txt(F_SMALL, G->prog.bolts >= ck_acc[a].cost ? ST_PLAIN : ST_RED, x + 18, y + 29.5f, ALIGN_CENTER, "%d", ck_acc[a].cost);
-        }
     }
     int np = G->prog.joined[0] + G->prog.joined[1], j = 0;
     for (int s = 0; s < 2; s++) {
@@ -605,13 +601,19 @@ static void draw_shop(const ck_game *G) {
         memcpy(tryOn, c->wear[s], sizeof tryOn);
         tryOn[ck_acc[a].slot] = (uint8_t)(a + 1);
         int hero = G->prog.hero[s];
-        float hx = np > 1 ? 80 + j * 160 : 160, sc = hero == HERO_ROBOT ? 0.11f / 0.074f : 0.1f / 0.071f, tt = t + j;
+        float hx = np > 1 ? 40 + j * 160 : 120, sc = hero == HERO_ROBOT ? 0.11f / 0.074f : 0.1f / 0.071f, tt = t + j;
         rect(hx - 22, 228, 44, 4, 0xFFFFFF, 0.12f);
         int fr = (int)(tt / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
         hero_front(hero, G->prog.col[s], fr, hx, 230, sc, false, tryOn, tt);
-        const char *how = !CK_OWNS(c, a) ? "A buy" : c->wear[s][ck_acc[a].slot] == a + 1 ? "A take off" : "A wear";
-        txt(F_MED, s ? ST_BLUE : ST_YELLOW, hx, 175, ALIGN_CENTER, "%s", ck_acc[a].name);
-        txt(F_SMALL, ST_PLAIN, hx, 186, ALIGN_CENTER, "%s", how);
+        // the words go beside the hero, so they never cover what it is trying on
+        float tx = hx + 24;
+        txt(F_MED, s ? ST_BLUE : ST_YELLOW, tx, 200, ALIGN_LEFT, "%s", ck_acc[a].name);
+        if (!CK_OWNS(c, a)) {
+            char buy[24];
+            snprintf(buy, sizeof buy, "A buy  %d", ck_acc[a].cost);
+            txt(F_SMALL, G->prog.bolts >= ck_acc[a].cost ? ST_PLAIN : ST_RED, tx, 213, ALIGN_LEFT, "%s", buy);
+            blit_o(SPR_BOLT, 0, tx + txt_w(F_SMALL, buy) + 5, 210, (bopt){ .sx = 3 / 4.2f, .sy = 3 / 4.2f });
+        } else txt(F_SMALL, ST_PLAIN, tx, 213, ALIGN_LEFT, "%s", c->wear[s][ck_acc[a].slot] == a + 1 ? "A take off" : "A wear");
         j++;
     }
     if (G->shopMsgT > 0) banner(F_MED, ST_YELLOW, 0xFFD23F, 10, 120, 20, 24, G->shopMsg);

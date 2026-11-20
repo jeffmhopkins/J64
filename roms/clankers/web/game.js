@@ -544,8 +544,8 @@ function shopScene() {
       const { x, y } = cell(k), own = closet.own.includes(it.id), worn = team.some(m => closet.wear[m.slot][it.slot] === it.id);
       K.rr(x, y, TW, TH, 5, worn ? 'rgba(73,209,122,0.4)' : TINT[it.slot]);
       icon(it, x, y, S.t);
+      // prices would cover the items at this size: owned ones get a tick, the price shows below
       if (own) { K.circ(x + TW - 4, y + 4, 4, '#49d17a'); text('✓', x + TW - 4, y + 6.5, 6, '#fff', 'center', null); }
-      else { K.rr(x + 1, y + TH - 8, TW - 2, 8, 3, 'rgba(27,20,38,0.88)'); K.nut(x + 6, y + TH - 4, 2.5, 0, '#ffd23f'); text(String(it.cost), x + 18, y + TH - 1, 7, (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'center', null); }
     });
     // cursors, one per player
     team.forEach((m, j) => {
@@ -556,12 +556,15 @@ function shopScene() {
     // the heroes trying on what their cursor is on, on top of everything they already wear
     team.forEach((m, j) => {
       const it = K.ACC[S.cur[m.slot]], worn = closet.wear[m.slot], tryOn = Object.assign({}, worn, { [it.slot]: it.id });
-      const x = team.length > 1 ? 80 + j * 160 : 160, y = 230, t = S.t + j;
+      const x = team.length > 1 ? 40 + j * 160 : 120, y = 230, t = S.t + j;
       K.rr(x - 22, y - 2, 44, 5, 2.5, 'rgba(255,255,255,0.12)');
       if (m.hero === 'robot') K.robot(x, y, 0.11, m.hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
       else K.ostrich(x, y, 0.1, m.hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: 0.6 }, acc: tryOn });
-      const own = closet.own.includes(it.id), how = !own ? 'A buy' : worn[it.slot] === it.id ? 'A take off' : 'A wear';
-      text(it.name, x, 174, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'center'); text(how, x, 184, 7, '#fff6d8', 'center');
+      const own = closet.own.includes(it.id), how = !own ? 'A buy  ' + it.cost : worn[it.slot] === it.id ? 'A take off' : 'A wear';
+      const tx = x + 24;   // beside the hero, so the words never cover what it is trying on
+      text(it.name, tx, 200, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'left');
+      text(how, tx, 212, 7, own || (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'left');
+      if (!own) K.nut(tx + textW(how, 7) + 5, 209.5, 3, S.t, '#ffd23f');
     });
     drawParticles(0);
     if (S.msg) { fitPanel(S.msg.text, 10, 0, 12, 18, '#ffd23f'); text(S.msg.text, W / 2, 25, 10, '#2b2230', 'center', null); }

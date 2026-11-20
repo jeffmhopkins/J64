@@ -391,6 +391,8 @@ const CK = (() => {
     g.bezierCurveTo(x + r * 0.8, y - r * 1.2, x + r * 1.5, y - r * 0.1, x, y + r * 0.95);
     g.fill();
   }
+  // a line at least ~1.3 screen pixels wide, so thin frames survive tiny sizes (and the N64 bake)
+  const pxw = lw => { const m = K.g.getTransform(); return Math.max(lw, 1.3 / (Math.hypot(m.a, m.b) || 1)); };
   const poly = (pts, c) => { const g = K.g; g.fillStyle = c; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill(); };
   // HATS: drawn at the head's top middle, 100 units = the head's width; side = facing right
   K.wearHead = (id, cx, top, w, t = 0, side = false) => {
@@ -454,7 +456,7 @@ const CK = (() => {
   // FACE: eyes = [[x, y, rx, ry], ...], the near eye first (side views pass the squeezed far eye second)
   K.wearFace = (id, eyes, side = false) => {
     const g = K.g, [a, b] = eyes, dir = b[0] > a[0] ? 1 : -1;
-    const bridge = (c, lw, k = 0.3) => { g.strokeStyle = c; g.lineWidth = lw; g.lineCap = 'round'; g.beginPath(); g.moveTo(a[0] + dir * a[2], a[1] - a[3] * k); g.lineTo(b[0] - dir * b[2], b[1] - b[3] * k); g.stroke();
+    const bridge = (c, lw, k = 0.3) => { g.strokeStyle = c; g.lineWidth = pxw(lw); g.lineCap = 'round'; g.beginPath(); g.moveTo(a[0] + dir * a[2], a[1] - a[3] * k); g.lineTo(b[0] - dir * b[2], b[1] - b[3] * k); g.stroke();
       if (side) { g.beginPath(); g.moveTo(a[0] - a[2], a[1] - a[3] * k); g.lineTo(a[0] - a[2] * 2.6, a[1] - a[3] * (k + 0.2)); g.stroke(); } };
     if (id === 'shades') {
       bridge('#1b1426', Math.max(1.2, a[2] * 0.22));
@@ -464,7 +466,7 @@ const CK = (() => {
       }
     } else if (id === 'glasses') {
       bridge('#3a3346', Math.max(1.2, a[2] * 0.16), 0);
-      for (const [x, y, rx, ry] of eyes) { g.strokeStyle = '#3a3346'; g.lineWidth = Math.max(1.2, rx * 0.18); g.beginPath(); g.ellipse(x, y, rx * 1.2, ry * 1.1, 0, 0, P * 2); g.stroke(); }
+      for (const [x, y, rx, ry] of eyes) { g.strokeStyle = '#3a3346'; g.lineWidth = pxw(Math.max(1.2, rx * 0.18)); g.beginPath(); g.ellipse(x, y, rx * 1.2, ry * 1.1, 0, 0, P * 2); g.stroke(); }
     } else if (id === 'hearts' || id === 'stars') {
       bridge(id === 'hearts' ? '#c23b78' : '#d49a10', Math.max(1.2, a[2] * 0.18), 0.5);
       for (const [x, y, rx, ry] of eyes) {
@@ -484,8 +486,8 @@ const CK = (() => {
       if (side) { g.beginPath(); g.moveTo(mx, my - s * 0.15); g.quadraticCurveTo(mx - s * 0.6, my - s * 0.4, mx - s * 0.8, my); g.quadraticCurveTo(mx - s * 0.4, my + s * 0.2, mx, my + s * 0.15); g.fill(); }
     } else if (id === 'monocle') {
       const [x, y, rx, ry] = side ? a : b, pad = rx * 0.2;
-      g.strokeStyle = '#d49a10'; g.lineWidth = Math.max(1.5, rx * 0.2); g.beginPath(); g.ellipse(x, y, rx + pad, ry + pad, 0, 0, P * 2); g.stroke();
-      g.lineWidth = Math.max(1, rx * 0.08); g.beginPath(); g.moveTo(x, y + ry + pad); g.quadraticCurveTo(x - rx * 0.6, y + ry * 2.2, x - rx * 1.4, y + ry * 1.9); g.stroke();
+      g.strokeStyle = '#d49a10'; g.lineWidth = pxw(Math.max(1.5, rx * 0.2)); g.beginPath(); g.ellipse(x, y, rx + pad, ry + pad, 0, 0, P * 2); g.stroke();
+      g.lineWidth = pxw(Math.max(1, rx * 0.08)); g.beginPath(); g.moveTo(x, y + ry + pad); g.quadraticCurveTo(x - rx * 0.6, y + ry * 2.2, x - rx * 1.4, y + ry * 1.9); g.stroke();
     }
   };
   // NECK: at the bottom middle of the head, 100 units = the neck piece's width
