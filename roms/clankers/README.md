@@ -46,16 +46,24 @@ make clankers                  # builds dist/clankers.z64
 make deploy ROM=clankers       # sends it to a SummerCart64
 ```
 
-The ROM saves to a 4K EEPROM. On a SummerCart64 the save type comes from the ROM header, so
-there is nothing to set. Each world keeps its own progress, and a save from before Worlds 2 to 4
-carries on as World 1.
+The ROM saves to a 16K EEPROM with three save slots, one per 512-byte block. On a SummerCart64
+the save type comes from the ROM header, so there is nothing to set. Each world keeps its own
+progress, and a save from before Worlds 2 to 4 carries on as World 1.
+
+> [!IMPORTANT]
+> A save from the old 4K build is 512 bytes. Pad it with zeros to 2048 bytes before loading it
+> with this build; it becomes slot 1.
 
 | Button | In a level | On the map |
 | --- | --- | --- |
 | Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
-| A | Jump (hold to jump higher, again to boost or flap) | Enter a level; on the exit, go to the next world; at home, go back a world |
-| B or C-left | Action: grab, throw, shoot | |
-| Start | Pause | Enter a level |
+| A | Jump (hold to jump higher), again in the air for a double jump; hold to glide (jetpack or flapping) | Enter a level, the parts shop or the house; on the exit, go to the next world |
+| B or C-left | Action: grab, throw, shoot (bubbles when the bubble gun is on) | |
+| C-up, C-down or C-right | With the bubble gun bought: switch between the gun and grab or kick | |
+| Start | Pause | Menu: keep playing, change heroes, let player 2 leave, or start a new game |
+| L (or Z), R | | In the paint room: the previous or next colour |
+
+After the title you pick one of the three save slots.
 
 <a id="worlds"></a>
 ## The four worlds
@@ -73,6 +81,52 @@ plays the parade home and THE END. A or START skips a film after the first secon
 
 In the pause menu, Start or A goes back to the level, B goes back to the map, and Z turns the
 CRT scanlines on or off. A second controller plays the ostrich.
+
+<a id="house"></a>
+## The house
+
+Each world's map starts at the heroes' house. You start in the yard and walk right through the
+rooms; A uses what you stand at, and A anywhere else jumps. Walk off the yard's left edge to go
+back to the map.
+
+| Room | What A does there |
+| --- | --- |
+| Yard | Pick an apple off the tree, read a letter from the mailbox; from World 2 on, the signpost goes back a world |
+| Bedroom | Sleep, and save the game to a slot |
+| Kitchen | A snack fills the batteries |
+| Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall mural (hold B); L and R change colour |
+| Music room | The piano (the stick picks a key, A plays it, B jumps an octave) or the drums (every button is a different drum) |
+| Aquarium | Dive into a tank three screens wide with a bubble helmet; B feeds the fish, and swimming into one boops it; crabs walk the beach |
+| Garage | A side-on race, a lane each for two players: the cars drive themselves and A jumps the cones and crates |
+
+The babies you have rescued wander about the house. Two players can play every room together,
+and START leaves a game.
+
+<a id="shop"></a>
+## The parts shop
+
+The shop on each map is the parts shop. Bolts buy 36 accessories in five slots: hats, face
+(glasses, goggles, a mustache), neck, outfits (with sleeves) and shoes. Each player has a cursor;
+A buys an item and puts it on, and on an owned item A puts it on or takes it off. Items in
+different slots stack, one per slot. The rainbow cap, disco suit and light-up shoes cycle through
+colours.
+
+The bottom row has the rest:
+
+| Item | Cost | What it does |
+| --- | --- | --- |
+| Robot, Robot ostrich | free | Swap your hero |
+| Paint pots | 30 each (the first two are free) | Paint your hero; the select screen offers only paints you own |
+| Rainbow paint | 150 | Your hero's whole body keeps cycling through the colours |
+| Bubble gun | 100 | C switches B between the gun and grab or kick |
+| Super jetpack | 300 | Glides almost level, so you can glide much further |
+
+What you own is shared by both players and saved with the game; a new game from the map menu
+empties it.
+
+> [!NOTE]
+> On the N64 each accessory is a small sprite drawn over the hero sprite, placed per frame from
+> `ACC_AT` in `src/n64/sprites.h`, so it can sit a pixel off where the browser draws it.
 
 <a id="sprites"></a>
 ## Redrawing the sprites

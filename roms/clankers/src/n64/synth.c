@@ -102,7 +102,9 @@ static void render(int16_t *out, int n) {
                 if (v->music) mus += x * v->env; else sfx += x * v->env;
                 if (++v->t >= v->len) v->on = false;
             }
-            float y = (mus * 0.32f + sfx * 0.7f) * 0.55f;
+            // twice as loud as it first was (0.55), with a soft knee above 0.7 so loud bits round off instead of crackling
+            float y = (mus * 0.32f + sfx * 0.7f) * 1.1f, ay = fabsf(y);
+            if (ay > 0.7f) { float o = ay - 0.7f; y = copysignf(0.7f + o / (1 + o * 3), y); }
             if (muted) y = 0;
             int q = (int)(y * 26000.0f);
             out[base + s] = (int16_t)(q > 32767 ? 32767 : q < -32768 ? -32768 : q);
@@ -132,6 +134,12 @@ void synth_sfx(int id) {
     ck_tone t[8];
     int n = ck_sfx_tones(id, t, 8);
     for (int i = 0; i < n; i++) start_tone(&t[i], 0);
+}
+
+// A piano note: a soft triangle with a quiet sine an octave up, as in the browser.
+void synth_note(float freq) {
+    start_tone(&(ck_tone){ .wave = WAVE_TRIANGLE, .freq = freq, .dur = 0.7f, .vol = 0.32f }, 0);
+    start_tone(&(ck_tone){ .wave = WAVE_SINE, .freq = freq * 2, .dur = 0.25f, .vol = 0.06f }, 0);
 }
 
 void synth_song(int id) {

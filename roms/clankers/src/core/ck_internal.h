@@ -34,6 +34,16 @@ void ck_jet_start(ck_game *G, int hatch);
 bool ck_jet_update(ck_game *G);           // true when the zone is over
 void ck_level_come_back(ck_game *G);
 
+// game.c
+void ck_go(ck_game *G, int scene);
+void ck_go_map(ck_game *G);               // back to the map where you were
+void ck_save_to_slot(ck_game *G, int k);  // the bed: this game is now saved in slot k
+
+// house.c
+void ck_house_enter(ck_game *G, bool fromShop);
+void ck_house_step(ck_game *G);
+void ck_mural_dab(ck_house *H, float px, float py, int c);
+
 // cut.c
 void ck_cut_start(ck_game *G, int k);
 bool ck_cut_update(ck_game *G);           // true when the film is over

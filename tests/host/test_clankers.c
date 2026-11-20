@@ -1,6 +1,7 @@
 // Host tests for the Clankers game core (roms/clankers/src/core): the data files parse the way
 // the browser reads them, and the rules behave (bolts, stomps, lives, the map opening up).
 // Runs from the repo root so it reads the real data files.
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -205,7 +206,7 @@ static uint16_t fuzz_pad(int *hold, uint16_t *cur) {
     return *cur;
 }
 static void fuzz_check(const ck_game *G) {
-    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_CUT, 1);
+    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_SLOTS, 1);
     EXPECT_EQ_INT(G->worldNum >= 1 && G->worldNum <= CK_WORLDS, 1);
     EXPECT_EQ_INT(G->nparts >= 0 && G->nparts <= CK_MAXPARTS, 1);
     EXPECT_EQ_INT(G->nsfx >= 0 && G->nsfx <= CK_MAXSFX, 1);
@@ -316,6 +317,10 @@ static void test_flow(void) {
     EXPECT_EQ_INT(G->song, SONG_TITLE);
     ck_game_step(G, 0, 0);
     ck_game_step(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_SLOTS);   // pick a save slot (slot 1 is the one already loaded)
+    EXPECT_EQ_INT(G->slotPick, 0);
+    ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_SELECT);
     ck_game_step(G, 0, 0);
     ck_game_step(G, CK_A, 0);   // player 1 ready
@@ -326,6 +331,13 @@ static void test_flow(void) {
     steps(G, 120, 0);
     EXPECT_EQ_INT(G->map.walking, 0);
     EXPECT_EQ_INT(G->map.at, ck_world_node(&G->world, "l1"));
+    {   // the first baby follows 14 px back along the path walked
+        float bx, by;
+        ck_map_baby_pos(G, 0, &bx, &by);
+        float d = sqrtf((bx - G->map.hx) * (bx - G->map.hx) + (by - G->map.hy) * (by - G->map.hy));
+        if (!(d > 8 && d < 14.5f)) printf("baby d=%f n=%d\n", d, G->map.ntrail);
+        EXPECT_EQ_INT(d > 8 && d < 14.5f, 1);
+    }
     ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_LEVEL);
     steps(G, 30, 0);
@@ -404,7 +416,7 @@ static void test_new_worlds(void) {
             const ck_leveldef *L = &G->defs[i];
             if (N->kind == CK_NODE_BOSS) EXPECT_EQ_INT(L->bossType, bosses[n]);
             // every Moon level has low gravity, nowhere else does
-            EXPECT_EQ_INT(L->grav < 0.25f, n == 4);
+            EXPECT_EQ_INT(L->grav < CK_GRAV * 0.9f, n == 4);
             // every level has a start, and a pad unless the boss or the shower ends it
             int start = 0, pad = 0, gears = 0;
             for (int y = 0; y < CK_ROWS; y++)
@@ -416,11 +428,16 @@ static void test_new_worlds(void) {
             if (L->kind == CK_KIND_LEVEL) { EXPECT_EQ_INT(pad, 1); EXPECT_EQ_INT(gears, 3); }
         }
     }
-    // the home node takes you back a world, to that world's exit
+    // the home node is the house; its yard's signpost takes you back a world, to that world's exit
     G->prog.at = (uint8_t)ck_world_node(&G->world, "home");
     G->keepMap = false;
     ck_map_reset(G);
     ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    ck_game_step(G, 0, 0);
+    for (int i = 0; i < 400 && ck_house_near(G, &G->house.ps[0]) != SPOT_BACK; i++) ck_game_step(G, CK_LEFT, 0);
+    for (int i = 0; i < 20; i++) ck_game_step(G, 0, 0);
     ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->worldNum, 3);
     EXPECT_EQ_INT(G->world.nodes[G->prog.at].kind, CK_NODE_EXIT);
@@ -523,7 +540,7 @@ static void test_bosses(void) {
         for (int f = 0; f < 60 * 40 && G->scene == SC_LEVEL; f++) {
             // pace to and fro (the Stamper follows you, so for it stand still, away from the shelves)
             if (n == 2 && f == 0) G->lv.players[0].x = 150;
-            ck_game_step(G, n == 2 ? 0 : (f / 50) % 2 ? CK_LEFT : CK_RIGHT, 0);
+            ck_game_step(G, n == 2 ? 0 : (f / 80) % 2 ? CK_LEFT : CK_RIGHT, 0);   // long enough legs to get up to speed
             if (G->lv.players[0].wob > 0 || G->lv.dyingT >= 0) wobbles++;   // no bolts to drop: a bump costs a try
         }
         if (!wobbles) fprintf(stderr, "boss %d never got the hero\n", n);
@@ -626,6 +643,433 @@ static void test_new_bot_runs(void) {
     }
 }
 
+// Movement: speed ramps up, both heroes double jump and glide, the ostrich's kick reaches like the
+// robot's arm, and a bubble or a catch-up hop only ever sets a hero down on clear, firm floor.
+static float jump_height(ck_game *G, int hero, bool twice) {
+    G->prog.hero[0] = (uint8_t)hero;
+    start_level(G, "l1");
+    for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+    ck_player *p = &G->lv.players[0];
+    float y0 = p->y, top = y0;
+    for (int f = 0; f < 150; f++) {
+        uint16_t pad = f < 14 || (twice && f >= 24 && f < 40) ? CK_A : 0;   // let go, then a second press in the air
+        ck_game_step(G, pad, 0);
+        if (p->y < top) top = p->y;
+    }
+    return y0 - top;
+}
+static void test_movement(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    // the run ramps up over half a second
+    G->prog.hero[0] = HERO_ROBOT;
+    start_level(G, "l1");
+    for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+    ck_player *p = &G->lv.players[0];
+    for (int f = 0; f < 8; f++) ck_game_step(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(p->vx > 0 && p->vx < 1.75f * 0.4f, 1);
+    for (int f = 0; f < 40; f++) ck_game_step(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(p->vx > 1.7f, 1);
+    // both heroes: a second press in the air goes higher
+    for (int h = 0; h < 2; h++) {
+        float one = jump_height(G, h ? HERO_OSTRICH : HERO_ROBOT, false), two = jump_height(G, h ? HERO_OSTRICH : HERO_ROBOT, true);
+        if (!(two > one + 12)) fprintf(stderr, "hero %d: jump %.1f, double %.1f\n", h, one, two);
+        EXPECT_EQ_INT(two > one + 12, 1);
+    }
+    // a first jump still reaches as high as it did with the old gravity (0.3, v = -5.5): about 50 px
+    float one = jump_height(G, HERO_ROBOT, false);
+    EXPECT_EQ_INT(one > 44 && one < 56, 1);
+    // both heroes glide while A is held on the way down
+    for (int h = 0; h < 2; h++) {
+        G->prog.hero[0] = (uint8_t)(h ? HERO_OSTRICH : HERO_ROBOT);
+        start_level(G, "l1");
+        for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+        p = &G->lv.players[0];
+        bool glided = false;
+        for (int f = 0; f < 120; f++) { ck_game_step(G, CK_A, 0); if (p->flapping && p->vy < 1) glided = true; }
+        EXPECT_EQ_INT(glided, 1);
+    }
+    // the ostrich kick reboots a Glitchy 29 px in front (the old kick stopped at 16), as the robot's arm does
+    for (int h = 0; h < 2; h++) {
+        G->prog.hero[0] = (uint8_t)(h ? HERO_OSTRICH : HERO_ROBOT);
+        start_level(G, "l1");
+        for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+        ck_level *lv = &G->lv;
+        p = &lv->players[0]; p->face = 1; p->inv = 0;
+        ck_ent *e = NULL;
+        for (int k = 0; k < lv->nents; k++) if (lv->ents[k].type == E_ENEMY && !lv->ents[k].dead) { e = &lv->ents[k]; break; }
+        EXPECT_EQ_INT(e != NULL, 1);
+        if (!e) return;
+        e->x = p->x + p->w + 29 - e->w; e->y = p->y + p->h - e->h; e->vx = 0; e->kind = EN_SPROCKET; e->state = ES_GLITCHY; e->hopT = 999;
+        ck_game_step(G, CK_B, 0);
+        for (int f = 0; f < 20; f++) { e->x = p->x + p->w + 29 - e->w; ck_game_step(G, 0, 0); }
+        EXPECT_EQ_INT(e->state == ES_HAPPY || e->dead, 1);
+    }
+    // setting a hero down beside a buddy: only on firm floor, never in a wall or over a pit
+    G->prog.hero[0] = HERO_ROBOT; G->prog.joined[1] = 1; G->prog.hero[1] = HERO_OSTRICH;
+    start_level(G, "l1");
+    for (int f = 0; f < 100; f++) ck_game_step(G, 0, 0);
+    ck_level *lv = &G->lv;
+    EXPECT_EQ_INT(lv->nplayers, 2);
+    ck_player *a = &lv->players[0], *b = &lv->players[1];
+    EXPECT_EQ_INT(a->ground, 1);
+    b->x = a->x + 60; b->y = a->y - 80;
+    EXPECT_EQ_INT(ck_set_down(lv, b, a), 1);
+    EXPECT_EQ_INT(ck_absf(b->y + b->h - (a->y + a->h)) < 0.01f, 1);
+    a->ground = false;   // in the air (over a pit, maybe): nowhere to put anyone
+    EXPECT_EQ_INT(ck_set_down(lv, b, a), 0);
+    a->ground = true;
+    // wall in every spot beside and at the buddy: stay in the bubble
+    int ty = (int)((a->y + a->h) / 16) - 1;
+    char keep[3];
+    for (int k = -1; k <= 1; k++) { int tx = (int)((a->x + a->w / 2) / 16) + k; keep[k + 1] = lv->tiles[ty][tx]; lv->tiles[ty][tx] = '#'; }
+    EXPECT_EQ_INT(ck_set_down(lv, b, a), 0);
+    for (int k = -1; k <= 1; k++) lv->tiles[ty][(int)((a->x + a->w / 2) / 16) + k] = keep[k + 1];
+    // bubble: a hero who lost a life floats to the buddy and lands standing on the floor, not in the air
+    G->prog.lives = 3;
+    b->y = 240 + 40; ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(b->bubble > 0, 1);
+    for (int f = 0; f < 400 && b->bubble; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(b->bubble, 0);
+    for (int f = 0; f < 3; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(b->ground, 1);
+    G->prog.joined[1] = 0;
+}
+
+// Every looping song but the two short intro moods and the parade film runs 16 bars before it repeats.
+static void test_song_lengths(void) {
+    static ck_song songs[SONG_COUNT];
+    char *t = slurp("roms/clankers/data/songs.txt");
+    if (!t) return;
+    ck_parse_songs(t, songs);
+    free(t);
+    for (int id = 1; id < SONG_COUNT; id++) {
+        const ck_song *s = &songs[id];
+        if (!s->valid || !s->loop || id == SONG_LULLABY || id == SONG_STORM || id == SONG_PARADE) continue;   // the parade film ends before it loops
+        for (int k = 0; k < s->ntracks; k++) {
+            int eighths = 0;
+            for (int n = 0; n < s->tracks[k].n; n++) eighths += s->tracks[k].len[n];
+            if (eighths != 128) fprintf(stderr, "song %d track %d: %d eighths\n", id, k, eighths);
+            EXPECT_EQ_INT(eighths, 128);
+        }
+    }
+}
+
+// The parts shop: buy with bolts, one item per slot, items in different slots stack, both players.
+static void press(ck_game *G, uint16_t p1, uint16_t p2) { ck_game_step(G, p1, p2); ck_game_step(G, 0, 0); }
+static void test_shop(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    EXPECT_EQ_INT(ACC_COUNT, 36);
+    for (int a = 0; a < ACC_COUNT; a++) EXPECT_EQ_INT(!!(ck_acc[a].cost > 0 && ck_acc[a].slot < SLOT_COUNT && ck_acc[a].name[0]), 1);
+    G->prog.joined[0] = G->prog.joined[1] = true;
+    G->prog.bolts = 100;
+    G->scene = SC_SHOP;
+    G->shopCur[0] = ACC_PARTY; G->shopCur[1] = ACC_BOWTIE;
+    press(G, CK_A, 0);   // P1 buys the party hat and puts it on
+    EXPECT_EQ_INT(!!(CK_OWNS(&G->saves.closet, ACC_PARTY)), 1);
+    EXPECT_EQ_INT(G->prog.bolts, 100 - ck_acc[ACC_PARTY].cost);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    press(G, 0, CK_A);   // P2 buys a bow tie
+    EXPECT_EQ_INT(ck_wearing(G, 1, SLOT_NECK), ACC_BOWTIE);
+    EXPECT_EQ_INT(ck_wearing(G, 1, SLOT_HEAD), -1);
+    // P1 walks to the bow tie (already owned): wearing it is free and stacks with the hat
+    G->shopCur[0] = ACC_BOWTIE;
+    int bolts = G->prog.bolts;
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->prog.bolts, bolts);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_NECK), ACC_BOWTIE);
+    press(G, CK_A, 0);   // and A again takes it off
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_NECK), -1);
+    // too few bolts: nothing changes
+    G->shopCur[0] = ACC_DISCO;
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_DISCO)), 1);
+    EXPECT_EQ_INT(!!(G->shopMsgT > 0), 1);
+    // the grid is 12 wide: down moves a row, right steps one
+    G->shopCur[0] = 0;
+    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], 12);
+    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], 13);
+    // the last row: heroes swap for free, paint pots are bought then worn, the bubble gun is bought once
+    EXPECT_EQ_INT(SHOP_COUNT, 49);
+    G->prog.hero[1] = HERO_ROBOT;
+    G->shopCur[1] = SHOP_OSTRICH; bolts = G->prog.bolts;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(G->prog.hero[1], HERO_OSTRICH);
+    EXPECT_EQ_INT(G->prog.bolts, bolts);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 0), 1);   // the first two colours are free
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 0);
+    G->shopCur[1] = SHOP_PAINT0 + 4;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 1);
+    EXPECT_EQ_INT(G->prog.col[1], 4);
+    EXPECT_EQ_INT(G->prog.bolts, bolts - CK_PAINT_COST);
+    // the rainbow paint: bought once, worn per player, and a plain paint takes it off again
+    G->prog.bolts = 500;
+    G->shopCur[1] = SHOP_RAINBOW;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(G->prog.bolts, 500 - CK_RAINBOW_COST);
+    EXPECT_EQ_INT(ck_rainbow_skin(G, 1), 1);
+    EXPECT_EQ_INT(ck_rainbow_skin(G, 0), 0);
+    EXPECT_EQ_INT(G->prog.col[1], CK_RAINBOW_COL);
+    G->shopCur[1] = SHOP_PAINT0 + 4;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(ck_rainbow_skin(G, 1), 0);
+    EXPECT_EQ_INT(G->prog.col[1], 4);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_RAINBOW), 1);
+    // a high item past bit 31 still saves and stacks
+    G->prog.bolts = 500;
+    G->shopCur[0] = ACC_LIGHTUP; press(G, CK_A, 0);
+    G->shopCur[0] = ACC_DISCO; press(G, CK_A, 0);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), ACC_LIGHTUP);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_BODY), ACC_DISCO);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    G->prog.bolts = 500;
+    G->shopCur[0] = SHOP_GUN;
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_GUN), 1);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
+    // B leaves to the map; a new game empties the closet
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+    ck_game_new_game(G);
+    EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_PARTY) && !CK_OWNS(&G->saves.closet, ACC_LIGHTUP)), 1);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), -1);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), -1);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_GUN), 0);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 0);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 1), 1);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_RAINBOW), 0);
+}
+
+// The bubble gun: C switches to it once bought, and then B fires bubbles instead of kicking.
+static void test_bubble_gun(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.joined[0] = true; G->prog.joined[1] = false; G->prog.hero[0] = HERO_ROBOT;
+    G->scene = SC_LEVEL;
+    ck_level_start(G, ck_world_node(&G->world, "l1"), false, false);
+    steps(G, 60, 0);
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);   // not bought yet
+    G->saves.closet.gear |= CK_GEAR_GUN;
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 1);
+    int shots = 0;
+    ck_game_step(G, CK_B, 0);
+    for (int k = 0; k < G->lv.nents; k++) if (G->lv.ents[k].type == E_SHOT && !G->lv.ents[k].dead) shots++;
+    EXPECT_EQ_INT(shots, 1);
+    steps(G, 30, 0);
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
+    // the super jetpack: holding A in the air sinks almost level
+    G->saves.closet.gear |= CK_GEAR_JET;
+    steps(G, 30, 0);
+    ck_game_step(G, CK_A, 0);
+    int f = 0;
+    while (G->lv.players[0].vy <= 0 && f++ < 120) ck_game_step(G, CK_A, 0);
+    steps(G, 10, CK_A);
+    EXPECT_EQ_INT(G->lv.players[0].ground, 0);
+    EXPECT_EQ_INT(G->lv.players[0].vy <= CK_SUPERGLIDE_VY + CK_GRAV + 0.001f, 1);   // capped, then one frame of gravity
+}
+
+// The map menu lets player 2 leave; the row only shows while two are playing.
+static void test_drop_player2(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.joined[0] = G->prog.joined[1] = true;
+    G->scene = SC_MAP;
+    int items[4];
+    EXPECT_EQ_INT(ck_menu_items(G, items), 4);
+    EXPECT_EQ_INT(items[2], MENU_DROP);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_MENU);
+    press(G, CK_DOWN, 0); press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->prog.joined[1], 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+    EXPECT_EQ_INT(ck_menu_items(G, items), 3);
+    EXPECT_EQ_INT(items[2], MENU_NEW);
+}
+
+
+// The house: walk along the rooms, use the things in them, and the little games.
+static void hold(ck_game *G, int n, uint16_t p1, uint16_t p2) { for (int i = 0; i < n; i++) ck_game_step(G, p1, p2); }
+static void walk_to(ck_game *G, float x) {
+    for (int i = 0; i < 2000 && fabsf(G->house.ps[0].x - x) > 4; i++) ck_game_step(G, G->house.ps[0].x < x ? CK_RIGHT : CK_LEFT, 0);
+    hold(G, 20, 0, 0);
+}
+static void test_house(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.joined[0] = G->prog.joined[1] = true;
+    G->prog.beaten = 0x7;   // home, l1, l2 (two levels): two babies at home
+    G->scene = SC_MAP;
+    ck_house_enter(G, false);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    EXPECT_EQ_INT(G->house.np, 2);
+    EXPECT_EQ_INT(G->house.nbabies, 2);
+    EXPECT_EQ_INT(G->house.babies[0].hex, G->world.babies[0]);
+    // the layout: rooms side by side, every spot inside a room
+    for (int r = 1; r < CK_HOUSE_ROOMS; r++) EXPECT_EQ_INT(ck_rooms[r].x0, ck_rooms[r - 1].x1);
+    EXPECT_EQ_INT(ck_rooms[CK_HOUSE_ROOMS - 1].x1, CK_HOUSE_W);
+    // walk to the kitchen fridge: a snack fills the batteries
+    G->prog.lives = 1;
+    walk_to(G, ck_spots[SPOT_SNACK].x);
+    EXPECT_EQ_INT(ck_house_near(G, &G->house.ps[0]), SPOT_SNACK);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->prog.lives, 3);
+    EXPECT_EQ_INT(G->house.ps[0].eat > 0, 1);
+    hold(G, 80, 0, 0);
+    // the paint studio: fly up with A, hold B to paint, R changes colour
+    walk_to(G, ck_spots[SPOT_PAINT].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_PAINT);
+    int painted = 0;
+    hold(G, 30, CK_A | CK_B | CK_RIGHT, 0);
+    for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) if (G->house.mural[i] == 1) painted++;
+    EXPECT_EQ_INT(painted > 20, 1);
+    EXPECT_EQ_INT(G->house.gs[0].y < CK_MURAL_FLOOR - 20, 1);
+    press(G, CK_R, 0);
+    EXPECT_EQ_INT(G->house.gs[0].col, 1);
+    press(G, CK_L, 0); press(G, CK_L, 0);
+    EXPECT_EQ_INT(G->house.gs[0].col, CK_MURAL_ERASER);
+    hold(G, 10, CK_B, 0);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    EXPECT_EQ_INT(painted > 0, 1);   // the wall keeps its paint
+    // the aquarium: swim down and right; the beach is dry land
+    walk_to(G, ck_spots[SPOT_AQUA].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_AQUA);
+    float y0 = G->house.gs[0].y;
+    hold(G, 40, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->house.gs[0].y > y0 + 10, 1);
+    // feeding: B sprinkles food, and a fish swims over and eats it
+    hold(G, 60, 0, 0);
+    int fed = 0;
+    for (int n = 0; n < 6 && !fed; n++) {
+        press(G, CK_B, 0);
+        for (int i = 0; i < 300 && !fed; i++) { ck_game_step(G, 0, 0); for (int k = 0; k < CK_AQUA_FISH; k++) fed += G->house.fish[k].happy > 0; }
+    }
+    EXPECT_EQ_INT(fed > 0, 1);
+    // the tank scrolls: the beach is three screens along
+    hold(G, 700, CK_RIGHT | CK_UP, 0);
+    hold(G, 100, CK_RIGHT, 0);
+    EXPECT_EQ_INT(G->house.gcam > 600, 1);
+    EXPECT_EQ_INT(G->house.gs[0].land, 1);
+    EXPECT_EQ_INT(G->house.gs[0].y, CK_AQUA_BEACH_Y);
+    for (int i = 0; i < 600; i++) {
+        ck_game_step(G, 0, 0);
+        for (int k = 0; k < CK_AQUA_FISH; k++) EXPECT_EQ_INT(G->house.fish[k].x >= 12 && G->house.fish[k].x <= CK_AQUA_BEACH_X - 16, 1);
+    }
+    press(G, CK_START, 0);
+    // the garage: a side-on race; a scripted driver jumps every cone and crate
+    walk_to(G, ck_spots[SPOT_CARS].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_CARS);
+    hold(G, 200, 0, 0);   // the countdown
+    EXPECT_EQ_INT(G->house.count <= 0, 1);
+    bool was_a = false;
+    for (int i = 0; i < 60 * 60 && G->house.win < 0; i++) {
+        const ck_hhero *c = &G->house.gs[0];
+        bool jump = false;
+        for (int k = 0; k < CK_RACE_OBST; k++) {
+            float ox, w, h; int kind;
+            ck_race_obst(k, &ox, &kind, &w, &h);
+            float dx = ox - c->x;
+            if (dx > 36 && dx < 55 && c->ground) jump = true;
+        }
+        jump = jump && !was_a;
+        was_a = jump;
+        ck_game_step(G, jump ? CK_A : 0, 0);
+    }
+    EXPECT_EQ_INT(G->house.win, 0);
+    EXPECT_EQ_INT(G->house.gs[0].key, 0);   // no bumps
+    EXPECT_EQ_INT(G->house.gs[0].best < 15, 1);
+    // a driver who never jumps bumps into everything and is much slower
+    hold(G, 60 * 5, 0, 0);
+    EXPECT_EQ_INT(G->house.win, -1);
+    for (int i = 0; i < 60 * 90 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(G->house.gs[0].key, (1 << CK_RACE_OBST) - 1);
+    EXPECT_EQ_INT(G->house.gs[0].best > 20, 1);
+    press(G, CK_START, 0);
+    // the piano: A plays the key under the hand, the stick moves along the keys
+    walk_to(G, ck_spots[SPOT_PIANO].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_PIANO);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->nnotes, 1);
+    EXPECT_EQ_INT(fabsf(G->notes[0] - 261.63f * powf(2, 7 / 12.0f)) < 0.5f, 1);
+    ck_game_step(G, 0, 0);
+    press(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(G->house.gs[0].key, 8);
+    for (int i = 0; i < CK_KEYS_N; i++) { float x; bool b; ck_piano_key(i, &x, &b); EXPECT_EQ_INT(x > CK_KEYS_X && x < CK_KEYS_X + 14 * CK_KEYS_W, 1); }
+    press(G, CK_START, 0);
+    // the drums: each button is its own hit
+    walk_to(G, ck_spots[SPOT_DRUMS].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_PIANO);
+    EXPECT_EQ_INT(G->house.drums, 1);
+    for (int k = 0; k < CK_DRUMS; k++) {
+        ck_game_step(G, ck_drums[k].btn, 0);
+        bool heard = false;
+        for (int i = 0; i < G->nsfx; i++) heard |= G->sfx[i] == SFX_DRUM0 + k;
+        EXPECT_EQ_INT(heard, 1);
+        ck_game_step(G, 0, 0);
+    }
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    // the mailbox has a letter, and the tree an apple
+    walk_to(G, ck_spots[SPOT_MAIL].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.msgT > 0, 1);
+    EXPECT_EQ_INT(G->house.ps[0].ground, 1);   // A there reads the mail, it does not jump
+    walk_to(G, ck_spots[SPOT_TREE].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.ps[0].eat > 0 && G->house.ps[0].col == 1, 1);
+    hold(G, 60, 0, 0);
+    // the bed saves this game into a slot of your choice
+    walk_to(G, ck_spots[SPOT_BED].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->house.mode, HM_SLOTS);
+    press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->slot, 1);
+    EXPECT_EQ_INT(G->saveNow, 1);
+    EXPECT_EQ_INT(ck_slot_summary(G, 1).used, 1);
+    EXPECT_EQ_INT(G->house.mode, HM_SLEEP);
+    hold(G, 200, 0, 0);
+    EXPECT_EQ_INT(G->house.mode, HM_WALK);
+    // START (or walking off the yard) goes back to the map
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+}
+
+// Three save slots: the title picks one, and an empty slot is a new game.
+static void test_slots(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    static ck_saves three[CK_SLOTS];
+    memset(three, 0, sizeof three);
+    three[0] = *ck_game_saves(G);
+    ck_game_slots(G, three);
+    G->prog.bolts = 77;   // playing slot 1
+    EXPECT_EQ_INT(ck_slot_summary(G, 0).used, 1);
+    EXPECT_EQ_INT(ck_slot_summary(G, 2).used, 0);
+    G->scene = SC_TITLE;
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_SLOTS);
+    press(G, CK_UP, 0);   // slot 3
+    EXPECT_EQ_INT(G->slotPick, 2);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_SELECT);
+    EXPECT_EQ_INT(G->slot, 2);
+    EXPECT_EQ_INT(G->prog.bolts, 0);
+    EXPECT_EQ_INT(G->slots[0].w[0].bolts, 77);   // slot 1 is left as it was
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -642,4 +1086,11 @@ void test_clankers(void) {
     test_bosses();
     test_films();
     test_new_bot_runs();
+    test_movement();
+    test_song_lengths();
+    test_shop();
+    test_bubble_gun();
+    test_drop_player2();
+    test_house();
+    test_slots();
 }

@@ -47,11 +47,24 @@ static const fx FX[SFX_COUNT] = {
     [SFX_STAR0] = { 2, { T(784, 0.18f, TRIANGLE, 0.26f, 0, 0), T(1568, 0.12f, SQUARE, 0.06f, 0.04f, 0) } },
     [SFX_STAR1] = { 2, { T(988, 0.18f, TRIANGLE, 0.26f, 0, 0), T(1976, 0.12f, SQUARE, 0.06f, 0.04f, 0) } },
     [SFX_STAR2] = { 2, { T(1175, 0.18f, TRIANGLE, 0.26f, 0, 0), T(2349, 0.12f, SQUARE, 0.06f, 0.04f, 0) } },
+    // the drum kit, in ck_drums order: kick, snare, hi-hat, crash, cowbell, tom, tom, floor tom, clap
+    [SFX_DRUM0 + 0] = { 2, { T(150, 0.28f, SINE, 0.6f, 0, 0.3f), N(0.02f, 0.25f, 0, 3000, BAND) } },
+    [SFX_DRUM0 + 1] = { 2, { N(0.18f, 0.4f, 0, 1500, HIGH), T(190, 0.1f, TRIANGLE, 0.25f, 0, 0.7f) } },
+    [SFX_DRUM0 + 2] = { 1, { N(0.05f, 0.25f, 0, 7000, HIGH) } },
+    [SFX_DRUM0 + 3] = { 2, { N(0.9f, 0.3f, 0, 5000, HIGH), N(0.5f, 0.15f, 0, 3000, BAND) } },
+    [SFX_DRUM0 + 4] = { 2, { T(560, 0.25f, SQUARE, 0.12f, 0, 0), T(845, 0.25f, SQUARE, 0.1f, 0, 0) } },
+    [SFX_DRUM0 + 5] = { 1, { T(240, 0.3f, SINE, 0.45f, 0, 0.6f) } },
+    [SFX_DRUM0 + 6] = { 1, { T(170, 0.32f, SINE, 0.48f, 0, 0.6f) } },
+    [SFX_DRUM0 + 7] = { 1, { T(110, 0.4f, SINE, 0.5f, 0, 0.6f) } },
+    [SFX_DRUM0 + 8] = { 4, { N(0.02f, 0.35f, 0, 1400, BAND), N(0.02f, 0.35f, 0.015f, 1400, BAND), N(0.02f, 0.35f, 0.03f, 1400, BAND), N(0.15f, 0.25f, 0.045f, 1400, BAND) } },
     [SFX_RECORD] = { 7, { T(523, 0.11f, SQUARE, 0.13f, 0, 0), T(659, 0.11f, SQUARE, 0.13f, 0.05f, 0), T(784, 0.11f, SQUARE, 0.13f, 0.1f, 0), T(1047, 0.11f, SQUARE, 0.13f, 0.15f, 0), T(1319, 0.11f, SQUARE, 0.13f, 0.2f, 0), T(1568, 0.11f, SQUARE, 0.13f, 0.25f, 0), T(2093, 0.11f, SQUARE, 0.13f, 0.3f, 0) } },
     [SFX_FLAG] = { 5, { T(392, 0.12f, TRIANGLE, 0.22f, 0, 0), T(523, 0.12f, TRIANGLE, 0.22f, 0.06f, 0), T(659, 0.12f, TRIANGLE, 0.22f, 0.12f, 0), T(784, 0.12f, TRIANGLE, 0.22f, 0.18f, 0), T(1047, 0.12f, TRIANGLE, 0.22f, 0.24f, 0) } },
     [SFX_SLIDE] = { 2, { N(0.35f, 0.2f, 0, 900, LOW), T(300, 0.25f, TRIANGLE, 0.1f, 0, 0.6f) } },
     [SFX_THUNDER] = { 2, { N(1.1f, 0.5f, 0, 160, LOW), N(0.2f, 0.3f, 0, 2000, BAND) } },
     [SFX_WHOOSH] = { 2, { N(1.4f, 0.35f, 0, 600, BAND), T(200, 1.2f, SINE, 0.08f, 0, 3) } },
+    [SFX_HOP2] = { 2, { T(440, 0.12f, TRIANGLE, 0.2f, 0, 2), N(0.08f, 0.1f, 0, 2500, BAND) } },
+    [SFX_HOVER] = { 1, { N(0.09f, 0.09f, 0, 1400, BAND) } },
+    [SFX_BUY] = { 5, { T(659, 0.1f, SQUARE, 0.15f, 0, 0), T(784, 0.1f, SQUARE, 0.15f, 0.05f, 0), T(1047, 0.1f, SQUARE, 0.15f, 0.1f, 0), T(1319, 0.1f, SQUARE, 0.15f, 0.15f, 0), T(1568, 0.1f, SQUARE, 0.15f, 0.2f, 0) } },
 };
 
 int ck_sfx_tones(int id, ck_tone *out, int max) {

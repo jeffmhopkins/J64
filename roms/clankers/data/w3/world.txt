@@ -8,7 +8,7 @@ babies: C28BFF 3BF0FF FF8FC7 FFB347
 boss-msg: Fixed! The rocket is fuelled
 
 # node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
-node home   2 12  home   "Mine lift"
+node home   2 12  home   "Our house"
 node l1     6 12  level  "Magnet Cave"                level=3-1
 node l2     6 8   level  "Mine Cart Run"              level=3-2
 node shop   2 8   shop   "Parts shop"

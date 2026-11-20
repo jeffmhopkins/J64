@@ -1,6 +1,6 @@
 ROMNAME          := clankers
 N64_ROM_TITLE    := "Clankers"
-N64_ROM_SAVETYPE := eeprom4k
+N64_ROM_SAVETYPE := eeprom16k
 
 # The level, world and music text files go into the ROM as they are.
 ROM_DATA := data

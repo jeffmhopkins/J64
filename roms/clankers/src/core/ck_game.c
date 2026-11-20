@@ -116,13 +116,94 @@ static void sanitize(ck_game *G) {
 
 _Static_assert(sizeof(ck_saves) <= 512, "the save must fit a 4K EEPROM");
 
+const ck_accdef ck_acc[ACC_COUNT] = {
+    [ACC_PARTY] = { "Party hat", SLOT_HEAD, 0, 15 },
+    [ACC_FLOWER] = { "Flower", SLOT_HEAD, 0, 15 },
+    [ACC_BEANIE] = { "Beanie", SLOT_HEAD, 0, 20 },
+    [ACC_BASEBALL] = { "Ball cap", SLOT_HEAD, 0, 20 },
+    [ACC_CHEF] = { "Chef hat", SLOT_HEAD, 0, 25 },
+    [ACC_PROPELLER] = { "Propeller cap", SLOT_HEAD, 0, 30 },
+    [ACC_COWBOY] = { "Cowboy hat", SLOT_HEAD, 0, 30 },
+    [ACC_PIRATE] = { "Pirate hat", SLOT_HEAD, 0, 35 },
+    [ACC_TOPHAT] = { "Top hat", SLOT_HEAD, 0, 40 },
+    [ACC_WIZARD] = { "Wizard hat", SLOT_HEAD, 0, 45 },
+    [ACC_CROWN] = { "Crown", SLOT_HEAD, 0, 60 },
+    [ACC_RAINBOWCAP] = { "Rainbow cap", SLOT_HEAD, 1, 80 },
+    [ACC_GLASSES] = { "Eyeglasses", SLOT_FACE, 0, 15 },
+    [ACC_SHADES] = { "Cool shades", SLOT_FACE, 0, 25 },
+    [ACC_HEARTS] = { "Heart glasses", SLOT_FACE, 0, 25 },
+    [ACC_STARS] = { "Star glasses", SLOT_FACE, 0, 25 },
+    [ACC_GOGGLES] = { "Goggles", SLOT_FACE, 0, 30 },
+    [ACC_MUSTACHE] = { "Mustache", SLOT_FACE, 0, 20 },
+    [ACC_MONOCLE] = { "Monocle", SLOT_FACE, 0, 35 },
+    [ACC_BOWTIE] = { "Bow tie", SLOT_NECK, 0, 15 },
+    [ACC_SCARF] = { "Scarf", SLOT_NECK, 0, 20 },
+    [ACC_NECKTIE] = { "Necktie", SLOT_NECK, 0, 20 },
+    [ACC_BANDANA] = { "Bandana", SLOT_NECK, 0, 20 },
+    [ACC_MEDAL] = { "Gold medal", SLOT_NECK, 0, 50 },
+    [ACC_SWEATER] = { "Stripy sweater", SLOT_BODY, 0, 30 },
+    [ACC_OVERALLS] = { "Overalls", SLOT_BODY, 0, 30 },
+    [ACC_JERSEY] = { "Team jersey", SLOT_BODY, 0, 35 },
+    [ACC_TUX] = { "Fancy suit", SLOT_BODY, 0, 50 },
+    [ACC_SUPER] = { "Super suit", SLOT_BODY, 0, 60 },
+    [ACC_DISCO] = { "Disco suit", SLOT_BODY, 1, 90 },
+    [ACC_SNEAKERS] = { "Sneakers", SLOT_FEET, 0, 20 },
+    [ACC_BOOTS] = { "Boots", SLOT_FEET, 0, 25 },
+    [ACC_RAINBOOTS] = { "Rain boots", SLOT_FEET, 0, 25 },
+    [ACC_FLIPPERS] = { "Flippers", SLOT_FEET, 0, 30 },
+    [ACC_SKATES] = { "Roller skates", SLOT_FEET, 0, 40 },
+    [ACC_LIGHTUP] = { "Light-up shoes", SLOT_FEET, 1, 70 },
+};
+
+// An older save has no closet, and a damaged one may wear what it does not own: keep it sane.
+static void sanitize_closet(ck_closet *c) {
+    if (c->magic != CK_CLOSET_MAGIC) { memset(c, 0, sizeof *c); c->magic = CK_CLOSET_MAGIC; }
+    for (int a = ACC_COUNT; a < (int)sizeof c->own * 8; a++) c->own[a >> 3] &= (uint8_t)~(1u << (a & 7));
+    for (int s = 0; s < 2; s++)
+        for (int k = 0; k < SLOT_COUNT; k++) {
+            int a = c->wear[s][k] - 1;
+            if (a < 0 || a >= ACC_COUNT || ck_acc[a].slot != k || !CK_OWNS(c, a)) c->wear[s][k] = 0;
+        }
+    if (c->magic2 != CK_CLOSET_MAGIC2) { c->magic2 = CK_CLOSET_MAGIC2; c->paints = 0; c->gear = 0; c->rainbow = 0; }
+    c->paints |= CK_FREE_PAINTS;
+    c->gear &= CK_GEAR_GUN | CK_GEAR_JET | CK_GEAR_RAINBOW;
+    c->rainbow = c->gear & CK_GEAR_RAINBOW ? c->rainbow & 3 : 0;
+}
+
+int ck_shop_cost(int item) {
+    if (item >= 0 && item < ACC_COUNT) return ck_acc[item].cost;
+    if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) return (CK_FREE_PAINTS >> (item - SHOP_PAINT0)) & 1 ? 0 : CK_PAINT_COST;
+    if (item == SHOP_RAINBOW) return CK_RAINBOW_COST;
+    if (item == SHOP_GUN) return CK_GUN_COST;
+    if (item == SHOP_JET) return CK_JET_COST;
+    return 0;
+}
+const char *ck_shop_name(int item, char *buf, int n) {
+    if (item >= 0 && item < ACC_COUNT) snprintf(buf, n, "%s", ck_acc[item].name);
+    else if (item == SHOP_ROBOT) snprintf(buf, n, "Robot");
+    else if (item == SHOP_OSTRICH) snprintf(buf, n, "Robot ostrich");
+    else if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) snprintf(buf, n, "%s paint", ck_col_names[item - SHOP_PAINT0]);
+    else if (item == SHOP_RAINBOW) snprintf(buf, n, "Rainbow paint");
+    else if (item == SHOP_GUN) snprintf(buf, n, "Bubble gun");
+    else if (item == SHOP_JET) snprintf(buf, n, "Super jetpack");
+    else snprintf(buf, n, "?");
+    return buf;
+}
+
+int ck_wearing(const ck_game *G, int s, int slot) {
+    if (s < 0 || s > 1 || slot < 0 || slot >= SLOT_COUNT) return -1;
+    return (int)G->saves.closet.wear[s][slot] - 1;
+}
+
 void ck_saves_read(ck_saves *s, const void *raw) {
     uint32_t magic;
     memcpy(&magic, raw, sizeof magic);
     memset(s, 0, sizeof *s);
     if (magic == CK_SAVES_MAGIC) memcpy(s, raw, sizeof *s);
     else if (magic == CK_SAVE_MAGIC) memcpy(&s->w[0], raw, sizeof s->w[0]);   // a save from before Worlds 2 to 4
+    if (magic != CK_SAVES_MAGIC) memset(&s->closet, 0, sizeof s->closet);
     s->magic = CK_SAVES_MAGIC;
+    sanitize_closet(&s->closet);
     if (s->world < 1 || s->world > CK_WORLDS) s->world = 1;
     for (int i = 0; i < CK_WORLDS; i++)
         if (s->w[i].magic != CK_SAVE_MAGIC) memset(&s->w[i], 0, sizeof s->w[i]);
@@ -132,7 +213,40 @@ const ck_saves *ck_game_saves(ck_game *G) {
     G->saves.magic = CK_SAVES_MAGIC;
     G->saves.world = (uint8_t)G->worldNum;
     G->saves.w[G->worldNum - 1] = G->prog;
+    if (G->slot >= 0 && G->slot < CK_SLOTS) G->slots[G->slot] = G->saves;
     return &G->saves;
+}
+
+void ck_game_slots(ck_game *G, const ck_saves *slots) {
+    for (int k = 0; k < CK_SLOTS; k++) {
+        G->slots[k] = slots[k];
+        if (G->slots[k].magic != CK_SAVES_MAGIC) memset(&G->slots[k], 0, sizeof G->slots[k]);
+    }
+    G->slot = 0;
+}
+
+ck_slot_info ck_slot_summary(const ck_game *G, int k) {
+    ck_slot_info r = { false, 1, 0 };
+    if (k < 0 || k >= CK_SLOTS) return r;
+    const ck_saves *s = k == G->slot ? &G->saves : &G->slots[k];
+    if (s->magic != CK_SAVES_MAGIC) return r;
+    for (int i = 0; i < CK_WORLDS; i++) {
+        const ck_prog *p = k == G->slot && i == G->worldNum - 1 ? &G->prog : &s->w[i];
+        if (p->magic != CK_SAVE_MAGIC) continue;
+        r.used = true;
+        r.bolts += p->bolts;
+    }
+    r.world = k == G->slot ? G->worldNum : s->world >= 1 && s->world <= CK_WORLDS ? s->world : 1;
+    return r;
+}
+
+void ck_save_to_slot(ck_game *G, int k) {
+    if (k < 0 || k >= CK_SLOTS) return;
+    ck_game_saves(G);
+    G->slot = k;
+    G->slots[k] = G->saves;
+    G->saveNow = true;
+    G->progDirty = true;
 }
 
 bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
@@ -141,6 +255,7 @@ bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
     G->worldNum = 1;
     G->saves.magic = CK_SAVES_MAGIC;
     G->saves.world = 1;
+    sanitize_closet(&G->saves.closet);
     if (!ck_parse_world(world_text, &G->world)) return false;
     if (saved && saved->magic == CK_SAVE_MAGIC) G->prog = *saved;
     else ck_prog_fresh(&G->prog);
@@ -204,6 +319,7 @@ bool ck_game_boot(ck_game *G, ck_loader load, void *user, const ck_saves *saved)
     G->loadUser = user;
     if (saved) G->saves = *saved;
     if (G->saves.magic != CK_SAVES_MAGIC) { memset(&G->saves, 0, sizeof G->saves); G->saves.magic = CK_SAVES_MAGIC; }
+    sanitize_closet(&G->saves.closet);
     int n = G->saves.world >= 1 && G->saves.world <= CK_WORLDS ? G->saves.world : 1;
     if (!load_world(G, n) && (n == 1 || !load_world(G, (n = 1)))) return false;
     // the heroes come from whichever world was saved last
@@ -220,6 +336,26 @@ bool ck_game_boot(ck_game *G, ck_loader load, void *user, const ck_saves *saved)
 }
 
 static void go(ck_game *G, int scene);
+void ck_go(ck_game *G, int scene) { go(G, scene); }
+
+// The title's slot picker: play another slot's game (the one being played is kept as it is).
+static void use_slot(ck_game *G, int k) {
+    if (k == G->slot || k < 0 || k >= CK_SLOTS || !G->load) return;
+    ck_game_saves(G);
+    static ck_saves all[CK_SLOTS];
+    memcpy(all, G->slots, sizeof all);
+    ck_loader load = G->load;
+    void *user = G->loadUser;
+    if (!ck_game_boot(G, load, user, &all[k])) { ck_game_boot(G, load, user, &all[0]); k = 0; }
+    memcpy(G->slots, all, sizeof all);
+    G->slot = k;
+}
+static void slots_update(ck_game *G) {
+    if (ANYHIT(G, CK_UP)) { G->slotPick = (G->slotPick + CK_SLOTS - 1) % CK_SLOTS; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_DOWN)) { G->slotPick = (G->slotPick + 1) % CK_SLOTS; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_B)) { ck_sfx(G, SFX_SELECT); go(G, SC_TITLE); return; }
+    if (ANYHIT(G, CK_A) || ANYHIT(G, CK_START)) { ck_sfx(G, SFX_CONFIRM); use_slot(G, G->slotPick); go(G, SC_SELECT); }
+}
 
 bool ck_game_enter_world(ck_game *G, int n, int at) {
     if (n == G->worldNum || !world_exists(G, n)) return false;
@@ -239,6 +375,23 @@ bool ck_game_enter_world(ck_game *G, int n, int at) {
     G->keepMap = true;
     go(G, SC_MAP);
     return true;
+}
+
+void ck_game_new_game(ck_game *G) {
+    ck_prog was = G->prog;
+    memset(G->saves.w, 0, sizeof G->saves.w);
+    memset(&G->saves.closet, 0, sizeof G->saves.closet);
+    sanitize_closet(&G->saves.closet);
+    G->gunOn[0] = G->gunOn[1] = false;
+    if (G->worldNum != 1) load_world(G, 1);
+    G->saves.world = 1;
+    ck_prog_fresh(&G->prog);
+    memcpy(G->prog.hero, was.hero, 2); memcpy(G->prog.col, was.col, 2); memcpy(G->prog.joined, was.joined, 2);
+    G->prog.little = was.little;
+    sanitize(G);
+    G->snap.valid = false;
+    ck_map_reset(G);
+    ck_save(G);
 }
 
 bool ck_game_add_level(ck_game *G, const char *stem, const char *text) {
@@ -261,7 +414,14 @@ static void go(ck_game *G, int scene) {
         else ck_map_reset(G);
         ck_play(G, G->world.song ? G->world.song : SONG_MAP);
         break;
-    case SC_SHOP: ck_play(G, G->world.song ? G->world.song : SONG_MAP); break;
+    case SC_SHOP:
+        G->shopMsgT = 0;
+        ck_play(G, G->world.song ? G->world.song : SONG_MAP);
+        break;
+    case SC_MENU: G->menuPick = 0; G->menuAsk = false; break;
+    case SC_SLOTS: G->slotPick = G->slot; ck_play(G, SONG_TITLE); break;
+    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_CARS: ck_play(G, SONG_SELECT); break;
+    case SC_PIANO: ck_play(G, SONG_NONE); break;
     }
 }
 
@@ -279,8 +439,15 @@ static void select_update(ck_game *G) {
             continue;
         }
         if (HIT(G, i, CK_LEFT) || HIT(G, i, CK_RIGHT)) { P->hero[i] = P->hero[i] == HERO_ROBOT ? HERO_OSTRICH : HERO_ROBOT; ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, i, CK_UP)) { P->col[i] = (uint8_t)((P->col[i] + CK_NCOLS - 1) % CK_NCOLS); ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, i, CK_DOWN)) { P->col[i] = (uint8_t)((P->col[i] + 1) % CK_NCOLS); ck_sfx(G, SFX_SELECT); }
+        // colours: the free ones and the paint pots bought at the parts shop
+        int step = HIT(G, i, CK_UP) ? CK_NCOLS - 1 : HIT(G, i, CK_DOWN) ? 1 : 0;
+        if (step) {
+            int c = P->col[i] % CK_NCOLS;
+            for (int k = 0; k < CK_NCOLS; k++) { c = (c + step) % CK_NCOLS; if ((G->saves.closet.paints >> c) & 1) break; }
+            P->col[i] = (uint8_t)c;
+            G->saves.closet.rainbow &= (uint8_t)~(1u << i);
+            ck_sfx(G, SFX_SELECT);
+        }
         if (HIT(G, i, CK_A)) { G->ready[i] = true; ck_sfx(G, SFX_CONFIRM); }
         if (HIT(G, i, CK_B) && i == 1) { P->joined[i] = 0; ck_sfx(G, SFX_SELECT); }
     }
@@ -295,7 +462,8 @@ static void map_update(ck_game *G) {
     for (int i = 0; i < 2; i++) {
         for (int d = 0; d < 4; d++)
             if (HIT(G, i, dirs[d]) && ck_map_step(G, dirs[d])) ck_sfx(G, SFX_STEP);
-        if (HIT(G, i, CK_A) || HIT(G, i, CK_START)) {
+        if (HIT(G, i, CK_START)) { ck_sfx(G, SFX_SELECT); go(G, SC_MENU); return; }   // START opens the map menu
+        if (HIT(G, i, CK_A)) {
             int n = ck_map_here(G);
             if (n < 0) continue;
             G->prog.at = (uint8_t)n;
@@ -307,7 +475,8 @@ static void map_update(ck_game *G) {
                 G->scene = SC_LEVEL;
                 ck_level_start(G, n, false, false);
                 return;
-            } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SHOP); return; }
+            } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); G->shopFromHouse = false; ck_go(G, SC_SHOP); return; }
+            else if (k == CK_NODE_HOME) { ck_sfx(G, SFX_CONFIRM); ck_house_enter(G, false); return; }
             else if (k == CK_NODE_EXIT) {
                 // through the gate to the next world, with its little film first
                 if (G->worldNum >= CK_WORLDS || world_exists(G, G->worldNum + 1)) { ck_sfx(G, SFX_CONFIRM); ck_save(G); ck_cut_start(G, G->worldNum); return; }
@@ -321,6 +490,116 @@ static void map_update(ck_game *G) {
     ck_map_update(G, G->map.now + 1.0f / 60);
     int n = ck_map_here(G);
     if (n >= 0 && G->prog.at != n) { G->prog.at = (uint8_t)n; ck_save(G); }
+}
+
+// START on the map: Keep playing, Change heroes, or New game (which asks once more first).
+static void back_to_map(ck_game *G) { G->keepMap = true; go(G, SC_MAP); }
+void ck_go_map(ck_game *G) { back_to_map(G); }
+
+// The map menu. "Player 2 leaves" shows only while a second player is in the game.
+int ck_menu_items(const ck_game *G, int *out) {
+    int n = 0;
+    out[n++] = MENU_KEEP; out[n++] = MENU_HEROES;
+    if (G->prog.joined[1] && G->prog.joined[0]) out[n++] = MENU_DROP;
+    out[n++] = MENU_NEW;
+    return n;
+}
+static void menu_update(ck_game *G) {
+    ck_map_update(G, G->map.now + 1.0f / 60);
+    int items[4], ni = ck_menu_items(G, items);
+    int n = G->menuAsk ? 2 : ni;
+    if (G->menuPick >= n) G->menuPick = 0;
+    if (ANYHIT(G, CK_UP)) { G->menuPick = (G->menuPick + n - 1) % n; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_DOWN)) { G->menuPick = (G->menuPick + 1) % n; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_B) || (ANYHIT(G, CK_START) && !G->menuAsk)) {
+        ck_sfx(G, SFX_SELECT);
+        if (G->menuAsk) { G->menuAsk = false; G->menuPick = ni - 1; } else back_to_map(G);
+        return;
+    }
+    if (!ANYHIT(G, CK_A) && !ANYHIT(G, CK_START)) return;
+    if (G->menuAsk) {
+        if (G->menuPick == 1) { ck_sfx(G, SFX_OPEN); ck_game_new_game(G); go(G, SC_SELECT); }
+        else { ck_sfx(G, SFX_SELECT); G->menuAsk = false; G->menuPick = ni - 1; }
+        return;
+    }
+    switch (items[G->menuPick]) {
+    case MENU_KEEP: ck_sfx(G, SFX_SELECT); back_to_map(G); break;
+    case MENU_HEROES: ck_sfx(G, SFX_CONFIRM); go(G, SC_SELECT); break;
+    case MENU_DROP: G->prog.joined[1] = 0; G->gunOn[1] = false; ck_sfx(G, SFX_SELECT); ck_save(G); back_to_map(G); break;
+    default: ck_sfx(G, SFX_NOPE); G->menuAsk = true; G->menuPick = 0; break;
+    }
+}
+
+// The parts shop: each player moves their own cursor; A buys an accessory, then wears or takes it off.
+#define SHOP_COLS 12   // the same grid as the web shop: hats; face and neck; outfits and shoes; bots and gear
+static bool shop_owns(const ck_closet *c, int item) {
+    if (item < ACC_COUNT) return CK_OWNS(c, item);
+    if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) return (c->paints >> (item - SHOP_PAINT0)) & 1;
+    if (item == SHOP_RAINBOW) return (c->gear & CK_GEAR_RAINBOW) != 0;
+    if (item == SHOP_GUN) return c->gear & CK_GEAR_GUN;
+    if (item == SHOP_JET) return (c->gear & CK_GEAR_JET) != 0;
+    return true;   // the heroes are free
+}
+static void shop_act(ck_game *G, int s) {
+    int a = G->shopCur[s], cost = ck_shop_cost(a);
+    ck_closet *c = &G->saves.closet;
+    char name[24];
+    ck_shop_name(a, name, sizeof name);
+    if (!shop_owns(c, a)) {
+        if (G->prog.bolts < cost) {
+            ck_sfx(G, SFX_NOPE);
+            snprintf(G->shopMsg, sizeof G->shopMsg, "Need %d more bolts", cost - G->prog.bolts);
+            G->shopMsgT = 90;
+            return;
+        }
+        G->prog.bolts = (uint16_t)(G->prog.bolts - cost);
+        G->map.bolts = G->prog.bolts;
+        if (a < ACC_COUNT) { c->own[a >> 3] |= (uint8_t)(1u << (a & 7)); c->wear[s][ck_acc[a].slot] = (uint8_t)(a + 1); }
+        else if (a == SHOP_GUN) { c->gear |= CK_GEAR_GUN; G->gunOn[0] = G->gunOn[1] = false; }
+        else if (a == SHOP_JET) c->gear |= CK_GEAR_JET;
+        else if (a == SHOP_RAINBOW) { c->gear |= CK_GEAR_RAINBOW; c->rainbow |= (uint8_t)(1u << s); G->prog.col[s] = CK_RAINBOW_COL; }
+        else { c->paints |= (uint8_t)(1u << (a - SHOP_PAINT0)); G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); c->rainbow &= (uint8_t)~(1u << s); }
+        ck_sfx(G, SFX_BUY);
+        if (a == SHOP_GUN) snprintf(G->shopMsg, sizeof G->shopMsg, "Bubble gun! C switches");
+        else if (a == SHOP_JET) snprintf(G->shopMsg, sizeof G->shopMsg, "Hold A to glide far!");
+        else snprintf(G->shopMsg, sizeof G->shopMsg, "%s!", name);
+        G->shopMsgT = a >= SHOP_GUN ? 150 : 90;
+    } else if (a < ACC_COUNT) {
+        uint8_t *w = &c->wear[s][ck_acc[a].slot];
+        if (*w == a + 1) { *w = 0; ck_sfx(G, SFX_SELECT); } else { *w = (uint8_t)(a + 1); ck_sfx(G, SFX_CONFIRM); }
+    } else if (a == SHOP_ROBOT || a == SHOP_OSTRICH) {
+        G->prog.hero[s] = a == SHOP_ROBOT ? HERO_ROBOT : HERO_OSTRICH;
+        ck_sfx(G, SFX_CONFIRM);
+    } else if (a == SHOP_GUN || a == SHOP_JET) {
+        snprintf(G->shopMsg, sizeof G->shopMsg, a == SHOP_GUN ? "In a level, C switches to it" : "Hold A in the air to glide");
+        G->shopMsgT = 120;
+        ck_sfx(G, SFX_SELECT);
+    } else if (a == SHOP_RAINBOW) {
+        G->prog.col[s] = CK_RAINBOW_COL; c->rainbow |= (uint8_t)(1u << s); ck_sfx(G, SFX_CONFIRM);
+    } else { G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); c->rainbow &= (uint8_t)~(1u << s); ck_sfx(G, SFX_CONFIRM); }
+    ck_save(G);
+}
+bool ck_shop_owns(const ck_game *G, int item) { return shop_owns(&G->saves.closet, item); }
+bool ck_rainbow_skin(const ck_game *G, int slot) { return slot >= 0 && slot < 2 && ((G->saves.closet.rainbow >> slot) & 1); }
+static void shop_update(ck_game *G) {
+    ck_map_update(G, G->map.now + 1.0f / 60);
+    for (int s = 0; s < 2; s++) {
+        if (!G->prog.joined[s]) continue;
+        int *cur = &G->shopCur[s];
+        if (*cur < 0 || *cur >= SHOP_COUNT) *cur = 0;
+        if (HIT(G, s, CK_LEFT)) { *cur = (*cur + SHOP_COUNT - 1) % SHOP_COUNT; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_RIGHT)) { *cur = (*cur + 1) % SHOP_COUNT; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_UP) && *cur >= SHOP_COLS) { *cur -= SHOP_COLS; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_DOWN) && *cur + SHOP_COLS < SHOP_COUNT) { *cur += SHOP_COLS; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_A)) shop_act(G, s);
+        if (HIT(G, s, CK_B) || HIT(G, s, CK_START)) {
+            ck_sfx(G, SFX_SELECT);
+            ck_save(G);
+            if (G->shopFromHouse) { G->shopFromHouse = false; ck_house_enter(G, true); } else back_to_map(G);
+            return;
+        }
+    }
+    if (G->shopMsgT > 0) G->shopMsgT--;
 }
 
 static void level_update(ck_game *G) {
@@ -381,18 +660,19 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
     G->in.held[0] = pad1;
     G->in.held[1] = pad2;
     G->nsfx = 0;
+    G->nnotes = 0;
     G->t += 1.0f / 60;
     switch (G->scene) {
     case SC_INTRO: intro_update(G); break;
     case SC_TITLE:
-        if (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SELECT); }
+        if (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SLOTS); }
         break;
+    case SC_SLOTS: slots_update(G); break;
+    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_CARS: case SC_PIANO: ck_house_step(G); break;
     case SC_SELECT: select_update(G); break;
     case SC_MAP: map_update(G); break;
-    case SC_SHOP:
-        ck_map_update(G, G->map.now + 1.0f / 60);
-        if (ANYHIT(G, CK_A) || ANYHIT(G, CK_B) || ANYHIT(G, CK_START)) { ck_sfx(G, SFX_SELECT); G->keepMap = true; go(G, SC_MAP); }
-        break;
+    case SC_SHOP: shop_update(G); break;
+    case SC_MENU: menu_update(G); break;
     case SC_LEVEL: level_update(G); break;
     case SC_CUT:
         if (ck_cut_update(G)) {
