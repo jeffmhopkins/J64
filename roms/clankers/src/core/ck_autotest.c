@@ -27,7 +27,8 @@ uint16_t ck_bot(const ck_level *lv) {
 }
 
 const char *ck_scene_name(int scene) {
-    static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro", "cut", "menu" };
+    static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro", "cut", "menu",
+                                    "house", "paint", "aqua", "cars", "piano", "slots" };
     return scene >= 0 && scene < (int)(sizeof names / sizeof *names) ? names[scene] : "?";
 }
 
@@ -83,8 +84,9 @@ int ck_autotest_step(ck_autotest *A, ck_game *G) {
         break;
     case T_TITLE:
         if (G->scene == SC_SELECT) return check(A, "player select");
-        if (A->stepFrames == 2) A->pressed = CK_START;
-        if (A->stepFrames > 10) return fail(A, G, "START did not leave the title");
+        if (A->stepFrames == 2) A->pressed = CK_START;    // the title, then slot 1 on the slot picker
+        if (A->stepFrames == 6) A->pressed = CK_A;
+        if (A->stepFrames > 14) return fail(A, G, "START did not leave the title");
         break;
     case T_SELECT:
         if (G->scene == SC_MAP) return check(A, "map");

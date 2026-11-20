@@ -206,7 +206,7 @@ static uint16_t fuzz_pad(int *hold, uint16_t *cur) {
     return *cur;
 }
 static void fuzz_check(const ck_game *G) {
-    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_MENU, 1);
+    EXPECT_EQ_INT(G->scene >= SC_TITLE && G->scene <= SC_SLOTS, 1);
     EXPECT_EQ_INT(G->worldNum >= 1 && G->worldNum <= CK_WORLDS, 1);
     EXPECT_EQ_INT(G->nparts >= 0 && G->nparts <= CK_MAXPARTS, 1);
     EXPECT_EQ_INT(G->nsfx >= 0 && G->nsfx <= CK_MAXSFX, 1);
@@ -317,6 +317,10 @@ static void test_flow(void) {
     EXPECT_EQ_INT(G->song, SONG_TITLE);
     ck_game_step(G, 0, 0);
     ck_game_step(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_SLOTS);   // pick a save slot (slot 1 is the one already loaded)
+    EXPECT_EQ_INT(G->slotPick, 0);
+    ck_game_step(G, 0, 0);
+    ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_SELECT);
     ck_game_step(G, 0, 0);
     ck_game_step(G, CK_A, 0);   // player 1 ready
@@ -884,6 +888,145 @@ static void test_drop_player2(void) {
     EXPECT_EQ_INT(items[2], MENU_NEW);
 }
 
+
+// The house: walk along the rooms, use the things in them, and the little games.
+static void hold(ck_game *G, int n, uint16_t p1, uint16_t p2) { for (int i = 0; i < n; i++) ck_game_step(G, p1, p2); }
+static void walk_to(ck_game *G, float x) {
+    for (int i = 0; i < 2000 && fabsf(G->house.ps[0].x - x) > 4; i++) ck_game_step(G, G->house.ps[0].x < x ? CK_RIGHT : CK_LEFT, 0);
+    hold(G, 20, 0, 0);
+}
+static void test_house(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    G->prog.joined[0] = G->prog.joined[1] = true;
+    G->prog.beaten = 0x7;   // home, l1, l2 (two levels): two babies at home
+    G->scene = SC_MAP;
+    ck_house_enter(G, false);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    EXPECT_EQ_INT(G->house.np, 2);
+    EXPECT_EQ_INT(G->house.nbabies, 2);
+    EXPECT_EQ_INT(G->house.babies[0].hex, G->world.babies[0]);
+    // the layout: rooms side by side, every spot inside a room
+    for (int r = 1; r < CK_HOUSE_ROOMS; r++) EXPECT_EQ_INT(ck_rooms[r].x0, ck_rooms[r - 1].x1);
+    EXPECT_EQ_INT(ck_rooms[CK_HOUSE_ROOMS - 1].x1, CK_HOUSE_W);
+    // walk to the kitchen fridge: a snack fills the batteries
+    G->prog.lives = 1;
+    walk_to(G, ck_spots[SPOT_SNACK].x);
+    EXPECT_EQ_INT(ck_house_near(&G->house.ps[0]), SPOT_SNACK);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->prog.lives, 3);
+    EXPECT_EQ_INT(G->house.ps[0].eat > 0, 1);
+    hold(G, 80, 0, 0);
+    // the shop counter opens the parts shop, and leaving it comes back to the house
+    walk_to(G, ck_spots[SPOT_SHOP].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_SHOP);
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    EXPECT_EQ_INT(fabsf(G->house.ps[0].x - ck_spots[SPOT_SHOP].x) < 30, 1);
+    // the paint studio: fly up with A, hold B to paint, R changes colour
+    walk_to(G, ck_spots[SPOT_PAINT].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_PAINT);
+    int painted = 0;
+    hold(G, 30, CK_A | CK_B | CK_RIGHT, 0);
+    for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) if (G->house.mural[i] == 1) painted++;
+    EXPECT_EQ_INT(painted > 20, 1);
+    EXPECT_EQ_INT(G->house.gs[0].y < CK_MURAL_FLOOR - 20, 1);
+    press(G, CK_R, 0);
+    EXPECT_EQ_INT(G->house.gs[0].col, 1);
+    press(G, CK_L, 0); press(G, CK_L, 0);
+    EXPECT_EQ_INT(G->house.gs[0].col, CK_MURAL_ERASER);
+    hold(G, 10, CK_B, 0);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    EXPECT_EQ_INT(painted > 0, 1);   // the wall keeps its paint
+    // the aquarium: swim down and right; the beach is dry land
+    walk_to(G, ck_spots[SPOT_AQUA].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_AQUA);
+    float y0 = G->house.gs[0].y;
+    hold(G, 40, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->house.gs[0].y > y0 + 10, 1);
+    hold(G, 400, CK_RIGHT | CK_UP, 0);
+    hold(G, 100, CK_RIGHT, 0);
+    EXPECT_EQ_INT(G->house.gs[0].land, 1);
+    EXPECT_EQ_INT(G->house.gs[0].y, CK_AQUA_BEACH_Y);
+    for (int i = 0; i < 600; i++) {
+        ck_game_step(G, 0, 0);
+        for (int k = 0; k < CK_AQUA_FISH; k++) EXPECT_EQ_INT(G->house.fish[k].x >= 12 && G->house.fish[k].x <= CK_AQUA_BEACH_X - 16, 1);
+    }
+    press(G, CK_START, 0);
+    // the garage: a three-lap race; a scripted driver steers round the oval
+    walk_to(G, ck_spots[SPOT_CARS].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_CARS);
+    hold(G, 200, 0, 0);   // the countdown
+    EXPECT_EQ_INT(G->house.count <= 0, 1);
+    for (int i = 0; i < 60 * 90 && G->house.win < 0; i++) {
+        const ck_hhero *c = &G->house.gs[0];
+        // aim at a point a little ahead round the middle of the ring (clockwise on screen)
+        float ang = atan2f((c->y - CK_TRACK_CY) / ((CK_TRACK_OY + CK_TRACK_IY) / 2.0f), (c->x - CK_TRACK_CX) / ((CK_TRACK_OX + CK_TRACK_IX) / 2.0f)) + 0.35f;
+        float tx = CK_TRACK_CX + cosf(ang) * (CK_TRACK_OX + CK_TRACK_IX) / 2.0f, ty = CK_TRACK_CY + sinf(ang) * (CK_TRACK_OY + CK_TRACK_IY) / 2.0f;
+        float want = atan2f(ty - c->y, tx - c->x), d = remainderf(want - c->a, 2 * 3.14159265f);
+        uint16_t pad = CK_A | (d > 0.05f ? CK_RIGHT : d < -0.05f ? CK_LEFT : 0);
+        ck_game_step(G, pad, 0);
+    }
+    EXPECT_EQ_INT(G->house.win, 0);
+    EXPECT_EQ_INT(G->house.gs[0].laps, CK_RACE_LAPS);
+    press(G, CK_START, 0);
+    // the piano: A plays the key under the hand, the stick moves along the keys
+    walk_to(G, ck_spots[SPOT_PIANO].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->scene, SC_PIANO);
+    ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(G->nnotes, 1);
+    EXPECT_EQ_INT(fabsf(G->notes[0] - 261.63f * powf(2, 7 / 12.0f)) < 0.5f, 1);
+    ck_game_step(G, 0, 0);
+    press(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(G->house.gs[0].key, 8);
+    for (int i = 0; i < CK_KEYS_N; i++) { float x; bool b; ck_piano_key(i, &x, &b); EXPECT_EQ_INT(x > CK_KEYS_X && x < CK_KEYS_X + 14 * CK_KEYS_W, 1); }
+    press(G, CK_START, 0);
+    // the bed saves this game into a slot of your choice
+    walk_to(G, ck_spots[SPOT_BED].x);
+    press(G, CK_DOWN, 0);
+    EXPECT_EQ_INT(G->house.mode, HM_SLOTS);
+    press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->slot, 1);
+    EXPECT_EQ_INT(G->saveNow, 1);
+    EXPECT_EQ_INT(ck_slot_summary(G, 1).used, 1);
+    EXPECT_EQ_INT(G->house.mode, HM_SLEEP);
+    hold(G, 200, 0, 0);
+    EXPECT_EQ_INT(G->house.mode, HM_WALK);
+    // START (or walking off the yard) goes back to the map
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+}
+
+// Three save slots: the title picks one, and an empty slot is a new game.
+static void test_slots(void) {
+    ck_game *G = load_game();
+    if (!G) return;
+    static ck_saves three[CK_SLOTS];
+    memset(three, 0, sizeof three);
+    three[0] = *ck_game_saves(G);
+    ck_game_slots(G, three);
+    G->prog.bolts = 77;   // playing slot 1
+    EXPECT_EQ_INT(ck_slot_summary(G, 0).used, 1);
+    EXPECT_EQ_INT(ck_slot_summary(G, 2).used, 0);
+    G->scene = SC_TITLE;
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_SLOTS);
+    press(G, CK_UP, 0);   // slot 3
+    EXPECT_EQ_INT(G->slotPick, 2);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_SELECT);
+    EXPECT_EQ_INT(G->slot, 2);
+    EXPECT_EQ_INT(G->prog.bolts, 0);
+    EXPECT_EQ_INT(G->slots[0].w[0].bolts, 77);   // slot 1 is left as it was
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -905,4 +1048,6 @@ void test_clankers(void) {
     test_shop();
     test_bubble_gun();
     test_drop_player2();
+    test_house();
+    test_slots();
 }

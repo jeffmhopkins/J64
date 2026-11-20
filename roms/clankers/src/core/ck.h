@@ -31,6 +31,7 @@ enum {
     CK_LEFT = 1 << 0, CK_RIGHT = 1 << 1, CK_UP = 1 << 2, CK_DOWN = 1 << 3,
     CK_A = 1 << 4, CK_B = 1 << 5, CK_START = 1 << 6,
     CK_C = 1 << 7,   // C-up, C-down or C-right: switch between the action and the bubble gun
+    CK_L = 1 << 8, CK_R = 1 << 9,   // the shoulder buttons (the paint studio's colours)
 };
 typedef struct { uint16_t held[2], prev[2]; } ck_input;
 
@@ -385,8 +386,108 @@ typedef struct {
     int ntrail;
 } ck_map;
 
+// ---------------------------------------------------------------------------- the house
+// The shop node on every map is the heroes' house: the yard, then rooms in a row along one floor
+// (web/lib/houseart.js has the same layout). Down at a room's thing uses it; some open a little
+// game of their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO). Rescued baby bots wander about.
+#define CK_HOUSE_W 2040
+#define CK_HOUSE_FLOOR 200
+#define CK_HOUSE_CEIL 20
+#define CK_HOUSE_PILLAR 8
+#define CK_HOUSE_DOOR_TOP 120
+#define CK_HOUSE_ROOMS 8
+#define CK_HOUSE_SPOTS 7
+#define CK_HOUSE_DECOR 9
+#define CK_HOUSE_BABIES 16
+enum { SPOT_SHOP, SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS };
+// furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
+enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
+       FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_COUNT };
+typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
+typedef struct { int x, kind, furn; const char *label; } ck_spot;
+typedef struct { int x, furn; } ck_decor;
+extern const ck_room ck_rooms[CK_HOUSE_ROOMS];
+extern const ck_spot ck_spots[CK_HOUSE_SPOTS];
+extern const ck_decor ck_decors[CK_HOUSE_DECOR];
+// the paint studio's wall: 80 x 48 cells of 4 px from y 16; 0 is bare, else palette index + 1
+#define CK_MURAL_W 80
+#define CK_MURAL_H 48
+#define CK_MURAL_CELL 4
+#define CK_MURAL_Y 16
+#define CK_MURAL_FLOOR 220
+#define CK_MURAL_PAL 10
+#define CK_MURAL_ERASER CK_MURAL_PAL   // the last choice rubs paint out
+extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
+// the aquarium: water on the left, a beach on the right
+#define CK_AQUA_TOP 44
+#define CK_AQUA_SEABED 222
+#define CK_AQUA_BEACH_X 236
+#define CK_AQUA_BEACH_Y 182
+#define CK_AQUA_FISH 7
+#define CK_AQUA_SHRIMP 4
+#define CK_AQUA_CRABS 3
+// the garage's race track: an oval ring seen from above
+#define CK_TRACK_CX 160
+#define CK_TRACK_CY 130
+#define CK_TRACK_OX 150
+#define CK_TRACK_OY 100
+#define CK_TRACK_IX 92
+#define CK_TRACK_IY 48
+#define CK_RACE_LAPS 3
+// the piano: two octaves from middle C, 14 white keys
+#define CK_KEYS_X 20
+#define CK_KEYS_Y 150
+#define CK_KEYS_W 20
+#define CK_KEYS_H 80
+#define CK_KEYS_BW 12
+#define CK_KEYS_BH 48
+#define CK_KEYS_N 24
+void ck_piano_key(int i, float *x, bool *black);   // semitone 0..23: the key's middle and colour
+// One hero in the house or one of its games (not every game uses every field).
+typedef struct {
+    int slot;                  // player slot 0 or 1
+    float x, y, vx, vy, anim;
+    int face;
+    bool ground, land, jet, brush;
+    int eat, bubT, col;        // house: snack time; aqua: next bubble; paint: palette choice
+    float bx, by;              // paint: where the brush was last frame
+    float a, s, lapT, best;    // cars: heading, speed, this lap, best lap
+    int laps, key, rep, bounce;
+    bool half;
+} ck_hhero;
+typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
+typedef struct { int kind; float x, y, vx, ph; int scare; } ck_fish;
+typedef struct { float x, y, vx, vy; int face, rest; } ck_shrimp;
+typedef struct { float x, vx; int snap, wait; } ck_crab;
+typedef struct { float x, y; int life; uint32_t col; } ck_note_fx;
+enum { HM_WALK, HM_SLOTS, HM_SLEEP };
+typedef struct {
+    ck_hhero ps[2];            // in the house
+    ck_hhero gs[2];            // in the game you went into
+    int np;
+    ck_hbaby babies[CK_HOUSE_BABIES];
+    int nbabies;
+    float cam;
+    int mode, pick;
+    float sleepT;
+    char msg[32];
+    int msgT;
+    uint8_t mural[CK_MURAL_W * CK_MURAL_H];
+    ck_fish fish[CK_AQUA_FISH];
+    ck_shrimp shrimp[CK_AQUA_SHRIMP];
+    ck_crab crabs[CK_AQUA_CRABS];
+    float count, endT, clock;  // cars: the countdown, the time since the winner got home, the race clock
+    int win;                   // cars: the winner's index, or -1
+    uint8_t lit[CK_KEYS_N];    // piano: frames a key stays lit
+    ck_note_fx notes[16];
+    int nnotes;
+} ck_house;
+#define CK_SLOTS 3
+typedef struct { bool used; int world, bolts; } ck_slot_info;
+
 // ---------------------------------------------------------------------------- the whole game
-enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU };
+enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU,
+       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS };
 enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
 
 // The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine
@@ -466,6 +567,16 @@ typedef struct ck_game {
     char shopMsg[32];
     int shopMsgT;
 
+    ck_house house;
+    // save slots: the frontend hands in all three at boot; G->slot is the one being played
+    ck_saves slots[CK_SLOTS];
+    int slot;
+    int slotPick;
+    bool saveNow;              // the frontend should write the save now (the bed)
+    bool shopFromHouse;        // the parts shop goes back into the house
+    float notes[4];            // piano notes to play this tick (Hz)
+    int nnotes;
+
     ck_input in;
     ck_part parts[CK_MAXPARTS];
     int nparts;
@@ -498,6 +609,10 @@ bool ck_gun_on(const ck_game *G, int slot);        // that player's B fires the 
 void ck_map_baby_pos(const ck_game *G, int i, float *x, float *y);
 enum { MENU_KEEP, MENU_HEROES, MENU_DROP, MENU_NEW };
 int ck_menu_items(const ck_game *G, int *out);    // the map menu's rows (up to 4), MENU_*
+// Save slots: give the core all three saves (after ck_game_boot, which plays slot 0). The
+// frontend writes ck_game_saves() into slot G->slot.
+void ck_game_slots(ck_game *G, const ck_saves *slots);
+ck_slot_info ck_slot_summary(const ck_game *G, int k);
 // One 60 Hz tick. Clears and refills G->sfx.
 void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2);
 

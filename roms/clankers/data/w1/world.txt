@@ -10,7 +10,7 @@ boss-msg: Fixed! Path to World 2 open
 node home   2 11  home   "Home garage"
 node l1     5 11  level  "Scrap Path"                 level=1-1
 node l2     5 7   level  "Squeeze Alley"              level=1-2
-node shop   2 7   shop   "Parts shop"
+node shop   2 7   shop   "Our house"
 node l3     9 7   level  "Tyre Bounce"                level=1-3
 node bonus  9 3   bonus  "Bonus · Bolt Shower"        level=bonus gate=3
 node boss   12 11 boss   "Big Glitch · Clanky Crane"  level=boss

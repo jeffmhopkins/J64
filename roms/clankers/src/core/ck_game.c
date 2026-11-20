@@ -213,7 +213,40 @@ const ck_saves *ck_game_saves(ck_game *G) {
     G->saves.magic = CK_SAVES_MAGIC;
     G->saves.world = (uint8_t)G->worldNum;
     G->saves.w[G->worldNum - 1] = G->prog;
+    if (G->slot >= 0 && G->slot < CK_SLOTS) G->slots[G->slot] = G->saves;
     return &G->saves;
+}
+
+void ck_game_slots(ck_game *G, const ck_saves *slots) {
+    for (int k = 0; k < CK_SLOTS; k++) {
+        G->slots[k] = slots[k];
+        if (G->slots[k].magic != CK_SAVES_MAGIC) memset(&G->slots[k], 0, sizeof G->slots[k]);
+    }
+    G->slot = 0;
+}
+
+ck_slot_info ck_slot_summary(const ck_game *G, int k) {
+    ck_slot_info r = { false, 1, 0 };
+    if (k < 0 || k >= CK_SLOTS) return r;
+    const ck_saves *s = k == G->slot ? &G->saves : &G->slots[k];
+    if (s->magic != CK_SAVES_MAGIC) return r;
+    for (int i = 0; i < CK_WORLDS; i++) {
+        const ck_prog *p = k == G->slot && i == G->worldNum - 1 ? &G->prog : &s->w[i];
+        if (p->magic != CK_SAVE_MAGIC) continue;
+        r.used = true;
+        r.bolts += p->bolts;
+    }
+    r.world = k == G->slot ? G->worldNum : s->world >= 1 && s->world <= CK_WORLDS ? s->world : 1;
+    return r;
+}
+
+void ck_save_to_slot(ck_game *G, int k) {
+    if (k < 0 || k >= CK_SLOTS) return;
+    ck_game_saves(G);
+    G->slot = k;
+    G->slots[k] = G->saves;
+    G->saveNow = true;
+    G->progDirty = true;
 }
 
 bool ck_game_init(ck_game *G, const char *world_text, const ck_prog *saved) {
@@ -303,6 +336,26 @@ bool ck_game_boot(ck_game *G, ck_loader load, void *user, const ck_saves *saved)
 }
 
 static void go(ck_game *G, int scene);
+void ck_go(ck_game *G, int scene) { go(G, scene); }
+
+// The title's slot picker: play another slot's game (the one being played is kept as it is).
+static void use_slot(ck_game *G, int k) {
+    if (k == G->slot || k < 0 || k >= CK_SLOTS || !G->load) return;
+    ck_game_saves(G);
+    static ck_saves all[CK_SLOTS];
+    memcpy(all, G->slots, sizeof all);
+    ck_loader load = G->load;
+    void *user = G->loadUser;
+    if (!ck_game_boot(G, load, user, &all[k])) { ck_game_boot(G, load, user, &all[0]); k = 0; }
+    memcpy(G->slots, all, sizeof all);
+    G->slot = k;
+}
+static void slots_update(ck_game *G) {
+    if (ANYHIT(G, CK_UP)) { G->slotPick = (G->slotPick + CK_SLOTS - 1) % CK_SLOTS; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_DOWN)) { G->slotPick = (G->slotPick + 1) % CK_SLOTS; ck_sfx(G, SFX_SELECT); }
+    if (ANYHIT(G, CK_B)) { ck_sfx(G, SFX_SELECT); go(G, SC_TITLE); return; }
+    if (ANYHIT(G, CK_A) || ANYHIT(G, CK_START)) { ck_sfx(G, SFX_CONFIRM); use_slot(G, G->slotPick); go(G, SC_SELECT); }
+}
 
 bool ck_game_enter_world(ck_game *G, int n, int at) {
     if (n == G->worldNum || !world_exists(G, n)) return false;
@@ -366,6 +419,9 @@ static void go(ck_game *G, int scene) {
         ck_play(G, G->world.song ? G->world.song : SONG_MAP);
         break;
     case SC_MENU: G->menuPick = 0; G->menuAsk = false; break;
+    case SC_SLOTS: G->slotPick = G->slot; ck_play(G, SONG_TITLE); break;
+    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_CARS: ck_play(G, SONG_SELECT); break;
+    case SC_PIANO: ck_play(G, SONG_NONE); break;
     }
 }
 
@@ -419,7 +475,7 @@ static void map_update(ck_game *G) {
                 G->scene = SC_LEVEL;
                 ck_level_start(G, n, false, false);
                 return;
-            } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SHOP); return; }
+            } else if (k == CK_NODE_SHOP) { ck_sfx(G, SFX_CONFIRM); ck_house_enter(G, false); return; }
             else if (k == CK_NODE_EXIT) {
                 // through the gate to the next world, with its little film first
                 if (G->worldNum >= CK_WORLDS || world_exists(G, G->worldNum + 1)) { ck_sfx(G, SFX_CONFIRM); ck_save(G); ck_cut_start(G, G->worldNum); return; }
@@ -437,6 +493,7 @@ static void map_update(ck_game *G) {
 
 // START on the map: Keep playing, Change heroes, or New game (which asks once more first).
 static void back_to_map(ck_game *G) { G->keepMap = true; go(G, SC_MAP); }
+void ck_go_map(ck_game *G) { back_to_map(G); }
 
 // The map menu. "Player 2 leaves" shows only while a second player is in the game.
 int ck_menu_items(const ck_game *G, int *out) {
@@ -534,7 +591,12 @@ static void shop_update(ck_game *G) {
         if (HIT(G, s, CK_UP) && *cur >= SHOP_COLS) { *cur -= SHOP_COLS; ck_sfx(G, SFX_SELECT); }
         if (HIT(G, s, CK_DOWN) && *cur + SHOP_COLS < SHOP_COUNT) { *cur += SHOP_COLS; ck_sfx(G, SFX_SELECT); }
         if (HIT(G, s, CK_A)) shop_act(G, s);
-        if (HIT(G, s, CK_B) || HIT(G, s, CK_START)) { ck_sfx(G, SFX_SELECT); ck_save(G); back_to_map(G); return; }
+        if (HIT(G, s, CK_B) || HIT(G, s, CK_START)) {
+            ck_sfx(G, SFX_SELECT);
+            ck_save(G);
+            if (G->shopFromHouse) { G->shopFromHouse = false; ck_house_enter(G, true); } else back_to_map(G);
+            return;
+        }
     }
     if (G->shopMsgT > 0) G->shopMsgT--;
 }
@@ -597,12 +659,15 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
     G->in.held[0] = pad1;
     G->in.held[1] = pad2;
     G->nsfx = 0;
+    G->nnotes = 0;
     G->t += 1.0f / 60;
     switch (G->scene) {
     case SC_INTRO: intro_update(G); break;
     case SC_TITLE:
-        if (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SELECT); }
+        if (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SLOTS); }
         break;
+    case SC_SLOTS: slots_update(G); break;
+    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_CARS: case SC_PIANO: ck_house_step(G); break;
     case SC_SELECT: select_update(G); break;
     case SC_MAP: map_update(G); break;
     case SC_SHOP: shop_update(G); break;

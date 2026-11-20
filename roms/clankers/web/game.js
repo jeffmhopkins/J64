@@ -7,10 +7,16 @@ const K = CK, P = Math.PI, FONT = '"Titan One", "Arial Black", Impact, sans-seri
 const cv = document.getElementById('scr'), g = cv.getContext('2d'), W = 320, H = 240, TS = 16;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// Three save slots: slot 1 keeps the old keys, slots 2 and 3 put 's2:' or 's3:' in front of
+// everything that belongs to a game (the heroes, the worlds, the closet, the mural).
+const SLOTS = 3, SLOTTED = k => /^(party|world|w\d+|closet|mural)$/.test(k);
+const slotKey = (k, n) => n > 1 && SLOTTED(k) ? 's' + n + ':' + k : k;
+let saveSlot = 1;
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('clankers:' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('clankers:' + k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } },
+  get(k, d) { try { const v = localStorage.getItem('clankers:' + slotKey(k, saveSlot)); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('clankers:' + slotKey(k, saveSlot), JSON.stringify(v)); } catch (e) { /* storage blocked */ } },
 };
+saveSlot = Math.min(SLOTS, Math.max(1, store.get('slot', 1) | 0));
 
 // ----------------------------------------------------------------------------- AUDIO
 const SND = (() => {
@@ -44,6 +50,7 @@ const SND = (() => {
   }
   const fx = {
     jump: () => tone(330, 0.16, 'square', 0.18, 0, 2.2),
+    note: f => { tone(f, 0.7, 'triangle', 0.32); tone(f * 2, 0.25, 'sine', 0.06); },
     boost: () => { noise(0.3, 0.25, 0, 1800); tone(220, 0.22, 'sawtooth', 0.1, 0, 2.6); },
     flap: () => tone(520, 0.06, 'triangle', 0.14, 0, 1.5),
     hop2: () => { tone(440, 0.12, 'triangle', 0.2, 0, 2); noise(0.08, 0.1, 0, 2500); },
@@ -123,14 +130,14 @@ const SND = (() => {
   }
   function stopSong() { if (timer) clearInterval(timer); timer = null; cur = null; }
   function setMuted(m) { muted = m; store.set('muted', m); if (master) master.gain.value = m ? 0 : VOL; }
-  return { resume, fx: new Proxy(fx, { get: (o, k) => (a) => { if (ac && o[k]) try { o[k](a); } catch (e) { /* audio hiccup */ } } }), playSong, stopSong, setMuted, get muted() { return muted; }, get ready() { return !!ac; } };
+  return { resume, note: f => { if (ac) try { fx.note(f); } catch (e) { /* audio hiccup */ } }, fx: new Proxy(fx, { get: (o, k) => (a) => { if (ac && o[k]) try { o[k](a); } catch (e) { /* audio hiccup */ } } }), playSong, stopSong, setMuted, get muted() { return muted; }, get ready() { return !!ac; } };
 })();
 
 // ----------------------------------------------------------------------------- INPUT
-const BTN = ['left', 'right', 'up', 'down', 'a', 'b', 'start', 'c'];
+const BTN = ['left', 'right', 'up', 'down', 'a', 'b', 'start', 'c', 'l', 'r'];
 const KEYMAP = [
-  { left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], a: ['z', 'Z', ' ', 'k', 'K'], b: ['x', 'X', 'j', 'J'], start: ['Enter'], c: ['c', 'C', 'l', 'L'] },
-  { left: ['a', 'A'], right: ['d', 'D'], up: ['w', 'W'], down: ['s', 'S'], a: ['g', 'G'], b: ['h', 'H'], start: ['Tab'], c: ['y', 'Y'] },
+  { left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], a: ['z', 'Z', ' ', 'k', 'K'], b: ['x', 'X', 'j', 'J'], start: ['Enter'], c: ['c', 'C', 'l', 'L'], l: ['q', 'Q', 'u', 'U'], r: ['e', 'E', 'o', 'O'] },
+  { left: ['a', 'A'], right: ['d', 'D'], up: ['w', 'W'], down: ['s', 'S'], a: ['g', 'G'], b: ['h', 'H'], start: ['Tab'], c: ['y', 'Y'], l: ['r', 'R'], r: ['t', 'T'] },
 ];
 const keys = new Set(), touch = {}, latch = new Set();   // latch: keys/buttons pressed and released between two frames still count once
 const pads = [0, 1].map(() => ({ cur: {}, prev: {} }));
@@ -186,7 +193,7 @@ function pollPads() {
       const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, bt = n => gp.buttons[n] && gp.buttons[n].pressed;
       c.left = c.left || ax < -0.45 || bt(14); c.right = c.right || ax > 0.45 || bt(15);
       c.up = c.up || ay < -0.5 || bt(12); c.down = c.down || ay > 0.5 || bt(13);
-      c.a = c.a || bt(0); c.b = c.b || bt(1) || bt(2); c.start = c.start || bt(9); c.c = c.c || bt(3);
+      c.a = c.a || bt(0); c.b = c.b || bt(1) || bt(2); c.start = c.start || bt(9); c.c = c.c || bt(3); c.l = c.l || bt(4) || bt(6); c.r = c.r || bt(5) || bt(7);
       if (Object.values(c).some(Boolean)) onFirstInput();
     }
     p.cur = c;
@@ -271,7 +278,7 @@ function fitPanel(s, size, w, y, h, c) { const ww = Math.min(W - 6, Math.max(w, 
 const TITLE = makeTitle(g, W, H, reduce);
 const titleScene = {
   song: 'title', t: 0,
-  update() { this.t += 1 / 60; if (anyHit('start') || anyHit('a')) { SND.fx.confirm(); go(selectScene); } },
+  update() { this.t += 1 / 60; if (anyHit('start') || anyHit('a')) { SND.fx.confirm(); go(slotScene()); } },
   draw() { K.g = g; TITLE.frame(this.t); },
 };
 
@@ -421,7 +428,7 @@ const mapScene = {
         const n = MAP.here(); if (!n) continue;
         prog.at = n.id; saveProg();
         if ((n.kind === 'level' || n.kind === 'boss' || n.kind === 'bonus') && LEVELS[n.id]) { SND.fx.confirm(); go(levelScene(n.id)); }
-        else if (n.kind === 'shop') { SND.fx.confirm(); go(shopScene()); }
+        else if (n.kind === 'shop') { SND.fx.confirm(); go(houseScene()); }
         else if (n.kind === 'exit') {
           if (WORLD_FILES[worldNum + 1] || worldNum >= 4) { SND.fx.confirm(); go(cutScene(worldNum)); }
           else { SND.fx.nope(); MAP.say('World ' + (worldNum + 1) + ' is coming soon!'); }
@@ -509,7 +516,7 @@ function mapMenu() {
 
 // ----------------------------------------------------------------------------- PARTS SHOP
 // Trade bolts for hats, glasses and neckwear. Each player has a cursor; A buys, then puts on or takes off.
-function shopScene() {
+function shopScene(back) {
   const S = { song: mapScene.song, t: 0, cur: [0, 0], msg: null };
   const team = activeParty();
   // rows: hats; face and neck; outfits and shoes; then the heroes (free to swap), paint pots and the bubble gun
@@ -521,7 +528,7 @@ function shopScene() {
   const TINT = { head: 'rgba(255,210,63,0.13)', face: 'rgba(90,209,255,0.13)', neck: 'rgba(255,143,199,0.13)', body: 'rgba(194,139,255,0.15)', feet: 'rgba(73,209,122,0.13)', bot: 'rgba(255,255,255,0.1)' };
   const owns = it => it.slot ? closet.own.includes(it.id) : it.kind === 'paint' ? closet.paints.includes(it.col) : it.kind === 'rainbow' ? closet.rbw : it.kind === 'gun' ? closet.gun : it.kind === 'jet' ? closet.jet : true;
   const member = slot => party[slot];
-  const leave = () => { saveProg(); go(mapScene); };
+  const leave = () => { saveProg(); if (back) back(); else go(mapScene); };
   function act(slot) {
     const it = ITEMS[S.cur[slot]], wear = closet.wear[slot], m = member(slot);
     if (!owns(it)) {
@@ -613,6 +620,455 @@ function shopScene() {
     text('B leave', W - 20, H - 14, 7, '#a49db4', 'right', null);
   };
   particles = [];
+  return S;
+}
+
+// ----------------------------------------------------------------------------- THE HOUSE
+// The shop node on every map is the heroes' house: a yard, then rooms in a row along one floor.
+// Walk with the stick, A jumps, Down at a room's thing uses it (the shop counter, the fridge, the
+// paint studio door, the piano, the fish tank, the bed, the go-kart). Walk off the yard's left
+// edge, or press START, to go back to the map. Every baby bot you have rescued lives here.
+// The N64 has the same house (src/core/ck_house.c); these numbers match it.
+const HL = HOUSEART.LAYOUT;
+const HOUSE_SPEED = 1.7, HOUSE_JUMP = -4.4, HOUSE_GRAV = 0.26;
+// One hero as the little games draw it: idle (front), run, jump, jet, cheer (front). Matches the
+// N64 hero sheet frames (0-3, 4-11, 12, 13-16, 25-26).
+function drawHeroPose(m, x, y, st, t, face = 1) {
+  const R = m.hero === 'robot', s = R ? 0.074 : 0.071, hex = m.hex, acc = m.acc;
+  const side = o => R ? K.robotSide(x, y, s, hex, Object.assign(o, { dir: face, acc })) : K.ostrichSide(x, y, s, hex, Object.assign(o, { dir: face, acc }));
+  if (st === 'run') side(K.pose(m.hero, 'run', R ? t * 2.2 : t * 2));
+  else if (st === 'jump') side(K.pose(m.hero, 'jump', t));
+  else if (st === 'jet') side(K.pose(m.hero, R ? 'jet' : 'flap', t));
+  else if (st === 'cheer') { if (R) K.robot(x, y, s, hex, { t, armL: 150 + Math.sin(t * 9) * 20, armR: -150 - Math.sin(t * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o', acc }); else K.ostrich(x, y, s, hex, { t, bob: Math.abs(Math.sin(t * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8, acc }); }
+  else { if (R) K.robot(x, y, s, hex, { t, bob: Math.sin(t * 3) * 3, acc }); else K.ostrich(x, y, s, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, acc }); }
+}
+// Every rescued baby: per world, one for each level beaten (up to the world's four), in its colours.
+function houseBabies() {
+  const out = [];
+  for (let n = 1; n <= LAST_WORLD; n++) {
+    const wf = WORLD_FILES[n]; if (!wf) continue;
+    const p = n === worldNum ? prog : store.get('w' + n, null); if (!p || !p.beaten) continue;
+    const kinds = Object.fromEntries(wf.nodes.map(q => [q.id, q.kind]));
+    const nb = Math.min(4, p.beaten.filter(id => kinds[id] === 'level').length);
+    const cols = ((wf.meta.babies) || 'FF8FC7 49F08A FFB347 8FD3FF').split(/\s+/).map(h => parseInt(h, 16));
+    for (let k = 0; k < nb; k++) out.push(cols[k % cols.length]);
+  }
+  return out;
+}
+// a little rng the N64 copies exactly, so the babies start in the same places
+const hrng = s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x80000000;
+function houseScene(from) {
+  const S = { song: 'select', t: 0, cam: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, snack: [false, false] };
+  const team = activeParty(), q = hrng(7);
+  const spawnX = from === 'shop' ? HL.spots[0][0] : 200;
+  S.ps = team.map((m, i) => ({ m, x: spawnX - 10 + i * 20, y: HL.FLOOR, vx: 0, vy: 0, face: 1, ground: true, anim: 0, eatT: 0 }));
+  S.babies = houseBabies().map((hex, i) => {
+    const r = i % (HL.rooms.length), [x0, x1] = HL.rooms[r];
+    return { hex, x: x0 + 30 + q() * (x1 - x0 - 60), x0: x0 + 14, x1: x1 - 14, vx: (q() < 0.5 ? -1 : 1) * (0.3 + q() * 0.3), hopT: 0, vy: 0, y: 0, wait: Math.floor(q() * 120) };
+  });
+  const near = p => HL.spots.findIndex(([x]) => Math.abs(p.x - x) < 22);
+  const leave = () => { SND.fx.select(); saveProg(); go(mapScene); };
+  function useSpot(k, p, i) {
+    const kind = HL.spots[k][1];
+    if (kind === 'shop') { SND.fx.confirm(); go(shopScene(() => go(houseScene('shop')))); }
+    else if (kind === 'snack') {
+      p.eatT = 70; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 20, 8, '#ffd23f');
+      const full = (prog.lives ?? 3) >= 3; prog.lives = 3; saveProg();
+      S.msg = { text: full ? 'Yum! Crunchy bolts!' : 'Yum! Batteries full!', t: 100 };
+    }
+    else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
+    else if (kind === 'piano') { SND.fx.open(); go(pianoScene(S)); }
+    else if (kind === 'aqua') { SND.fx.open(); go(aquaScene(S)); }
+    else if (kind === 'cars') { SND.fx.open(); go(carsScene(S)); }
+    else if (kind === 'bed') { SND.fx.select(); S.mode = 'slots'; S.pick = saveSlot - 1; }
+  }
+  S.resume = () => go(S);
+  S.update = function () {
+    S.t += 1 / 60;
+    if (S.msg && --S.msg.t <= 0) S.msg = null;
+    stepParticles();
+    if (S.mode === 'slots') {
+      const n = SLOTS;
+      if (anyHit('up')) { S.pick = (S.pick + n - 1) % n; SND.fx.select(); }
+      if (anyHit('down')) { S.pick = (S.pick + 1) % n; SND.fx.select(); }
+      if (anyHit('b') || anyHit('start')) { S.mode = 'walk'; SND.fx.select(); }
+      else if (anyHit('a')) { saveToSlot(S.pick + 1); S.mode = 'sleep'; S.sleepT = 0; SND.fx.record(); }
+      return;
+    }
+    if (S.mode === 'sleep') { S.sleepT += 1 / 60; if (S.sleepT > 2.6) { S.mode = 'walk'; S.msg = { text: 'Saved in slot ' + saveSlot + '!', t: 120 }; } return; }
+    if (anyHit('start')) { leave(); return; }
+    for (const [i, p] of S.ps.entries()) {
+      const sl = p.m.slot, want = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
+      if (p.eatT > 0) { p.eatT--; p.vx = 0; }
+      else {
+        p.vx += (want * HOUSE_SPEED - p.vx) * 0.3; if (want) p.face = want;
+        if (hit(sl, 'a') && p.ground) { p.vy = HOUSE_JUMP; p.ground = false; SND.fx.jump(); }
+        if (hit(sl, 'down') && p.ground) { const k = near(p); if (k >= 0) { useSpot(k, p, i); if (scene !== S) return; } }
+      }
+      p.vy += HOUSE_GRAV; p.x += p.vx; p.y += p.vy;
+      if (p.y >= HL.FLOOR) { p.y = HL.FLOOR; p.vy = 0; p.ground = true; }
+      p.x = clamp(p.x, -4, HL.W - 10); p.anim += Math.abs(p.vx);
+      if (p.x < 0) { leave(); return; }
+    }
+    // the camera follows the middle of the party; two players stay on screen together
+    const mid = S.ps.reduce((a, p) => a + p.x, 0) / S.ps.length;
+    S.cam = clamp(mid - W / 2, 0, HL.W - W);
+    if (S.ps.length > 1) for (const p of S.ps) p.x = clamp(p.x, S.cam + 8, S.cam + W - 8);
+    for (const b of S.babies) {
+      if (b.wait > 0) { b.wait--; continue; }
+      b.x += b.vx;
+      if (b.x < b.x0 || b.x > b.x1) { b.vx = -b.vx; b.x = clamp(b.x, b.x0, b.x1); }
+      if (b.y === 0 && Math.random() < 0.006) b.vy = -1.8;
+      if (b.y < 0 || b.vy < 0) { b.vy += 0.12; b.y += b.vy; if (b.y >= 0) { b.y = 0; b.vy = 0; } }
+      if (Math.random() < 0.003) b.wait = 60 + Math.floor(Math.random() * 90);
+    }
+  };
+  S.draw = function () {
+    K.g = g; drawHouse(S.cam, S.t);
+    for (const b of S.babies) { const x = b.x - S.cam; if (x < -20 || x > W + 20) continue; K.baby(x, HL.FLOOR + b.y, 0.05, b.hex, { t: S.t + b.x, armL: 30 + Math.sin(S.t * 5 + b.x) * 20, armR: -150, mouth: 'smile', eyes: { happy: 0.5 } }); }
+    for (const p of S.ps) {
+      const x = p.x - S.cam, t = S.t + p.m.slot * 0.7;
+      const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : !p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle';
+      drawHeroPose(p.m, x, p.y, st, st === 'run' ? p.anim / 11 : t, p.face);
+      if (p.eatT > 0) { K.circ(x + 6, p.y - 22, 4, '#c98a4b'); K.circ(x + 6, p.y - 22, 2.4, '#e8b46a'); }
+    }
+    // what Down does where you stand
+    const shown = new Set();
+    for (const p of S.ps) { const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k); const [x, , label] = HL.spots[k], s = '↓ ' + label, w = textW(s, 8) + 14; panel(x - S.cam - w / 2, 120, w, 15); text(s, x - S.cam, 131, 8, '#fff6d8', 'center', null); }
+    drawParticles(0);
+    if (S.cam < 40) text('← Map', 18 - S.cam, 186, 8, '#fff6d8', 'left');
+    livesHud(4, 4, S.t);
+    if (S.msg) { fitPanel(S.msg.text, 10, 0, 26, 18, '#ffd23f'); text(S.msg.text, W / 2, 39, 10, '#2b2230', 'center', null); }
+    if (S.mode === 'sleep') {
+      g.fillStyle = 'rgba(12,8,30,' + Math.min(0.75, S.sleepT * 0.6) + ')'; g.fillRect(0, 0, W, H);
+      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', HL.spots[5][0] - S.cam + 10 + u * 20, 150 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
+    }
+    if (S.mode === 'slots') drawSlotPicker('SLEEP AND SAVE', 'Which save slot?', S.pick);
+  };
+  return S;
+}
+// The rooms: walls with stripes, a floor, a ceiling, door pillars between rooms, a name plate,
+// then the furniture. The N64 draws the same boxes and the baked furniture.
+function drawHouse(cam, t) {
+  const L = HL;
+  for (const [i, [x0, x1, name, wall, stripe, floor]] of L.rooms.entries()) {
+    const a = x0 - cam, b = x1 - cam; if (b < 0 || a > W) continue;
+    if (i === 0) {   // the yard: sky, clouds, grass, a fence
+      g.fillStyle = hexStr(wall); g.fillRect(a, 0, b - a, L.FLOOR); g.fillStyle = hexStr(stripe); g.fillRect(a, 120, b - a, 80);
+      for (const [cx, cy] of [[60, 40], [200, 26]]) { K.circ(cx - cam, cy, 12, '#ffffff'); K.circ(cx + 12 - cam, cy - 4, 14, '#ffffff'); K.circ(cx + 26 - cam, cy, 11, '#ffffff'); }
+      for (let x = 10; x < 300; x += 16) { K.rr(x - cam, 170, 8, 30, 2, '#fff6d8'); } K.rr(a, 178, b - a - 20, 5, 1, '#fff6d8');
+      g.fillStyle = hexStr(floor); g.fillRect(a, L.FLOOR, b - a, H - L.FLOOR); g.fillStyle = '#4fa856'; for (let x = 0; x < 320; x += 10) g.fillRect(x - cam, L.FLOOR, 5, 3);
+      continue;
+    }
+    g.fillStyle = hexStr(wall); g.fillRect(a, L.CEIL, b - a, L.FLOOR - L.CEIL);
+    g.fillStyle = hexStr(stripe); for (let x = x0 + 12; x < x1; x += 24) g.fillRect(x - cam, L.CEIL, 10, L.FLOOR - L.CEIL);
+    g.fillStyle = '#6f4630'; g.fillRect(a, L.FLOOR - 8, b - a, 8);   // skirting board
+    g.fillStyle = hexStr(floor); g.fillRect(a, L.FLOOR, b - a, H - L.FLOOR);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; for (let x = x0; x < x1; x += 20) g.fillRect(x - cam, L.FLOOR, 1, H - L.FLOOR);
+    g.fillStyle = '#5a3f2e'; g.fillRect(a, 0, b - a, L.CEIL);   // the ceiling
+    // the room's name plate
+    const mid = (a + b) / 2, w = textW(name, 8) + 16; K.rr(mid - w / 2, 28, w, 15, 3, '#6f4630'); K.rr(mid - w / 2 + 2, 30, w - 4, 11, 2, '#c98a4b'); text(name, mid, 39, 8, '#fff6d8', 'center', '#3a2618');
+  }
+  // the roof over the front of the house, and the pillars of the doorways between rooms
+  K.rr(L.rooms[1][0] - 20 - cam, 0, 30, L.CEIL + 4, 2, '#a8432f');
+  for (let i = 1; i < L.rooms.length; i++) { const x = L.rooms[i][0] - cam - L.PILLAR / 2; if (x < -10 || x > W) continue; K.rr(x, L.CEIL, L.PILLAR, L.DOOR_TOP - L.CEIL, 1, '#6f4630'); K.rr(x - 2, L.DOOR_TOP - 4, L.PILLAR + 4, 6, 2, '#5a3f2e'); }
+  K.rr(L.W - 8 - cam, L.CEIL, 8, L.FLOOR - L.CEIL, 0, '#6f4630');
+  for (const [x, name] of L.decor) if (x - cam > -60 && x - cam < W + 60) HOUSEART.furn(g, name, x - cam, L.FLOOR);
+  for (const [x, kind] of L.spots) if (x - cam > -60 && x - cam < W + 60) {
+    HOUSEART.furn(g, HOUSEART.SPOT_FURN[kind], x - cam, L.FLOOR);
+    if (kind === 'aqua') for (let k = 0; k < 3; k++) { const u = t * (0.3 + k * 0.1) + k * 2, fx = x - cam + Math.sin(u) * 30, fy = L.FLOOR - 70 + k * 12; g.save(); g.translate(fx, fy); g.scale(Math.cos(u) > 0 ? 0.7 : -0.7, 0.7); HOUSEART.fish(g, k, t); g.restore(); }
+  }
+}
+
+// ---- save slots: three saves, picked at the title and written by sleeping in the bed
+function slotSummary(n) {
+  const get = k => { try { const v = localStorage.getItem('clankers:' + slotKey(k, n)); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+  const w = get('world'); if (w == null) return null;
+  let bolts = 0, beaten = 0; for (let k = 1; k <= LAST_WORLD; k++) { const p = get('w' + k); if (p) { bolts += p.bolts || 0; beaten += (p.beaten || []).length; } }
+  return { world: w, bolts, beaten };
+}
+function drawSlotPicker(title, sub, pick) {
+  g.fillStyle = 'rgba(15,10,25,0.6)'; g.fillRect(0, 0, W, H);
+  panel(40, 46, 240, 150, '#3b2a5c'); text(title, W / 2, 70, 14, '#ffd23f'); text(sub, W / 2, 86, 8, '#d9d2e6', 'center', null);
+  for (let k = 0; k < SLOTS; k++) {
+    const y = 96 + k * 28, on = k === pick, s = slotSummary(k + 1);
+    if (on) { K.rr(52, y, 216, 24, 4, '#ffd23f'); K.rr(54, y + 2, 212, 20, 3, '#1b1426'); } else K.rr(52, y, 216, 24, 4, 'rgba(255,255,255,0.08)');
+    text('Slot ' + (k + 1), 62, y + 16, 10, on ? '#ffd23f' : '#fff6d8', 'left');
+    text(s ? 'World ' + s.world + '  ·  ' + s.bolts + ' bolts' : 'empty', 258, y + 16, 8, s ? '#fff6d8' : '#a49db4', 'right', null);
+    if (k + 1 === saveSlot) text('•', 120, y + 16, 10, '#49d17a', 'center', null);
+  }
+  text('^ v choose   A ok   B back', W / 2, 188, 7, '#a49db4', 'center', null);
+}
+
+// ---- the paint studio: a big wall to paint on. Fly with the jetpack (hold A), hold B to paint,
+// L and R (or C) change the colour. Both players paint together; the wall is kept.
+const MURAL = { W: 80, H: 48, CELL: 4, Y: 16, FLOOR: 220,
+  PAL: [0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230], ERASER: 10 };
+let mural = (() => { const s = store.get('mural', ''); const a = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === a.length) for (let i = 0; i < a.length; i++) a[i] = Math.min(10, s.charCodeAt(i) - 48); return a; })();
+const saveMural = () => store.set('mural', String.fromCharCode(...mural.map(v => v + 48)));
+function muralDab(px, py, c) {
+  const cx = Math.floor(px / MURAL.CELL), cy = Math.floor((py - MURAL.Y) / MURAL.CELL);
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= MURAL.W || y >= MURAL.H) continue;
+    mural[y * MURAL.W + x] = c === MURAL.ERASER ? 0 : c + 1;
+  }
+}
+function paintScene(house) {
+  const S = { song: 'select', t: 0 };
+  S.ps = house.ps.map((h, i) => ({ m: h.m, x: 120 + i * 80, y: MURAL.FLOOR, vx: 0, vy: 0, face: 1, col: i ? 4 : 0, bx: null, by: null, jet: false }));
+  S.update = function () {
+    S.t += 1 / 60; stepParticles();
+    if (anyHit('start')) { saveMural(); SND.fx.select(); house.resume(); return; }
+    for (const p of S.ps) {
+      const sl = p.m.slot, want = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
+      p.vx += (want * 1.8 - p.vx) * 0.25; if (want) p.face = want;
+      p.jet = held(sl, 'a');
+      if (p.jet) { p.vy = Math.max(-2.4, p.vy - 0.32); if (S.t * 60 % 6 < 1) SND.fx.hover(); } else p.vy = Math.min(2.5, p.vy + 0.14);
+      p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
+      if (p.y > MURAL.FLOOR) { p.y = MURAL.FLOOR; p.vy = 0; }
+      if (p.y < MURAL.Y + 28) { p.y = MURAL.Y + 28; p.vy = 0; }
+      if (hit(sl, 'c') || hit(sl, 'r')) { p.col = (p.col + 1) % (MURAL.PAL.length + 1); SND.fx.select(); }
+      if (hit(sl, 'l')) { p.col = (p.col + MURAL.PAL.length) % (MURAL.PAL.length + 1); SND.fx.select(); }
+      // the brush is the hero's front hand; a fast stroke fills in between frames
+      const bx = p.x + p.face * 9, by = p.y - 16;
+      if (held(sl, 'b')) {
+        if (p.bx == null) { p.bx = bx; p.by = by; }
+        const n = Math.max(1, Math.ceil(Math.hypot(bx - p.bx, by - p.by) / 2));
+        for (let k = 1; k <= n; k++) muralDab(p.bx + (bx - p.bx) * k / n, p.by + (by - p.by) * k / n, p.col);
+        p.bx = bx; p.by = by;
+      } else p.bx = null;
+    }
+  };
+  S.draw = function () {
+    K.g = g; g.fillStyle = '#c98a4b'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#fff6e6'; g.fillRect(0, MURAL.Y, MURAL.W * MURAL.CELL, MURAL.H * MURAL.CELL);
+    for (let y = 0; y < MURAL.H; y++) { let x = 0; while (x < MURAL.W) { const v = mural[y * MURAL.W + x]; let e = x + 1; while (e < MURAL.W && mural[y * MURAL.W + e] === v) e++; if (v) { g.fillStyle = hexStr(MURAL.PAL[v - 1]); g.fillRect(x * MURAL.CELL, MURAL.Y + y * MURAL.CELL, (e - x) * MURAL.CELL, MURAL.CELL); } x = e; } }
+    g.fillStyle = '#9c7552'; g.fillRect(0, MURAL.Y + MURAL.H * MURAL.CELL, W, H);
+    // the palette along the bottom; each player's colour is ringed
+    for (let k = 0; k <= MURAL.PAL.length; k++) {
+      const x = 30 + k * 24, y = 228;
+      if (k < MURAL.PAL.length) K.circ(x, y, 7, hexStr(MURAL.PAL[k])); else { K.circ(x, y, 7, '#fff6e6'); text('x', x, y + 3, 8, '#e04f4f', 'center', null); }
+      S.ps.forEach((p, j) => { if (p.col === k) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 9 + j * 2, 0, P * 2); g.stroke(); } });
+    }
+    for (const p of S.ps) {
+      const t = S.t + p.m.slot * 0.7;
+      if (p.jet) K.flame(p.x - p.face * 5, p.y - 8, 14, 6, t);
+      drawHeroPose(p.m, p.x, p.y, p.y < MURAL.FLOOR ? 'jet' : 'idle', t, p.face);
+      const bx = p.x + p.face * 9, by = p.y - 16, c = p.col < MURAL.PAL.length ? hexStr(MURAL.PAL[p.col]) : '#fff6e6';
+      K.circ(bx, by, 4, '#1b1426'); K.circ(bx, by, 3, c);
+    }
+    drawParticles(0);
+    text('A fly   B paint   L R colour   START done', W / 2, 11, 7, '#fff6d8', 'center', '#3a2618');
+  };
+  return S;
+}
+
+// ---- the aquarium: swim round the tank with the fish and shrimp in a diving bubble, or climb out
+// onto the sandy beach where the crabs live. A swims up, B blows a bubble, START gets out.
+function aquaScene(house) {
+  const A = HOUSEART.AQUA, S = { song: 'select', t: 0 }, q = hrng(11);
+  S.ps = house.ps.map((h, i) => ({ m: h.m, x: 60 + i * 40, y: 120, vx: 0, vy: 0, face: 1, land: false, ground: false, bubT: 0 }));
+  S.fish = Array.from({ length: 7 }, (_, i) => ({ kind: i % 3, x: 20 + q() * 190, y: 70 + q() * 130, vx: (q() < 0.5 ? -1 : 1) * (0.4 + q() * 0.5), scare: 0, ph: q() * 6 }));
+  S.shrimp = Array.from({ length: 4 }, () => ({ x: 20 + q() * 170, y: A.SEABED - 2, vx: 0, vy: 0, face: q() < 0.5 ? -1 : 1, rest: Math.floor(q() * 200) }));
+  S.crabs = Array.from({ length: 3 }, (_, i) => ({ x: 250 + i * 22, vx: (i % 2 ? -1 : 1) * 0.5, snap: 0, wait: 0 }));
+  const floorAt = x => x >= A.BEACH_X ? A.BEACH_Y : x > A.BEACH_X - 30 ? A.SEABED - (x - (A.BEACH_X - 30)) / 30 * (A.SEABED - A.BEACH_Y) : A.SEABED;
+  S.update = function () {
+    S.t += 1 / 60; stepParticles();
+    if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
+    for (const p of S.ps) {
+      const sl = p.m.slot, dx = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0), dy = (held(sl, 'down') ? 1 : 0) - (held(sl, 'up') ? 1 : 0);
+      if (dx) p.face = dx;
+      p.land = p.x >= A.BEACH_X && p.y <= A.BEACH_Y + 2;
+      if (p.land) {   // walking on the beach
+        p.vx += (dx * 1.6 - p.vx) * 0.3;
+        if (hit(sl, 'a') && p.ground) { p.vy = -4; p.ground = false; SND.fx.jump(); }
+        p.vy += 0.26;
+      } else {        // swimming
+        p.vx = clamp((p.vx + dx * 0.14) * 0.95, -2, 2); p.vy = clamp((p.vy + dy * 0.14) * 0.95 + 0.01, -2.4, 2);
+        if (hit(sl, 'a')) { p.vy -= 1.6; SND.fx.flap(); puff(p.x, p.y - 26, 3, 'rgba(220,250,255,0.9)'); }
+      }
+      if (hit(sl, 'b')) { SND.fx.pop(); particles.push({ x: p.x + p.face * 8, y: p.y - 22, vx: p.face * 0.6, vy: -0.8, life: 60, max: 60, r: 4, col: 'rgba(220,250,255,0.85)', kind: 'puff' }); }
+      p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
+      const fl = floorAt(p.x);
+      p.ground = false; if (p.y >= fl) { p.y = fl; p.vy = 0; p.ground = true; }
+      if (!p.land && p.y < A.WATER_TOP + 22) { p.y = A.WATER_TOP + 22; p.vy = Math.max(0, p.vy); }
+      if (!p.land && p.x > A.BEACH_X - 2 && p.y > A.BEACH_Y + 4) p.x = A.BEACH_X - 2;   // the sand bank's side
+      if (!p.land && --p.bubT <= 0) { p.bubT = 40 + Math.floor(Math.random() * 30); particles.push({ x: p.x, y: p.y - 30, vx: 0, vy: -0.7, life: 70, max: 70, r: 1.8, col: 'rgba(220,250,255,0.9)', kind: 'puff' }); }
+    }
+    for (const f of S.fish) {
+      let fear = null; for (const p of S.ps) if (!p.land && Math.hypot(p.x - f.x, p.y - 18 - f.y) < 34) fear = p;
+      if (fear) { f.vx = (f.x > fear.x ? 1 : -1) * 1.6; f.scare = 40; }
+      else if (f.scare > 0 && --f.scare === 0) f.vx = Math.sign(f.vx) * 0.6;
+      f.x += f.vx; f.y += Math.sin(S.t * 1.5 + f.ph) * 0.25;
+      if (f.x < 12) { f.x = 12; f.vx = Math.abs(f.vx); } if (f.x > A.BEACH_X - 16) { f.x = A.BEACH_X - 16; f.vx = -Math.abs(f.vx); }
+      f.y = clamp(f.y, A.WATER_TOP + 14, A.SEABED - 14);
+    }
+    for (const s of S.shrimp) {
+      const scared = S.ps.some(p => !p.land && Math.abs(p.x - s.x) < 24 && p.y > A.SEABED - 40);
+      if (s.y >= A.SEABED - 2 && (scared || --s.rest <= 0)) { s.face = scared ? (S.ps[0].x > s.x ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1); s.vx = s.face * 1.2; s.vy = -1.6; s.rest = 120 + Math.floor(Math.random() * 160); }
+      s.vy += 0.05; s.x = clamp(s.x + s.vx, 12, A.BEACH_X - 40); s.y += s.vy; s.vx *= 0.98;
+      if (s.y >= A.SEABED - 2) { s.y = A.SEABED - 2; s.vy = 0; s.vx = 0; }
+    }
+    for (const c of S.crabs) {
+      const close = S.ps.some(p => p.land && Math.abs(p.x - c.x) < 22);
+      if (close && c.snap <= 0) { c.snap = 30; SND.fx.tick(); }
+      if (c.snap > 0) c.snap--;
+      if (c.wait > 0) { c.wait--; continue; }
+      c.x += c.vx; if (c.x < A.BEACH_X + 10 || c.x > W - 12) c.vx = -c.vx;
+      if (Math.random() < 0.01) c.wait = 30 + Math.floor(Math.random() * 60);
+    }
+  };
+  S.draw = function () {
+    K.g = g; HOUSEART.aquaBg(g);
+    for (const [x, h] of [[30, 40], [52, 28], [176, 46], [196, 30]]) { g.save(); g.translate(x, A.SEABED); HOUSEART.weed(g, S.t, h); g.restore(); }
+    for (const s of S.shrimp) { g.save(); g.translate(s.x, s.y - 3); g.scale(s.face, 1); HOUSEART.shrimp(g, S.t); g.restore(); }
+    for (const f of S.fish) { g.save(); g.translate(f.x, f.y); g.scale(f.vx > 0 ? 1 : -1, 1); HOUSEART.fish(g, f.kind, S.t + f.ph); g.restore(); }
+    for (const c of S.crabs) { g.save(); g.translate(c.x, A.BEACH_Y - 5); HOUSEART.crab(g, c.wait > 0 ? 0 : S.t, c.snap > 0 && Math.floor(c.snap / 5) % 2 === 0); g.restore(); }
+    for (const p of S.ps) {
+      const t = S.t + p.m.slot * 0.7, st = p.land ? (!p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle') : 'jump';
+      drawHeroPose(p.m, p.x, p.y, st, st === 'run' ? S.t * 1.6 : t, p.face);
+      if (!p.land) { const hy = p.y - 24; g.globalAlpha = 0.3; K.circ(p.x, hy, 12, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = 'rgba(230,252,255,0.95)'; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, hy, 12, 0, P * 2); g.stroke(); K.circ(p.x - 5, hy - 5, 2, '#ffffff'); }
+    }
+    drawParticles(0);
+    text('Stick swim   A up   B bubble   START out', W / 2, 14, 7, '#2b2230', 'center', null);
+  };
+  return S;
+}
+
+// ---- the garage: a go-kart race round an oval, seen from above. A goes, B brakes and reverses,
+// the stick steers. Three laps; with two players the first one home wins.
+const RACE_LAPS = 3;
+function carsScene(house) {
+  const T = HOUSEART.TRACK, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
+  const lane = T.cy - (T.oy + T.iy) / 2;
+  const reset = () => { S.cars = house.ps.map((h, i) => ({ m: h.m, x: T.cx - 22, y: lane + (house.ps.length > 1 ? (i ? 9 : -9) : 0), a: 0, s: 0, laps: 0, half: false, lapT: 0, best: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
+  reset();
+  const ell = (x, y, rx, ry) => ((x - T.cx) / rx) ** 2 + ((y - T.cy) / ry) ** 2;
+  S.update = function () {
+    S.t += 1 / 60; stepParticles();
+    if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
+    if (S.count > 0) { const was = Math.ceil(S.count); S.count -= 1 / 60; if (Math.ceil(S.count) !== was) SND.fx[S.count <= 0 ? 'confirm' : 'tick'](); return; }
+    if (S.win >= 0) { if ((S.endT += 1 / 60) > 4) reset(); return; }
+    S.clock += 1 / 60;
+    for (const c of S.cars) {
+      const sl = c.m.slot, steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
+      c.a += steer * 0.055 * clamp(c.s / 1.5, -1, 1);
+      if (held(sl, 'a')) c.s = Math.min(3.2, c.s + 0.07); else if (held(sl, 'b')) c.s = Math.max(-1.2, c.s - 0.09); else c.s *= 0.985;
+      const px = c.x;
+      c.x += Math.cos(c.a) * c.s; c.y += Math.sin(c.a) * c.s;
+      const eo = ell(c.x, c.y, T.ox, T.oy), ei = ell(c.x, c.y, T.ix, T.iy);
+      if (eo > 1 || ei < 1) { c.s = clamp(c.s * 0.94, -1.2, 1.3); if (S.t * 60 % 8 < 1) puff(c.x, c.y, 1, 'rgba(120,200,120,0.8)'); }
+      if (eo > 1.18) { const k = Math.sqrt(1.18 / eo); c.x = T.cx + (c.x - T.cx) * k; c.y = T.cy + (c.y - T.cy) * k; }
+      if (ei < 0.75) { const k = Math.sqrt(0.75 / ei); c.x = T.cx + (c.x - T.cx) * k; c.y = T.cy + (c.y - T.cy) * k; }
+      // laps: past the bottom of the oval, then over the line at the top going right
+      if (c.y > T.cy && px >= T.cx && c.x < T.cx) c.half = true;
+      c.lapT += 1 / 60;
+      if (c.y < T.cy && px < T.cx && c.x >= T.cx && c.half) {
+        c.half = false; c.laps++; c.best = c.best ? Math.min(c.best, c.lapT) : c.lapT; c.lapT = 0; SND.fx.gear();
+        if (c.laps >= RACE_LAPS && S.win < 0) { S.win = S.cars.indexOf(c); SND.fx.flag(); confetti(160, 40, 40); }
+      }
+    }
+    if (S.cars.length > 1) {   // karts bump each other
+      const [a, b] = S.cars, d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 14 && d > 0.01) { const k = (14 - d) / 2 / d; a.x += (a.x - b.x) * k; a.y += (a.y - b.y) * k; b.x -= (a.x - b.x) * k; b.y -= (a.y - b.y) * k; a.s *= 0.9; b.s *= 0.9; SND.fx.kick(); }
+    }
+  };
+  S.draw = function () {
+    K.g = g; HOUSEART.trackBg(g);
+    for (const c of S.cars) { g.save(); g.translate(c.x, c.y); g.rotate(c.a); HOUSEART.carTop(g, c.m.hex); g.restore(); K.circ(c.x - 1, c.y, 3.2, hexStr(c.m.hex)); K.circ(c.x - 1, c.y, 2, '#fff6d8'); }
+    drawParticles(0);
+    S.cars.forEach((c, i) => { const x = i ? W - 92 : 6; panel(x, 4, 86, 16); text((S.cars.length > 1 ? 'P' + (c.m.slot + 1) + '  ' : '') + 'Lap ' + Math.min(RACE_LAPS, c.laps + 1) + '/' + RACE_LAPS, x + 43, 15, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', 'center', null); });
+    if (S.cars.length === 1) { panel(W / 2 - 34, 4, 68, 16); text(clock(Math.round(S.clock * 60)), W / 2, 15, 8, '#fff6d8', 'center', null); }
+    if (S.count > 0) { const n = Math.ceil(S.count); fitPanel(String(n), 20, 60, 100, 34, '#ffd23f'); text(String(n), W / 2, 126, 20, '#2b2230', 'center', null); }
+    else if (S.count > -0.8 && S.win < 0 && S.clock < 0.8) { fitPanel('GO!', 20, 80, 100, 34, '#49d17a'); text('GO!', W / 2, 126, 20, '#ffffff', 'center', null); }
+    if (S.win >= 0) { const s = S.cars.length > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.clock * 60)); fitPanel(s, 14, 120, 98, 30, '#ffd23f'); text(s, W / 2, 119, 14, '#2b2230', 'center', null); }
+    text('A go   B brake   START out', W / 2, H - 6, 7, '#fff6d8', 'center', '#1b1426');
+  };
+  return S;
+}
+
+// ---- the music room: a piano two octaves wide. Each player moves a hand along the keys with the
+// stick and plays the key under it with A (hold A and slide to run up the keys).
+const PIANO_LO = 261.63;   // middle C
+const SEMI_WHITE = [0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6];   // white key index in an octave, -1 for black
+function pianoKey(i) {   // a semitone 0..23: its key's middle x and whether it is black
+  const KY = HOUSEART.KEYS, o = Math.floor(i / 12), s = i % 12, w = SEMI_WHITE[s];
+  if (w >= 0) return { x: KY.x + (o * 7 + w) * KY.w + KY.w / 2, black: false };
+  return { x: KY.x + (o * 7 + SEMI_WHITE[s - 1] + 1) * KY.w, black: true };
+}
+function pianoScene(house) {
+  const S = { song: null, t: 0, lit: new Array(24).fill(0), notes: [] };
+  S.ps = house.ps.map((h, i) => ({ m: h.m, key: i ? 16 : 7, rep: 0, bounce: 0 }));
+  SND.stopSong();
+  const play = (p, i) => {
+    SND.note(PIANO_LO * Math.pow(2, i / 12)); S.lit[i] = 14; p.bounce = 10;
+    const k = pianoKey(i); S.notes.push({ x: k.x, y: 140, vy: -0.8, life: 60, col: [0xFF5A5A, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0xC28BFF, 0xFF8FC7][i % 6] });
+  };
+  S.update = function () {
+    S.t += 1 / 60;
+    if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
+    for (const p of S.ps) {
+      const sl = p.m.slot, d = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
+      if (!d) p.rep = 0; else if (p.rep === 0 || (p.rep > 14 && p.rep % 5 === 0)) { const was = p.key; p.key = clamp(p.key + d, 0, 23); if (p.key !== was && held(sl, 'a') && p.rep > 0) play(p, p.key); }
+      if (d) p.rep++;
+      if (hit(sl, 'a')) play(p, p.key);
+      if (hit(sl, 'b')) play(p, Math.min(23, p.key + 12) === p.key + 12 ? p.key + 12 : Math.max(0, p.key - 12));
+      if (p.bounce > 0) p.bounce--;
+    }
+    for (let i = 0; i < 24; i++) if (S.lit[i] > 0) S.lit[i]--;
+    for (const n of S.notes) { n.y += n.vy; n.life--; } S.notes = S.notes.filter(n => n.life > 0);
+  };
+  S.draw = function () {
+    K.g = g; const KY = HOUSEART.KEYS, room = HL.rooms[4];
+    g.fillStyle = hexStr(room[3]); g.fillRect(0, 0, W, H); g.fillStyle = hexStr(room[4]); for (let x = 12; x < W; x += 24) g.fillRect(x, 0, 10, KY.y);
+    g.fillStyle = '#2b2833'; g.fillRect(KY.x - 8, KY.y - 14, KY.n * KY.w + 16, KY.h + 18);
+    for (let w = 0; w < KY.n; w++) { K.rr(KY.x + w * KY.w + 1, KY.y, KY.w - 2, KY.h, 3, '#fff6d8'); }
+    for (let i = 0; i < 24; i++) { const k = pianoKey(i); if (!k.black && S.lit[i]) K.rr(k.x - KY.w / 2 + 1, KY.y, KY.w - 2, KY.h, 3, '#ffe066'); }
+    for (let i = 0; i < 24; i++) { const k = pianoKey(i); if (k.black) K.rr(k.x - KY.bw / 2, KY.y, KY.bw, KY.bh, 2, S.lit[i] ? '#c28bff' : '#1b1426'); }
+    for (const n of S.notes) { g.globalAlpha = Math.min(1, n.life / 20); K.circ(n.x, n.y, 3.5, hexStr(n.col)); K.rr(n.x + 2.5, n.y - 12, 1.6, 12, 0.5, hexStr(n.col)); g.globalAlpha = 1; }
+    for (const [j, p] of S.ps.entries()) {
+      const k = pianoKey(p.key), t = S.t + j;
+      drawHeroPose(p.m, k.x, 132 - (p.bounce > 0 ? Math.sin(p.bounce / 10 * P) * 6 : 0), p.bounce > 0 ? 'cheer' : 'idle', t);
+      const c = p.m.slot ? '#8fd3ff' : '#ffd23f', y = k.black ? KY.y + KY.bh - 10 : KY.y + KY.h - 12;
+      g.fillStyle = c; g.beginPath(); g.moveTo(k.x, y - 8); g.lineTo(k.x - 5, y); g.lineTo(k.x + 5, y); g.fill();
+    }
+    text('Stick move   A play   B other octave   START done', W / 2, 14, 7, '#fff6d8', 'center', '#1b1426');
+  };
+  return S;
+}
+
+// ---- save slots: copy this game into another slot (the bed), or pick which one to play (title)
+function saveToSlot(n) {
+  saveProg(); saveParty(); saveCloset(); saveMural(); store.set('world', worldNum);
+  if (n === saveSlot) return;
+  // the game's keys in slot m: bare name -> stored text
+  const keysOf = m => { const out = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k || !k.startsWith('clankers:')) continue; const r = k.slice(9), bare = m > 1 ? (r.startsWith('s' + m + ':') ? r.slice(3) : null) : (/^s\d:/.test(r) ? null : r); if (bare && SLOTTED(bare)) out[bare] = k; } } catch (e) { /* storage blocked */ } return out; };
+  try {
+    for (const k of Object.values(keysOf(n))) localStorage.removeItem(k);
+    for (const [bare, k] of Object.entries(keysOf(saveSlot))) localStorage.setItem('clankers:' + slotKey(bare, n), localStorage.getItem(k));
+    localStorage.setItem('clankers:slot', String(n));
+  } catch (e) { /* storage blocked */ }
+  saveSlot = n;
+}
+function loadSlot(n) {
+  saveSlot = n; try { localStorage.setItem('clankers:slot', String(n)); } catch (e) { /* storage blocked */ }
+  const def = [{ hero: 'robot', col: 0, joined: true }, { hero: 'ostrich', col: 1, joined: false }], pa = store.get('party', def);
+  for (let i = 0; i < 2; i++) Object.assign(party[i], def[i], pa[i] || {});
+  party[0].joined = true;
+  closet = cleanCloset(store.get('closet', freshCloset())); gunOn = [false, false];
+  const s = store.get('mural', ''); mural = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === mural.length) for (let i = 0; i < mural.length; i++) mural[i] = Math.min(10, s.charCodeAt(i) - 48);
+  setWorld(store.get('world', 1));
+}
+function slotScene() {
+  const S = { song: 'title', t: 0, pick: saveSlot - 1 };
+  S.update = function () {
+    S.t += 1 / 60;
+    if (anyHit('up')) { S.pick = (S.pick + SLOTS - 1) % SLOTS; SND.fx.select(); }
+    if (anyHit('down')) { S.pick = (S.pick + 1) % SLOTS; SND.fx.select(); }
+    if (anyHit('b')) { SND.fx.select(); go(titleScene); return; }
+    if (anyHit('a') || anyHit('start')) { SND.fx.confirm(); if (S.pick + 1 !== saveSlot) loadSlot(S.pick + 1); go(selectScene); }
+  };
+  S.draw = function () { K.g = g; TITLE.frame(S.t + 10); drawSlotPicker('PICK A GAME', 'Each slot is its own game', S.pick); };
   return S;
 }
 
@@ -1841,7 +2297,7 @@ document.getElementById('full').addEventListener('click', () => { const el = doc
 document.getElementById('wipe').addEventListener('click', () => { newGame(); if (scene === mapScene) buildMap(); });
 syncButtons(); syncTouch();
 
-window.__ck = { get scene() { return scene; }, go, introScene, shopScene, mapMenu, get closet() { return closet; }, party, buildLevel, levelScene, mapScene, get prog() { return prog; }, LEVELS, setWorld, enterWorld, cutScene, get world() { return worldNum; } };
+window.__ck = { get scene() { return scene; }, go, introScene, shopScene, houseScene, slotScene, mapMenu, get closet() { return closet; }, party, buildLevel, levelScene, mapScene, get prog() { return prog; }, LEVELS, setWorld, enterWorld, cutScene, get world() { return worldNum; } };
 // The level editor runs this game in a frame and sends the level it is editing to play-test.
 window.addEventListener('message', e => {
   const d = e.data;

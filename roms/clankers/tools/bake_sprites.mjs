@@ -26,7 +26,7 @@ const ASSETS = path.join(ROM, 'assets');
 
 const read = p => fs.readFileSync(path.join(WEB, p), 'utf8');
 const themes = fs.readdirSync(path.join(WEB, 'themes')).filter(f => f.endsWith('.js')).sort().map(f => read('themes/' + f));
-const engine = [read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), ...themes, read('lib/bossart.js'), read('lib/cutart.js'), read('lib/title.js'), read('lib/glitchies.js')].join('\n');
+const engine = [read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), ...themes, read('lib/bossart.js'), read('lib/cutart.js'), read('lib/houseart.js'), read('lib/title.js'), read('lib/glitchies.js')].join('\n');
 const files = {};
 (function walk(dir) {
   for (const f of fs.readdirSync(dir).sort()) {
