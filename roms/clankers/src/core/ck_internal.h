@@ -42,7 +42,6 @@ void ck_save_to_slot(ck_game *G, int k);  // the bed: this game is now saved in 
 // house.c
 void ck_house_enter(ck_game *G, bool fromShop);
 void ck_house_step(ck_game *G);
-int ck_house_near(const ck_hhero *p);
 void ck_mural_dab(ck_house *H, float px, float py, int c);
 
 // cut.c

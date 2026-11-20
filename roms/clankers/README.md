@@ -46,9 +46,13 @@ make clankers                  # builds dist/clankers.z64
 make deploy ROM=clankers       # sends it to a SummerCart64
 ```
 
-The ROM saves to a 4K EEPROM. On a SummerCart64 the save type comes from the ROM header, so
-there is nothing to set. Each world keeps its own progress, and a save from before Worlds 2 to 4
-carries on as World 1.
+The ROM saves to a 16K EEPROM with three save slots, one per 512-byte block. On a SummerCart64
+the save type comes from the ROM header, so there is nothing to set. Each world keeps its own
+progress, and a save from before Worlds 2 to 4 carries on as World 1.
+
+> [!IMPORTANT]
+> A save from the old 4K build is 512 bytes. Pad it with zeros to 2048 bytes before loading it
+> with this build; it becomes slot 1.
 
 | Button | In a level | On the map |
 | --- | --- | --- |
@@ -57,6 +61,9 @@ carries on as World 1.
 | B or C-left | Action: grab, throw, shoot (bubbles when the bubble gun is on) | |
 | C-up, C-down or C-right | With the bubble gun bought: switch between the gun and grab or kick | |
 | Start | Pause | Menu: keep playing, change heroes, let player 2 leave, or start a new game |
+| L (or Z), R | | In the paint room: the previous or next colour |
+
+After the title you pick one of the three save slots.
 
 <a id="worlds"></a>
 ## The four worlds
@@ -75,10 +82,29 @@ plays the parade home and THE END. A or START skips a film after the first secon
 In the pause menu, Start or A goes back to the level, B goes back to the map, and Z turns the
 CRT scanlines on or off. A second controller plays the ostrich.
 
+<a id="house"></a>
+## The house
+
+The house on each map is your home. You start in the yard and walk right through the rooms; Down
+uses what you stand at.
+
+| Room | What Down does |
+| --- | --- |
+| Store | Opens the parts shop |
+| Kitchen | A snack |
+| Paint room | Fly on the jetpack (A) and paint the wall mural (hold B); L and R change colour |
+| Music room | A piano: the stick picks a key, A plays it, B jumps an octave |
+| Aquarium | Dive into the tank with a bubble helmet and swim with the fish; crabs walk the dry side |
+| Bedroom | Sleep, and save the game to a slot |
+| Garage | A three-lap kart race, one or two players (A go, B brake) |
+
+The babies you have rescued wander about the house. Two players can play every room together,
+and START leaves a game.
+
 <a id="shop"></a>
 ## The parts shop
 
-The house on each map is the parts shop. Bolts buy 36 accessories in five slots: hats, face
+The store in the house is the parts shop. Bolts buy 36 accessories in five slots: hats, face
 (glasses, goggles, a mustache), neck, outfits (with sleeves) and shoes. Each player has a cursor;
 A buys an item and puts it on, and on an owned item A puts it on or takes it off. Items in
 different slots stack, one per slot. The rainbow cap, disco suit and light-up shoes cycle through

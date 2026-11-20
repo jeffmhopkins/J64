@@ -136,6 +136,12 @@ void synth_sfx(int id) {
     for (int i = 0; i < n; i++) start_tone(&t[i], 0);
 }
 
+// A piano note: a soft triangle with a quiet sine an octave up, as in the browser.
+void synth_note(float freq) {
+    start_tone(&(ck_tone){ .wave = WAVE_TRIANGLE, .freq = freq, .dur = 0.7f, .vol = 0.32f }, 0);
+    start_tone(&(ck_tone){ .wave = WAVE_SINE, .freq = freq * 2, .dur = 0.25f, .vol = 0.06f }, 0);
+}
+
 void synth_song(int id) {
     if (id == cur_song) return;
     cur_song = id;

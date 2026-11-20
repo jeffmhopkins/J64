@@ -306,6 +306,15 @@ function bakeAll() {
   }));
   // ---- the films between worlds (web/lib/cutart.js): a backdrop each, and the things that move
   [1, 2, 3, 4].forEach(k => picture('cut_bg_' + k, 320, 240, g => CUTART.bg(g, k)));
+  // ---- the house (web/lib/houseart.js): the furniture, the aquarium and race-track backdrops,
+  // and the little creatures; the rooms themselves are plain boxes the N64 fills in
+  strip('house_furn', 96, 100, 48, 96, HOUSEART.NAMES.length, (g, i) => HOUSEART.F[HOUSEART.NAMES[i]](g), 'rgba16', 8);
+  picture('aqua_bg', 320, 240, g => HOUSEART.aquaBg(g));
+  picture('track_bg', 320, 240, g => HOUSEART.trackBg(g));
+  strip('house_fish', 28, 16, 14, 8, 6, (g, i) => HOUSEART.fish(g, i >> 1, (i & 1) * 0.16), 'rgba32');
+  strip('house_shrimp', 20, 16, 9, 10, 2, (g, i) => HOUSEART.shrimp(g, i * 0.13), 'rgba32');
+  strip('house_crab', 32, 22, 16, 16, 2, (g, i) => HOUSEART.crab(g, 0, i === 1), 'rgba32');
+  strip('car_top', 28, 20, 14, 10, 1, g => HOUSEART.carTop(g, null), 'rgba32');
   strip('cut_gate', CUTART.GATE.w, CUTART.GATE.h, 0, 0, 1, g => CUTART.gate(g));
   strip('cut_cage', 48, 76, 24, 72, 2, (g, i) => CUTART.cage(g, i === 1));
   strip('cut_rocket', 48, 100, 24, 98, 1, g => CUTART.rocket(g));

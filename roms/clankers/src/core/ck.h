@@ -613,6 +613,8 @@ int ck_menu_items(const ck_game *G, int *out);    // the map menu's rows (up to 
 // frontend writes ck_game_saves() into slot G->slot.
 void ck_game_slots(ck_game *G, const ck_saves *slots);
 ck_slot_info ck_slot_summary(const ck_game *G, int k);
+// Which spot (an index into ck_spots) a hero in the house stands at, or -1.
+int ck_house_near(const ck_hhero *p);
 // One 60 Hz tick. Clears and refills G->sfx.
 void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2);
 
