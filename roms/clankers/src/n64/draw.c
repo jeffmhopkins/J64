@@ -555,7 +555,8 @@ static void outline(float x, float y, float w, float h, float th, uint32_t hex) 
 static void acc_icon(int a, float x, float y, float t) {
     static const acc_pt AT = { 0, 0, 0, 1, 1 };
     int slot = ck_acc[a].slot;
-    float hx = x + 15;
+    float hx = x + 13;
+    y -= 4;   // leave the bottom-right corner for the price
     switch (slot) {
     case SLOT_HEAD: rect(hx - 9, y + 17, 18, 12, 0x9AA1B0, 1); acc_piece(a, 0, &AT, hx, y + 17, 1.25f, false, t, 255, 255); break;
     case SLOT_FACE: rect(hx - 12, y + 4, 24, 20, 0x9AA1B0, 1); acc_piece(a, 0, &AT, hx, y + 4 - 1.2f, 1.6f, false, t, 255, 255); break;
@@ -584,8 +585,9 @@ static void draw_shop(const ck_game *G) {
         for (int s = 0; s < 2; s++) if (G->prog.joined[s] && c->wear[s][slot] == a + 1) worn = true;
         rect(x, y, 30, 30, worn ? 0x49D17A : tint[slot], worn ? 0.4f : 0.14f);
         acc_icon(a, x, y, t);
-        // prices would cover the items at this size: owned ones get a green dot, the price shows below
+        // owned: a green dot; for sale: the price in the corner, green if you have the bolts, red if not
         if (own) shape(SPR_DOT, x + 26, y + 4, 3.5f, 0x49D17A, 1);
+        else txt(F_SMALL, G->prog.bolts >= ck_acc[a].cost ? ST_GREEN : ST_RED, x + 29, y + 29, ALIGN_RIGHT, "%d", ck_acc[a].cost);
     }
     int np = G->prog.joined[0] + G->prog.joined[1], j = 0;
     for (int s = 0; s < 2; s++) {

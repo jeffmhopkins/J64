@@ -513,7 +513,7 @@ function shopScene() {
   }
   // one item drawn small inside its tile, on a grey stand-in head, body or pair of feet
   function icon(it, x, y, t) {
-    const hx = x + TW / 2;
+    const hx = x + TW / 2 - 2; y -= 4;   // leave the bottom-right corner for the price
     if (it.slot === 'head') { K.rr(hx - 9, y + 17, 18, 12, 5, '#9aa1b0'); K.wearHead(it.id, hx, y + 17, 18, t); }
     else if (it.slot === 'face') { K.rr(hx - 12, y + 4, 24, 20, 6, '#9aa1b0'); K.wearFace(it.id, [[hx - 5.5, y + 12, 3.6, 4.2], [hx + 5.5, y + 12, 3.6, 4.2]]); }
     else if (it.slot === 'neck') { K.rr(hx - 11, y + 2, 22, 13, 5, '#9aa1b0'); K.circ(hx - 5, y + 8, 1.8, '#2b2230'); K.circ(hx + 5, y + 8, 1.8, '#2b2230'); K.wearNeck(it.id, hx, y + 16, 24); }
@@ -544,8 +544,9 @@ function shopScene() {
       const { x, y } = cell(k), own = closet.own.includes(it.id), worn = team.some(m => closet.wear[m.slot][it.slot] === it.id);
       K.rr(x, y, TW, TH, 5, worn ? 'rgba(73,209,122,0.4)' : TINT[it.slot]);
       icon(it, x, y, S.t);
-      // prices would cover the items at this size: owned ones get a tick, the price shows below
+      // owned: a tick; for sale: the price in the corner, green if you have the bolts, red if not
       if (own) { K.circ(x + TW - 4, y + 4, 4, '#49d17a'); text('✓', x + TW - 4, y + 6.5, 6, '#fff', 'center', null); }
+      else text(String(it.cost), x + TW - 1, y + TH - 1, 7, (prog.bolts || 0) >= it.cost ? '#49d17a' : '#ff8a8a', 'right');
     });
     // cursors, one per player
     team.forEach((m, j) => {
