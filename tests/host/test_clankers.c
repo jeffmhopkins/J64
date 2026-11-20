@@ -783,7 +783,7 @@ static void test_shop(void) {
     press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], 12);
     press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], 13);
     // the last row: heroes swap for free, paint pots are bought then worn, the bubble gun is bought once
-    EXPECT_EQ_INT(SHOP_COUNT, 48);
+    EXPECT_EQ_INT(SHOP_COUNT, 49);
     G->prog.hero[1] = HERO_ROBOT;
     G->shopCur[1] = SHOP_OSTRICH; bolts = G->prog.bolts;
     press(G, 0, CK_A);
@@ -796,6 +796,19 @@ static void test_shop(void) {
     EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 1);
     EXPECT_EQ_INT(G->prog.col[1], 4);
     EXPECT_EQ_INT(G->prog.bolts, bolts - CK_PAINT_COST);
+    // the rainbow paint: bought once, worn per player, and a plain paint takes it off again
+    G->prog.bolts = 500;
+    G->shopCur[1] = SHOP_RAINBOW;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(G->prog.bolts, 500 - CK_RAINBOW_COST);
+    EXPECT_EQ_INT(ck_rainbow_skin(G, 1), 1);
+    EXPECT_EQ_INT(ck_rainbow_skin(G, 0), 0);
+    EXPECT_EQ_INT(G->prog.col[1], CK_RAINBOW_COL);
+    G->shopCur[1] = SHOP_PAINT0 + 4;
+    press(G, 0, CK_A);
+    EXPECT_EQ_INT(ck_rainbow_skin(G, 1), 0);
+    EXPECT_EQ_INT(G->prog.col[1], 4);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_RAINBOW), 1);
     // a high item past bit 31 still saves and stacks
     G->prog.bolts = 500;
     G->shopCur[0] = ACC_LIGHTUP; press(G, CK_A, 0);
@@ -818,6 +831,7 @@ static void test_shop(void) {
     EXPECT_EQ_INT(ck_shop_owns(G, SHOP_GUN), 0);
     EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 4), 0);
     EXPECT_EQ_INT(ck_shop_owns(G, SHOP_PAINT0 + 1), 1);
+    EXPECT_EQ_INT(ck_shop_owns(G, SHOP_RAINBOW), 0);
 }
 
 // The bubble gun: C switches to it once bought, and then B fires bubbles instead of kicking.

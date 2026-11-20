@@ -208,15 +208,17 @@ typedef struct {
     uint8_t magic2;
     uint8_t paints;                    // bit per hero colour owned (the first two are free)
     uint8_t gear;                      // CK_GEAR_* bits
-    uint8_t pad2;
+    uint8_t rainbow;                   // bit per player wearing the rainbow paint (their colour cycles)
 } ck_closet;
 #define CK_CLOSET_MAGIC2 0xC3
 #define CK_FREE_PAINTS 0x03
-enum { CK_GEAR_GUN = 1, CK_GEAR_JET = 2 };   // the bubble gun; the super jetpack (near-level glide)
+enum { CK_GEAR_GUN = 1, CK_GEAR_JET = 2, CK_GEAR_RAINBOW = 4 };   // the bubble gun; the super jetpack (near-level glide); rainbow paint
 // The shop sells the accessories, then (on its last row) the two heroes (free to swap), a paint pot
-// per colour and the bubble gun.
-enum { SHOP_ROBOT = ACC_COUNT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_GUN = SHOP_PAINT0 + CK_NCOLS, SHOP_JET, SHOP_COUNT };
+// per colour, the rainbow paint, the bubble gun and the super jetpack.
+enum { SHOP_ROBOT = ACC_COUNT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_RAINBOW = SHOP_PAINT0 + CK_NCOLS, SHOP_GUN, SHOP_JET, SHOP_COUNT };
 #define CK_PAINT_COST 30
+#define CK_RAINBOW_COST 150
+#define CK_RAINBOW_COL 7   // a rainbow hero is drawn from the Snow sheet, tinted
 #define CK_GUN_COST 100
 #define CK_JET_COST 300
 #define CK_GLIDE_VY 0.6f       // how fast a glide sinks
@@ -491,6 +493,7 @@ void ck_game_new_game(ck_game *G);
 // What player slot s wears in each slot: an accessory id, or -1.
 int ck_wearing(const ck_game *G, int s, int slot);
 bool ck_shop_owns(const ck_game *G, int item);     // any shop item, SHOP_* included
+bool ck_rainbow_skin(const ck_game *G, int slot);   // that player wears the rainbow paint
 bool ck_gun_on(const ck_game *G, int slot);        // that player's B fires the bubble gun
 void ck_map_baby_pos(const ck_game *G, int i, float *x, float *y);
 enum { MENU_KEEP, MENU_HEROES, MENU_DROP, MENU_NEW };

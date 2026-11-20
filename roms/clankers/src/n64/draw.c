@@ -44,7 +44,10 @@ static bool is_big(int id) {
     return false;
 }
 static void acc_init(void);
-static int hero_sprite(int hero, int col) { return (hero == HERO_ROBOT ? SPR_HERO_ROBOT_0 : SPR_HERO_OSTRICH_0) + (col & 7); }
+// col is a hero colour 0..7, or SKIN_RAINBOW: the Snow sheet tinted through the rainbow (skin_o)
+#define SKIN_RAINBOW CK_NCOLS
+static int hero_sprite(int hero, int col) { return (hero == HERO_ROBOT ? SPR_HERO_ROBOT_0 : SPR_HERO_OSTRICH_0) + (col >= CK_NCOLS ? CK_RAINBOW_COL : col & 7); }
+static int skin_col(const ck_game *G, int s) { return ck_rainbow_skin(G, s) ? SKIN_RAINBOW : G->prog.col[s]; }
 
 static color_t hexc(uint32_t hex, int a) { return RGBA32((hex >> 16) & 255, (hex >> 8) & 255, hex & 255, a); }
 
@@ -78,7 +81,18 @@ static void free_for(const ck_game *G) {
         for (int h = 0; h < 2; h++) {
             int id = hero_sprite(h, c);
             bool keep = false;
-            for (int s = 0; s < 2; s++) if (G->prog.joined[s] && G->prog.hero[s] == h && G->prog.col[s] == c) keep = true;
+            for (int s = 0; s < 2; s++) {
+                if (!G->prog.joined[s]) continue;
+                int hh = G->prog.hero[s], cc = G->prog.col[s] % CK_NCOLS;
+                if (G->scene == SC_SHOP) {   // the hero trying on another hero or paint keeps that sheet too
+                    int a = G->shopCur[s];
+                    if (a == SHOP_ROBOT || a == SHOP_OSTRICH) hh = a == SHOP_ROBOT ? HERO_ROBOT : HERO_OSTRICH;
+                    else if (a >= SHOP_PAINT0 && a < SHOP_PAINT0 + CK_NCOLS) cc = a - SHOP_PAINT0;
+                    else if (a == SHOP_RAINBOW) cc = CK_RAINBOW_COL;
+                    if (hh == h && cc == c) keep = true;
+                }
+                if (G->prog.hero[s] == h && G->prog.col[s] % CK_NCOLS == c) keep = true;
+            }
             if (!keep) drop(id);
         }
 }
@@ -137,6 +151,14 @@ static void acc_init(void) {
 static color_t rainbow_col(float t, int alpha) {
     float h = t * 0.6f * 2 * PI;
     return RGBA32((int)(150 + 105 * sinf(h)), (int)(150 + 105 * sinf(h + 2.094f)), (int)(150 + 105 * sinf(h + 4.189f)), alpha);
+}
+// a hero blit's options with the rainbow paint's tint (keeps any fade already in o)
+static bopt skin_o(bopt o, int col, float t) {
+    if (col < CK_NCOLS) return o;
+    int a = o.tinted ? o.tint.a : 255;
+    o.tinted = true;
+    o.tint = rainbow_col(t * 0.8f, a);
+    return o;
 }
 // one item at a point of a hero frame; view: 0 robot front, 1 robot side, 2 ostrich front, 3 ostrich side
 static void acc_piece(int a, int view, const acc_pt *p, float x, float y, float sc, bool flip, float t, int shade, int alpha) {
@@ -375,7 +397,7 @@ static void draw_title(const ck_game *G) {
 }
 
 static void hero_front(int hero, int col, int frame, float x, float y, float scale, bool flip, const uint8_t *wear, float t) {
-    blit_o(hero_sprite(hero, col), frame, x, y, (bopt){ .sx = scale, .sy = scale, .flip = flip });
+    blit_o(hero_sprite(hero, col), frame, x, y, skin_o((bopt){ .sx = scale, .sy = scale, .flip = flip }, col, t));
     hero_acc(wear, hero, frame, x, y, scale, flip, t);
 }
 
@@ -394,7 +416,7 @@ static void draw_select(const ck_game *G) {
         }
         rect(x + 30, y + 118, w - 60, 8, 0xFFFFFF, 0.12f);
         bool ready = G->ready[i];
-        int hero = G->prog.hero[i], col = G->prog.col[i];
+        int hero = G->prog.hero[i], col = skin_col(G, i);
         int frame = ready ? 25 + ((int)(G->t * 4) % 2) : (int)(G->t / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
         hero_front(hero, col, frame, x + w / 2, y + 120, 2.6f, false, wear_of(G, i), G->t + i);
         txt(F_MED, ST_CREAM, x + w / 2, y + 138, ALIGN_CENTER, hero == HERO_ROBOT ? "ROBOT" : "ROBOT OSTRICH");
@@ -515,18 +537,18 @@ static void draw_map(const ck_game *G) {
     int np = G->prog.joined[0] + G->prog.joined[1], k = 0;
     for (int s = 0; s < 2; s++) {
         if (!G->prog.joined[s]) continue;
-        int hero = G->prog.hero[s], col = G->prog.col[s];
+        int hero = G->prog.hero[s], col = skin_col(G, s);
         float sc = hero == HERO_ROBOT ? 0.062f / 0.074f : 0.95f * 0.062f / 0.071f, tt = t + k * 0.2f;
         if (M->walking) {
             float ox = np == 1 ? 0 : (k == 0 ? -5 : 4) * dir;
             float f = tt * (hero == HERO_ROBOT ? 11 : 10);
             int fr = 4 + ((int)(f / (2 * PI) * 8)) % 8;
-            blit_o(hero_sprite(hero, col), fr, hx + ox, hy - (hero == HERO_OSTRICH), (bopt){ .sx = sc, .sy = sc, .flip = dir < 0 });
+            blit_o(hero_sprite(hero, col), fr, hx + ox, hy - (hero == HERO_OSTRICH), skin_o((bopt){ .sx = sc, .sy = sc, .flip = dir < 0 }, col, tt));
             hero_acc(wear_of(G, s), hero, fr, hx + ox, hy - (hero == HERO_OSTRICH), sc, dir < 0, tt);
         } else {
             float off = np == 1 ? 0 : (k == 0 ? -6 : 6);
             int fr = (int)(tt / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
-            blit_o(hero_sprite(hero, col), fr, hx + off, hy - (hero == HERO_OSTRICH), (bopt){ .sx = sc, .sy = sc });
+            blit_o(hero_sprite(hero, col), fr, hx + off, hy - (hero == HERO_OSTRICH), skin_o((bopt){ .sx = sc, .sy = sc }, col, tt));
             hero_acc(wear_of(G, s), hero, fr, hx + off, hy - (hero == HERO_OSTRICH), sc, false, tt);
         }
         k++;
@@ -608,8 +630,8 @@ static void item_icon(int a, float x, float y, float t, int col) {
     if (a < ACC_COUNT) { acc_icon(a, x, y, t); return; }
     float hx = x + SHOP_TW / 2 - 1;
     y -= 3;
-    if (a == SHOP_ROBOT) blit_o(hero_sprite(HERO_ROBOT, col), 0, hx, y + 27, (bopt){ .sx = 0.07f / 0.074f, .sy = 0.07f / 0.074f });
-    else if (a == SHOP_OSTRICH) blit_o(hero_sprite(HERO_OSTRICH, col), 0, hx, y + 28, (bopt){ .sx = 0.062f / 0.071f, .sy = 0.062f / 0.071f });
+    if (a == SHOP_ROBOT || a == SHOP_OSTRICH)   // small white heroes, tinted (a whole hero sheet is too big to keep for an icon)
+        blit_o(SPR_SHOP_HERO, a == SHOP_OSTRICH, hx, y + 28, skin_o((bopt){ .tinted = true, .tint = hexc(col < CK_NCOLS ? ck_cols[col] : 0xFFFFFF, 255) }, col, t));
     else if (a == SHOP_GUN) {
         rect(hx - 9, y + 11, 14, 7, 0x9AA1B0, 1); rect(hx - 7, y + 16, 5, 8, 0x5D566A, 1); rect(hx + 4, y + 12.5f, 4, 4, 0x5D566A, 1);
         shape(SPR_DOT, hx + 7, y + 7, 3.5f, 0xBFF0FF, 0.5f); shape(SPR_DOT, hx + 2, y + 4, 2.2f, 0xBFF0FF, 0.5f); shape(SPR_DOT, hx + 6, y + 6, 1, 0xFFFFFF, 1);
@@ -617,8 +639,10 @@ static void item_icon(int a, float x, float y, float t, int col) {
         rect(hx - 7, y + 4, 14, 16, 0xE0564F, 1); rect(hx - 5, y + 6, 4, 12, 0xFFD23F, 1); rect(hx + 1, y + 6, 4, 12, 0xFFD23F, 1);
         float f = 3 + 2 * fabsf(sinf(t * 18));
         rect(hx - 5, y + 20, 4, f, 0xFF8A3D, 1); rect(hx + 1, y + 20, 4, f + 1 - 2 * fabsf(sinf(t * 15)), 0xFF8A3D, 1);
-    } else {   // a pot of paint
-        rect(hx - 7, y + 9, 14, 15, 0x9AA1B0, 1); rect(hx - 7, y + 9, 14, 6, ck_cols[a - SHOP_PAINT0], 1);
+    } else {   // a pot of paint (the rainbow one striped)
+        rect(hx - 7, y + 9, 14, 15, 0x9AA1B0, 1);
+        if (a == SHOP_RAINBOW) for (int k = 0; k < 6; k++) rect(hx - 7 + k * 14 / 6.0f, y + 9, 14 / 6.0f + 0.2f, 6, ck_cols[(k + (int)(t * 6)) % 6], 1);
+        else rect(hx - 7, y + 9, 14, 6, ck_cols[a - SHOP_PAINT0], 1);
         rect(hx - 8, y + 7, 16, 3, 0x5D566A, 1); rect(hx - 7, y + 2, 1.5f, 6, 0x5D566A, 1); rect(hx + 5.5f, y + 2, 1.5f, 6, 0x5D566A, 1); rect(hx - 6, y + 1.5f, 12, 1.5f, 0x5D566A, 1);
     }
 }
@@ -628,7 +652,8 @@ static bool shop_worn(const ck_game *G, int s, int a) {
     if (a == SHOP_ROBOT) return G->prog.hero[s] == HERO_ROBOT;
     if (a == SHOP_OSTRICH) return G->prog.hero[s] == HERO_OSTRICH;
     if (a == SHOP_GUN || a == SHOP_JET) return ck_shop_owns(G, a);
-    return G->prog.col[s] == a - SHOP_PAINT0;
+    if (a == SHOP_RAINBOW) return ck_rainbow_skin(G, s);
+    return !ck_rainbow_skin(G, s) && G->prog.col[s] == a - SHOP_PAINT0;
 }
 static void draw_shop(const ck_game *G) {
     static const uint32_t tint[SLOT_COUNT + 1] = { 0xFFD23F, 0x5AD1FF, 0xFF8FC7, 0xC28BFF, 0x49D17A, 0xFFB347 };
@@ -648,7 +673,7 @@ static void draw_shop(const ck_game *G) {
         bool own = ck_shop_owns(G, a), worn = false;
         for (int s = 0; s < 2; s++) if (G->prog.joined[s] && shop_worn(G, s, a)) worn = true;
         rect(x, y, SHOP_TW, SHOP_TH, worn ? 0x49D17A : tint[a < ACC_COUNT ? ck_acc[a].slot : SLOT_COUNT], worn ? 0.4f : 0.14f);
-        item_icon(a, x, y, t, G->prog.col[first]);
+        item_icon(a, x, y, t, skin_col(G, first));
         // owned: a green dot; for sale: the price in the corner, green if you have the bolts, red if not
         if (own && cost) shape(SPR_DOT, x + SHOP_TW - 3.5f, y + 3.5f, 3, 0x49D17A, 1);
         else if (!own) txt(F_SMALL, G->prog.bolts >= cost ? ST_GREEN : ST_RED, x + SHOP_TW - 1, y + SHOP_TH - 1, ALIGN_RIGHT, "%d", cost);
@@ -667,7 +692,7 @@ static void draw_shop(const ck_game *G) {
         memcpy(tryOn, c->wear[s], sizeof tryOn);
         if (a < ACC_COUNT) tryOn[ck_acc[a].slot] = (uint8_t)(a + 1);
         int hero = a == SHOP_ROBOT ? HERO_ROBOT : a == SHOP_OSTRICH ? HERO_OSTRICH : G->prog.hero[s];
-        int col = a >= SHOP_PAINT0 && a < SHOP_PAINT0 + CK_NCOLS ? a - SHOP_PAINT0 : G->prog.col[s];
+        int col = a >= SHOP_PAINT0 && a < SHOP_PAINT0 + CK_NCOLS ? a - SHOP_PAINT0 : a == SHOP_RAINBOW ? SKIN_RAINBOW : skin_col(G, s);
         float hx = np > 1 ? 40 + j * 160 : 120, sc = hero == HERO_ROBOT ? 0.11f / 0.074f : 0.1f / 0.071f, tt = t + j;
         rect(hx - 22, 228, 44, 4, 0xFFFFFF, 0.12f);
         int fr = (int)(tt / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
@@ -975,7 +1000,7 @@ static void draw_player(const ck_game *G, const ck_player *p, float cam, int npl
     const ck_level *lv = &G->lv;
     if (p->inv > 0 && p->wob <= 0 && !p->dead && !p->bubble && (p->inv / 4) % 2 == 0 && lv->clearT < 0) return;
     float fx = p->x + p->w / 2 - cam, fy = p->y + p->h + shakeY, t = lv->t + p->i * 0.7f;
-    int sheet = hero_sprite(p->hero, p->col);
+    int skin = ck_rainbow_skin(G, p->slot) ? SKIN_RAINBOW : p->col, sheet = hero_sprite(p->hero, skin);
     bool R = p->hero == HERO_ROBOT;
     const uint8_t *wear = wear_of(G, p->slot);
     if (p->dead) { blit(sheet, 27, fx, fy); hero_acc(wear, p->hero, 27, fx, fy, 1, false, t); return; }
@@ -1008,6 +1033,7 @@ static void draw_player(const ck_game *G, const ck_player *p, float cam, int npl
     } else { fr = (int)(t / (R ? 0.52f : 0.3f)) % 4; side = false; }
     bopt o = { .sx = mega, .sy = mega, .flip = side && p->face < 0 };
     if (rainbow) { o.tinted = true; o.tint = hexc(ck_cols[(int)(t * 12 + p->i * 3) % 8] | 0x606060, 255); }
+    else o = skin_o(o, skin, t + p->i);
     blit_o(sheet, fr, fx, fy, o);
     hero_acc(wear, p->hero, fr, fx, fy, mega, o.flip, t);
     if (rainbow && lv->frame % 3 == 0) { /* sparkles come from the particle list in the browser; a cheap twinkle here */
@@ -1179,7 +1205,8 @@ static void draw_jet(const ck_game *G) {
         if (p->inv > 0 && (p->inv / 4) % 2 == 0) continue;
         const ck_player *src = &lv->players[k];
         int jf = 29 + (int)(J->t * 14) % 2;
-        blit(hero_sprite(src->hero, src->col), jf, p->x + p->w / 2, p->y + p->h);
+        int skin = ck_rainbow_skin(G, src->slot) ? SKIN_RAINBOW : src->col;
+        blit_o(hero_sprite(src->hero, skin), jf, p->x + p->w / 2, p->y + p->h, skin_o((bopt){ 0 }, skin, J->t + k));
         hero_acc(wear_of(G, src->slot), src->hero, jf, p->x + p->w / 2, p->y + p->h, 1, false, J->t);
     }
     particles(G, sc);
@@ -1247,7 +1274,7 @@ static void draw_cut(const ck_game *G) {
     for (int s = 0; s < 2 && i < v.nheroes; s++) {
         if (!G->prog.joined[s]) continue;
         const ck_cut_actor *c = &v.heroes[i];
-        int hero = G->prog.hero[s], col = G->prog.col[s];
+        int hero = G->prog.hero[s], col = skin_col(G, s);
         float tt = t + i * 0.7f;
         i++;
         if (c->a <= 0) continue;
@@ -1255,7 +1282,7 @@ static void draw_cut(const ck_game *G) {
         if (c->walk) fr = 4 + (int)(tt * (hero == HERO_ROBOT ? 2.2f * 11 : 2 * 10) / (2 * PI) * 8) % 8;
         else if (k == 4 || (k == 2 && t > 9.5f)) fr = 25 + (int)(tt * 6) % 2;
         else fr = (int)(tt / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
-        blit_o(hero_sprite(hero, col), fr, c->x, c->y, (bopt){ .tinted = true, .tint = RGBA32(255, 255, 255, (int)(c->a * 255)) });
+        blit_o(hero_sprite(hero, col), fr, c->x, c->y, skin_o((bopt){ .tinted = true, .tint = RGBA32(255, 255, 255, (int)(c->a * 255)) }, col, tt));
         hero_acc_a(wear_of(G, s), hero, fr, c->x, c->y, 1, false, tt, (int)(c->a * 255));
     }
     }

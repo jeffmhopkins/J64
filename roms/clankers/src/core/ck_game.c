@@ -164,14 +164,16 @@ static void sanitize_closet(ck_closet *c) {
             int a = c->wear[s][k] - 1;
             if (a < 0 || a >= ACC_COUNT || ck_acc[a].slot != k || !CK_OWNS(c, a)) c->wear[s][k] = 0;
         }
-    if (c->magic2 != CK_CLOSET_MAGIC2) { c->magic2 = CK_CLOSET_MAGIC2; c->paints = 0; c->gear = 0; c->pad2 = 0; }
+    if (c->magic2 != CK_CLOSET_MAGIC2) { c->magic2 = CK_CLOSET_MAGIC2; c->paints = 0; c->gear = 0; c->rainbow = 0; }
     c->paints |= CK_FREE_PAINTS;
-    c->gear &= CK_GEAR_GUN | CK_GEAR_JET;
+    c->gear &= CK_GEAR_GUN | CK_GEAR_JET | CK_GEAR_RAINBOW;
+    c->rainbow = c->gear & CK_GEAR_RAINBOW ? c->rainbow & 3 : 0;
 }
 
 int ck_shop_cost(int item) {
     if (item >= 0 && item < ACC_COUNT) return ck_acc[item].cost;
     if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) return (CK_FREE_PAINTS >> (item - SHOP_PAINT0)) & 1 ? 0 : CK_PAINT_COST;
+    if (item == SHOP_RAINBOW) return CK_RAINBOW_COST;
     if (item == SHOP_GUN) return CK_GUN_COST;
     if (item == SHOP_JET) return CK_JET_COST;
     return 0;
@@ -181,6 +183,7 @@ const char *ck_shop_name(int item, char *buf, int n) {
     else if (item == SHOP_ROBOT) snprintf(buf, n, "Robot");
     else if (item == SHOP_OSTRICH) snprintf(buf, n, "Robot ostrich");
     else if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) snprintf(buf, n, "%s paint", ck_col_names[item - SHOP_PAINT0]);
+    else if (item == SHOP_RAINBOW) snprintf(buf, n, "Rainbow paint");
     else if (item == SHOP_GUN) snprintf(buf, n, "Bubble gun");
     else if (item == SHOP_JET) snprintf(buf, n, "Super jetpack");
     else snprintf(buf, n, "?");
@@ -386,6 +389,7 @@ static void select_update(ck_game *G) {
             int c = P->col[i] % CK_NCOLS;
             for (int k = 0; k < CK_NCOLS; k++) { c = (c + step) % CK_NCOLS; if ((G->saves.closet.paints >> c) & 1) break; }
             P->col[i] = (uint8_t)c;
+            G->saves.closet.rainbow &= (uint8_t)~(1u << i);
             ck_sfx(G, SFX_SELECT);
         }
         if (HIT(G, i, CK_A)) { G->ready[i] = true; ck_sfx(G, SFX_CONFIRM); }
@@ -473,6 +477,7 @@ static void menu_update(ck_game *G) {
 static bool shop_owns(const ck_closet *c, int item) {
     if (item < ACC_COUNT) return CK_OWNS(c, item);
     if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) return (c->paints >> (item - SHOP_PAINT0)) & 1;
+    if (item == SHOP_RAINBOW) return (c->gear & CK_GEAR_RAINBOW) != 0;
     if (item == SHOP_GUN) return c->gear & CK_GEAR_GUN;
     if (item == SHOP_JET) return (c->gear & CK_GEAR_JET) != 0;
     return true;   // the heroes are free
@@ -494,7 +499,8 @@ static void shop_act(ck_game *G, int s) {
         if (a < ACC_COUNT) { c->own[a >> 3] |= (uint8_t)(1u << (a & 7)); c->wear[s][ck_acc[a].slot] = (uint8_t)(a + 1); }
         else if (a == SHOP_GUN) { c->gear |= CK_GEAR_GUN; G->gunOn[0] = G->gunOn[1] = false; }
         else if (a == SHOP_JET) c->gear |= CK_GEAR_JET;
-        else { c->paints |= (uint8_t)(1u << (a - SHOP_PAINT0)); G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); }
+        else if (a == SHOP_RAINBOW) { c->gear |= CK_GEAR_RAINBOW; c->rainbow |= (uint8_t)(1u << s); G->prog.col[s] = CK_RAINBOW_COL; }
+        else { c->paints |= (uint8_t)(1u << (a - SHOP_PAINT0)); G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); c->rainbow &= (uint8_t)~(1u << s); }
         ck_sfx(G, SFX_BUY);
         if (a == SHOP_GUN) snprintf(G->shopMsg, sizeof G->shopMsg, "Bubble gun! C switches");
         else if (a == SHOP_JET) snprintf(G->shopMsg, sizeof G->shopMsg, "Hold A to glide far!");
@@ -510,10 +516,13 @@ static void shop_act(ck_game *G, int s) {
         snprintf(G->shopMsg, sizeof G->shopMsg, a == SHOP_GUN ? "In a level, C switches to it" : "Hold A in the air to glide");
         G->shopMsgT = 120;
         ck_sfx(G, SFX_SELECT);
-    } else { G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); ck_sfx(G, SFX_CONFIRM); }
+    } else if (a == SHOP_RAINBOW) {
+        G->prog.col[s] = CK_RAINBOW_COL; c->rainbow |= (uint8_t)(1u << s); ck_sfx(G, SFX_CONFIRM);
+    } else { G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); c->rainbow &= (uint8_t)~(1u << s); ck_sfx(G, SFX_CONFIRM); }
     ck_save(G);
 }
 bool ck_shop_owns(const ck_game *G, int item) { return shop_owns(&G->saves.closet, item); }
+bool ck_rainbow_skin(const ck_game *G, int slot) { return slot >= 0 && slot < 2 && ((G->saves.closet.rainbow >> slot) & 1); }
 static void shop_update(ck_game *G) {
     ck_map_update(G, G->map.now + 1.0f / 60);
     for (int s = 0; s < 2; s++) {

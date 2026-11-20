@@ -115,6 +115,7 @@ enum {
     SPR_INTRO_OSTRICH,
     SPR_INTRO_CLOUD,
     SPR_ZEE,
+    SPR_SHOP_HERO,
     SPR_COUNT
 };
 
@@ -228,6 +229,7 @@ static const spr_info SPR_INFO[SPR_COUNT] = {
     [SPR_INTRO_OSTRICH] = { "rom:/intro_ostrich.sprite", 40, 64, 4, 4, 20, 57 },
     [SPR_INTRO_CLOUD] = { "rom:/intro_cloud.sprite", 140, 88, 1, 1, 70, 46 },
     [SPR_ZEE] = { "rom:/zee.sprite", 16, 16, 1, 1, 8, 12 },
+    [SPR_SHOP_HERO] = { "rom:/shop_hero.sprite", 24, 30, 2, 2, 12, 28 },
 };
 
 // Where each hero frame (robot, ostrich) wears its accessories, from the feet anchor: the head's

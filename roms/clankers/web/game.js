@@ -213,8 +213,9 @@ let scene = null;
 function go(s) { scene = s; if (s.enter) s.enter(); if (s.song && SND.ready) SND.playSong(s.song); }
 // Accessories bought at the parts shop: owned once for the whole family, each player picks what to wear.
 const ACC_IDS = new Set(K.ACC.map(a => a.id)), accOf = id => K.ACC.find(a => a.id === id);
-const FREE_PAINTS = [0, 1], PAINT_COST = 30, GUN_COST = 100, JET_COST = 300;
-const freshCloset = () => ({ own: [], wear: [{}, {}], paints: [...FREE_PAINTS], gun: false, jet: false });
+const FREE_PAINTS = [0, 1], PAINT_COST = 30, RAINBOW_COST = 150, GUN_COST = 100, JET_COST = 300;
+// rbw: the rainbow paint is owned; rainbow[slot]: that player wears it (their colour keeps cycling)
+const freshCloset = () => ({ own: [], wear: [{}, {}], paints: [...FREE_PAINTS], gun: false, jet: false, rbw: false, rainbow: [false, false] });
 let gunOn = [false, false];   // per player: B fires the bubble gun instead of the kick or grab (C switches)
 let closet = store.get('closet', freshCloset());
 function cleanCloset(c) {   // a damaged or old save never breaks the game
@@ -222,12 +223,16 @@ function cleanCloset(c) {   // a damaged or old save never breaks the game
   if (c && Array.isArray(c.own)) out.own = c.own.filter(id => ACC_IDS.has(id));
   if (c && Array.isArray(c.wear)) for (let i = 0; i < 2; i++) { const w = c.wear[i] || {}; for (const sl of K.ACC_SLOTS) if (out.own.includes(w[sl]) && accOf(w[sl]).slot === sl) out.wear[i][sl] = w[sl]; }
   if (c && Array.isArray(c.paints)) out.paints = [...new Set([...FREE_PAINTS, ...c.paints.filter(k => Number.isInteger(k) && k >= 0 && k < COLS.length)])];
-  out.gun = !!(c && c.gun); out.jet = !!(c && c.jet);
+  out.gun = !!(c && c.gun); out.jet = !!(c && c.jet); out.rbw = !!(c && c.rbw);
+  if (out.rbw && c && Array.isArray(c.rainbow)) out.rainbow = [!!c.rainbow[0], !!c.rainbow[1]];
   return out;
 }
 closet = cleanCloset(closet);
 const saveCloset = () => store.set('closet', closet);
-const activeParty = () => party.filter(m => m.joined).map((m, i) => ({ hero: m.hero, hex: COLS[m.col], slot: party.indexOf(m), acc: closet.wear[party.indexOf(m)] }));
+// The rainbow paint's colour now (the same soft cycle as the N64's tint over the Snow sheet).
+const rainbowHex = t => { const h = t * 0.6 * 2 * Math.PI, c = k => Math.round(150 + 105 * Math.sin(h + k * 2.094)); return (c(0) << 16) | (c(1) << 8) | c(2); };
+const skinHex = slot => closet.rainbow[slot] ? rainbowHex(performance.now() / 1000) : COLS[party[slot].col];
+const activeParty = () => party.filter(m => m.joined).map(m => { const slot = party.indexOf(m); return { hero: m.hero, get hex() { return skinHex(slot); }, slot, acc: closet.wear[slot] }; });
 
 // ----------------------------------------------------------------------------- PARTICLES
 function puff(x, y, n = 6, col = 'rgba(255,248,230,0.9)') { for (let i = 0; i < n; i++) particles.push({ x, y, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 1.2, life: 26 + Math.random() * 10, max: 36, r: 2 + Math.random() * 2, col, kind: 'puff' }); }
@@ -361,7 +366,7 @@ const selectScene = {
       if (this.ready[i]) { if (hit(i, 'b')) { this.ready[i] = false; SND.fx.select(); } continue; }
       if (hit(i, 'left') || hit(i, 'right')) { m.hero = m.hero === 'robot' ? 'ostrich' : 'robot'; SND.fx.select(); }
       const step = hit(i, 'up') ? COLS.length - 1 : hit(i, 'down') ? 1 : 0;   // the free colours and the paint pots bought
-      if (step) { let c = m.col; for (let k = 0; k < COLS.length; k++) { c = (c + step) % COLS.length; if (closet.paints.includes(c)) break; } m.col = c; SND.fx.select(); }
+      if (step) { let c = m.col; for (let k = 0; k < COLS.length; k++) { c = (c + step) % COLS.length; if (closet.paints.includes(c)) break; } m.col = c; closet.rainbow[i] = false; saveCloset(); SND.fx.select(); }
       if (hit(i, 'a')) { this.ready[i] = true; SND.fx.confirm(); }
       if (hit(i, 'b') && i === 1) { m.joined = false; SND.fx.select(); }
     }
@@ -385,7 +390,7 @@ const selectScene = {
       }
       // pedestal and hero
       K.rr(x + 30, y + 118, w - 60, 8, 4, 'rgba(255,255,255,0.12)');
-      const hex = COLS[m.col], ready = this.ready[i];
+      const hex = skinHex(i), ready = this.ready[i];
       if (m.hero === 'robot') K.robot(x + w / 2, y + 120, 0.2, hex, { t, bob: Math.sin(t * 3) * 3, armR: ready ? -150 + Math.sin(t * 8) * 20 : -22, eyes: { happy: ready ? 0.7 : 0.45 }, acc: closet.wear[i] });
       else K.ostrich(x + w / 2, y + 120, 0.19, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: ready ? 0.7 : 0.4 }, acc: closet.wear[i] });
       text(m.hero === 'robot' ? 'ROBOT' : 'ROBOT OSTRICH', x + w / 2, y + 138, 10);
@@ -510,10 +515,11 @@ function shopScene() {
   // rows: hats; face and neck; outfits and shoes; then the heroes (free to swap), paint pots and the bubble gun
   const ITEMS = [...K.ACC, { kind: 'hero', hero: 'robot', name: 'Robot', cost: 0 }, { kind: 'hero', hero: 'ostrich', name: 'Robot ostrich', cost: 0 },
     ...COLS.map((c, k) => ({ kind: 'paint', col: k, name: CNAMES[k] + ' paint', cost: FREE_PAINTS.includes(k) ? 0 : PAINT_COST })),
+    { kind: 'rainbow', name: 'Rainbow paint', cost: RAINBOW_COST },
     { kind: 'gun', name: 'Bubble gun', cost: GUN_COST }, { kind: 'jet', name: 'Super jetpack', cost: JET_COST }];
   const COLS_N = 12, TW = 22, TH = 28, cell = (k) => ({ x: 16 + (k % COLS_N) * 24, y: 36 + Math.floor(k / COLS_N) * 30 });
   const TINT = { head: 'rgba(255,210,63,0.13)', face: 'rgba(90,209,255,0.13)', neck: 'rgba(255,143,199,0.13)', body: 'rgba(194,139,255,0.15)', feet: 'rgba(73,209,122,0.13)', bot: 'rgba(255,255,255,0.1)' };
-  const owns = it => it.slot ? closet.own.includes(it.id) : it.kind === 'paint' ? closet.paints.includes(it.col) : it.kind === 'gun' ? closet.gun : it.kind === 'jet' ? closet.jet : true;
+  const owns = it => it.slot ? closet.own.includes(it.id) : it.kind === 'paint' ? closet.paints.includes(it.col) : it.kind === 'rainbow' ? closet.rbw : it.kind === 'gun' ? closet.gun : it.kind === 'jet' ? closet.jet : true;
   const member = slot => party[slot];
   const leave = () => { saveProg(); go(mapScene); };
   function act(slot) {
@@ -522,7 +528,8 @@ function shopScene() {
       if ((prog.bolts || 0) < it.cost) { SND.fx.nope(); S.msg = { text: 'Need ' + (it.cost - (prog.bolts || 0)) + ' more bolts', t: 90 }; return; }
       prog.bolts -= it.cost; saveProg();
       if (it.slot) { closet.own.push(it.id); wear[it.slot] = it.id; }
-      else if (it.kind === 'paint') { closet.paints.push(it.col); m.col = it.col; saveParty(); }
+      else if (it.kind === 'paint') { closet.paints.push(it.col); m.col = it.col; closet.rainbow[slot] = false; saveParty(); }
+      else if (it.kind === 'rainbow') { closet.rbw = true; closet.rainbow[slot] = true; m.col = 7; saveParty(); }
       else if (it.kind === 'gun') { closet.gun = true; gunOn = [false, false]; }
       else if (it.kind === 'jet') closet.jet = true;
       saveCloset();
@@ -532,14 +539,16 @@ function shopScene() {
     }
     if (it.slot) { if (wear[it.slot] === it.id) { delete wear[it.slot]; SND.fx.select(); } else { wear[it.slot] = it.id; SND.fx.confirm(); } saveCloset(); }
     else if (it.kind === 'hero') { m.hero = it.hero; saveParty(); SND.fx.confirm(); }
-    else if (it.kind === 'paint') { m.col = it.col; saveParty(); SND.fx.confirm(); }
+    else if (it.kind === 'paint') { m.col = it.col; closet.rainbow[slot] = false; saveParty(); saveCloset(); SND.fx.confirm(); }
+    else if (it.kind === 'rainbow') { m.col = 7; closet.rainbow[slot] = true; saveParty(); saveCloset(); SND.fx.confirm(); }
     else { S.msg = { text: it.kind === 'gun' ? 'In a level, C switches to it' : 'Hold A in the air to glide', t: 120 }; SND.fx.select(); }
   }
   // one item drawn small inside its tile, on a grey stand-in head, body or pair of feet
   function icon(it, x, y, t, slot) {
     const hx = x + TW / 2 - 1; y -= 3;   // leave the bottom-right corner for the price
-    if (it.kind === 'hero') { const hex = COLS[member(slot).col]; if (it.hero === 'robot') K.robot(hx, y + 26, 0.07, hex, { t }); else K.ostrich(hx, y + 27, 0.062, hex, { t }); }
+    if (it.kind === 'hero') { const hex = skinHex(slot); if (it.hero === 'robot') K.robot(hx, y + 26, 0.07, hex, { t }); else K.ostrich(hx, y + 27, 0.062, hex, { t }); }
     else if (it.kind === 'paint') { K.rr(hx - 7, y + 9, 14, 15, 3, '#9aa1b0'); K.rr(hx - 7, y + 9, 14, 6, 3, '#' + COLS[it.col].toString(16).padStart(6, '0')); K.rr(hx - 8, y + 7, 16, 4, 2, '#5d566a'); g.strokeStyle = '#5d566a'; g.lineWidth = 1.2; g.beginPath(); g.arc(hx, y + 9, 7, P, 0); g.stroke(); }
+    else if (it.kind === 'rainbow') { K.rr(hx - 7, y + 9, 14, 15, 3, '#9aa1b0'); for (let k = 0; k < 6; k++) K.rr(hx - 7 + k * 14 / 6, y + 9, 14 / 6 + 0.2, 6, 0, hexStr(COLS[(k + Math.floor(t * 6)) % 6])); K.rr(hx - 8, y + 7, 16, 4, 2, '#5d566a'); g.strokeStyle = '#5d566a'; g.lineWidth = 1.2; g.beginPath(); g.arc(hx, y + 9, 7, P, 0); g.stroke(); }
     else if (it.kind === 'gun') { K.rr(hx - 9, y + 11, 14, 7, 2.5, '#9aa1b0'); K.rr(hx - 7, y + 16, 5, 8, 1.5, '#5d566a'); K.rr(hx + 4, y + 12.5, 4, 4, 1, '#5d566a'); g.globalAlpha = 0.5; K.circ(hx + 7, y + 7, 3.5, '#bff0ff'); K.circ(hx + 2, y + 4, 2.2, '#bff0ff'); g.globalAlpha = 1; K.circ(hx + 6, y + 6, 1, '#fff'); }
     else if (it.kind === 'jet') { K.rr(hx - 7, y + 4, 14, 16, 4, '#e0564f'); K.rr(hx - 5, y + 6, 4, 12, 2, '#ffd23f'); K.rr(hx + 1, y + 6, 4, 12, 2, '#ffd23f'); K.flame(hx - 3, y + 21, 9, 4, t); K.flame(hx + 3, y + 21, 9, 4, t + 0.3); }
     else if (it.slot === 'head') { K.rr(hx - 8, y + 17, 16, 11, 5, '#9aa1b0'); K.wearHead(it.id, hx, y + 17, 16, t); }
@@ -570,7 +579,7 @@ function shopScene() {
     panel(W - 86, 12, 70, 18, 'rgba(27,20,38,0.9)'); K.nut(W - 74, 21, 5, S.t, '#ffd23f'); text('×' + (prog.bolts || 0), W - 64, 26, 10, '#fff6d8', 'left', null);
     ITEMS.forEach((it, k) => {
       const { x, y } = cell(k), own = owns(it);
-      const worn = team.some(m => it.slot ? closet.wear[m.slot][it.slot] === it.id : it.kind === 'hero' ? member(m.slot).hero === it.hero : it.kind === 'paint' ? member(m.slot).col === it.col : (it.kind === 'gun' && closet.gun) || (it.kind === 'jet' && closet.jet));
+      const worn = team.some(m => it.slot ? closet.wear[m.slot][it.slot] === it.id : it.kind === 'hero' ? member(m.slot).hero === it.hero : it.kind === 'paint' ? member(m.slot).col === it.col && !closet.rainbow[m.slot] : it.kind === 'rainbow' ? closet.rainbow[m.slot] : (it.kind === 'gun' && closet.gun) || (it.kind === 'jet' && closet.jet));
       K.rr(x, y, TW, TH, 4, worn ? 'rgba(73,209,122,0.4)' : TINT[it.slot || 'bot']);
       icon(it, x, y, S.t, team[0].slot);
       // owned: a tick; for sale: the price in the corner, green if you have the bolts, red if not
@@ -587,7 +596,7 @@ function shopScene() {
     team.forEach((m, j) => {
       const it = ITEMS[S.cur[m.slot]], worn = closet.wear[m.slot], mm = member(m.slot);
       const tryOn = it.slot ? Object.assign({}, worn, { [it.slot]: it.id }) : worn;
-      const hero = it.kind === 'hero' ? it.hero : mm.hero, hex = COLS[it.kind === 'paint' ? it.col : mm.col];
+      const hero = it.kind === 'hero' ? it.hero : mm.hero, hex = it.kind === 'paint' ? COLS[it.col] : it.kind === 'rainbow' ? rainbowHex(t) : skinHex(m.slot);
       const x = team.length > 1 ? 40 + j * 160 : 120, y = 230, t = S.t + j;
       K.rr(x - 22, y - 2, 44, 5, 2.5, 'rgba(255,255,255,0.12)');
       if (hero === 'robot') K.robot(x, y, 0.11, hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
@@ -866,7 +875,7 @@ const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h 
 
 function makePlayer(m, i, x, y) {
   const stack = testPower ? [testPower] : [], h = baseH({ hero: m.hero, stack });   // power-ups never carry over between levels
-  return { slot: m.slot, i, hero: m.hero, hex: m.hex, acc: m.acc, stack, rainbowT: 0, magnetT: 0, x: x + i * 14, y: y - h, w: 12, h,
+  return { slot: m.slot, i, hero: m.hero, get hex() { return skinHex(m.slot); }, acc: m.acc, stack, rainbowT: 0, magnetT: 0, x: x + i * 14, y: y - h, w: 12, h,
     vx: 0, vy: 0, face: 1, ground: false, coyote: 0, runT: 0, runDir: 0, boost: false, jetT: 0, flapping: false, flapT: 0, actT: 0, inv: 0, wob: 0,
     safeX: x, safeY: y - 30, anim: 0, idleT: 0, cheer: false };
 }

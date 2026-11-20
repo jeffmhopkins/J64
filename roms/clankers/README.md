@@ -90,6 +90,7 @@ The bottom row has the rest:
 | --- | --- | --- |
 | Robot, Robot ostrich | free | Swap your hero |
 | Paint pots | 30 each (the first two are free) | Paint your hero; the select screen offers only paints you own |
+| Rainbow paint | 150 | Your hero's whole body keeps cycling through the colours |
 | Bubble gun | 100 | C switches B between the gun and grab or kick |
 | Super jetpack | 300 | Glides almost level, so you can glide much further |
 

@@ -186,7 +186,14 @@ function bakeAll() {
 
   // ---- things in a level. Anchors put (0,0) at the entity's top-left corner, like the game's boxes.
   strip('bolt', 14, 14, 7, 7, 1, () => K.nut(0, 0, 4.2, 0, '#ffd23f'));   // anchored at the centre, so it can spin
-  strip('gear', 20, 20, 10, 10, 1, () => K.gear(0, 0, 7, 10, 0, '#ffd23f', '#b8860b'));
+  // The gear is a plain hexagon on the N64: fine teeth turn into a blurry sun at this size on a TV.
+  strip('gear', 20, 20, 10, 10, 1, (g) => {
+    const hex = (r) => { g.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); };
+    hex(9); g.fillStyle = '#7a5600'; g.fill();
+    hex(7.6); g.fillStyle = '#ffd23f'; g.fill();
+    g.fillStyle = '#fff1a8'; g.beginPath(); g.moveTo(-3.8, -6.6); g.lineTo(3.8, -6.6); g.lineTo(2.6, -4.6); g.lineTo(-2.6, -4.6); g.closePath(); g.fill();
+    g.fillStyle = '#7a5600'; g.beginPath(); g.arc(0, 0, 2.8, 0, Math.PI * 2); g.fill();
+  });
   strip('power', 16, 16, 2, 2, 4, (g, i) => { K.rr(0, 0, 12, 12, 5, '#e8e4f0'); K.rr(1, 1, 10, 10, 4, '#3b2a5c'); powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet'][i], 6, 6, 0); });
   strip('picon', 14, 14, 7, 7, 5, (g, i) => powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet', 'gun'][i], 0, 0, 0));
   strip('tyre', 16, 10, 0, 1, 3, (g, i) => { const sq = i / 2, hh = 9 * (1 - sq * 0.4); K.rr(0, 9 - hh, 16, hh, hh / 2, '#2b2833'); K.rr(4, 9 - hh + hh * 0.3, 8, hh * 0.4, 2, '#4a4652'); g.fillStyle = '#5b5666'; g.fillRect(2, 9 - hh + 1, 12, 1); });
@@ -362,6 +369,8 @@ function bakeAll() {
   });
   // a white sleepy "z" the N64 tints and sizes
   strip('zee', 16, 16, 8, 12, 1, g => text(g, 'z', 0, 0, 12, '#ffffff', null));
+  // the two heroes, small and white, for the parts shop's grid (the N64 tints them the player's colour)
+  strip('shop_hero', 24, 30, 12, 28, 2, (g, i) => { K.g = g; if (i) K.ostrich(0, 1, 0.062, 0xF5F1E8, { t: 0 }); else K.robot(0, 0, 0.07, 0xF5F1E8, { t: 0 }); }, 'rgba16');
 
   function powerIcon(g, kind, x, y, t) {
     if (kind === 'mega') { K.rr(x - 3.5, y - 4.5, 7, 10, 1.5, '#2b2833'); K.rr(x - 1.5, y - 6, 3, 2, 0.5, '#2b2833'); K.rr(x - 2.2, y - 3.2, 4.4, 7.4, 1, '#49f08a');
