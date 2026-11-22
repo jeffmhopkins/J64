@@ -967,6 +967,13 @@ static void test_house(void) {
     press(G, CK_RIGHT, 0); press(G, CK_RIGHT, 0);
     press(G, CK_A, 0);                             // cheese
     EXPECT_EQ_INT(G->house.npan, 2);
+    press(G, CK_A, 0); press(G, CK_A, 0); press(G, CK_A, 0);   // a full pan of four swaps its last one
+    EXPECT_EQ_INT(G->house.npan, 4);
+    EXPECT_EQ_INT(G->house.pan[3], FOOD_CHEESE);
+    press(G, CK_RIGHT, 0); press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.pan[3], FOOD_MUSHROOM);
+    EXPECT_EQ_INT(G->house.pan[2], FOOD_CHEESE);
+    G->house.npan = 2;   // back to egg and cheese
     for (int i = 0; i < 12 && !G->house.dish; i++) press(G, CK_B, 0);
     EXPECT_EQ_INT(G->house.dish, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
     EXPECT_EQ_INT(strcmp(G->house.dishName, "Cheesy omelette"), 0);
@@ -1008,14 +1015,14 @@ static void test_house(void) {
     }
     press(G, CK_A, 0);   // eat it
     hold(G, 60, 0, 0);
-    // the paint studio: fly up with A, hold B to paint, R changes colour
+    // the paint studio: fly up with the stick, hold A to paint, R changes colour
     walk_to(G, ck_spots[SPOT_PAINT].x);
     press(G, CK_DOWN, 0);   // down no longer opens a game; A does
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_PAINT);
     int painted = 0;
-    hold(G, 30, CK_A | CK_B | CK_RIGHT, 0);
+    hold(G, 30, CK_UP | CK_A | CK_RIGHT, 0);
     for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) if (G->house.mural[i] == 1) painted++;
     EXPECT_EQ_INT(painted > 20, 1);
     EXPECT_EQ_INT(G->house.gs[0].y < CK_MURAL_FLOOR - 20, 1);
@@ -1025,7 +1032,7 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->house.gs[0].col, CK_MURAL_CLEAR);
     press(G, CK_L, 0);
     EXPECT_EQ_INT(G->house.gs[0].col, CK_MURAL_ERASER);
-    hold(G, 10, CK_B, 0);
+    hold(G, 10, CK_A, 0);
     // turning round barely moves the brush
     {
         const ck_hhero *p = &G->house.gs[0];
@@ -1036,7 +1043,7 @@ static void test_house(void) {
     }
     press(G, CK_R, 0);
     EXPECT_EQ_INT(G->house.gs[0].col, CK_MURAL_CLEAR);
-    press(G, CK_B, 0);   // wipe the wall
+    press(G, CK_A, 0);   // wipe the wall
     int left = 0;
     for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) left += G->house.mural[i] != 0;
     EXPECT_EQ_INT(left, 0);
@@ -1047,13 +1054,35 @@ static void test_house(void) {
     static const int sizes[3] = { 1, 4, 9 };
     for (int sz = 0; sz < 3; sz++) {
         EXPECT_EQ_INT(G->house.gs[0].size, sz);
-        ck_game_step(G, CK_B, 0); ck_game_step(G, 0, 0);
+        ck_game_step(G, CK_A, 0); ck_game_step(G, 0, 0);
         left = 0;
         for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) left += G->house.mural[i] != 0;
         EXPECT_EQ_INT(left, sizes[sz]);
         press(G, CK_C, 0);
     }
     EXPECT_EQ_INT(G->house.gs[0].size, 0);
+    // B swaps the brush for a sticker; A stamps it in shades of your colour with an ink outline
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->house.gs[0].stick, 1);
+    press(G, CK_A, 0);
+    {
+        int n[31] = { 0 };
+        for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) n[G->house.mural[i]]++;
+        EXPECT_EQ_INT(n[1] > 10 && n[1 + CK_MURAL_PAL] > 0 && n[1 + 2 * CK_MURAL_PAL] > 0 && n[10] > 10, 1);
+        EXPECT_EQ_INT(ck_mural_hex(1 + CK_MURAL_PAL) != ck_mural_pal[0] && ck_mural_hex(1 + 2 * CK_MURAL_PAL) != ck_mural_pal[0], 1);
+    }
+    press(G, CK_C, 0);
+    EXPECT_EQ_INT(G->house.gs[0].kind, 1);
+    EXPECT_EQ_INT(G->house.gs[0].size, 0);   // C picks the sticker, not the brush size
+    for (int k = 0; k < CK_STICKERS; k++) {   // every sticker has some of its colour and an outline
+        int g[CK_STICKER_N][CK_STICKER_N], main = 0, ink = 0;
+        ck_sticker_cells(k, 3, g);
+        for (int y = 0; y < CK_STICKER_N; y++) for (int x = 0; x < CK_STICKER_N; x++) { main += g[y][x] == 4; ink += g[y][x] == 10; }
+        EXPECT_EQ_INT(main > 4 && ink > 8, 1);
+        EXPECT_EQ_INT(g[0][0], -1);
+    }
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->house.gs[0].stick, 0);
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
     EXPECT_EQ_INT(painted > 0, 1);   // the wall keeps its paint

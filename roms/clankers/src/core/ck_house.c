@@ -277,8 +277,9 @@ static void cook_update(ck_game *G) {
             }
             continue;
         }
-        if (HIT(G, s, CK_A) && H->npan < CK_COOK_PAN) {   // into the pan
-            H->pan[H->npan++] = ck_cook_ingr[*c];
+        if (HIT(G, s, CK_A)) {   // into the pan; a full pan swaps its last one for this
+            if (H->npan < CK_COOK_PAN) H->pan[H->npan++] = ck_cook_ingr[*c];
+            else H->pan[CK_COOK_PAN - 1] = ck_cook_ingr[*c];
             ck_sfx(G, SFX_HOP);
         }
         if (HIT(G, s, CK_B) && H->npan > 0) {   // stir: it cooks a bit more each time
@@ -406,6 +407,78 @@ static void paint_start(ck_game *G) {
     for (int i = 0; i < H->np; i++) { ck_hhero *p = &H->gs[i]; p->x = 120 + i * 80; p->y = CK_MURAL_FLOOR; p->col = i ? 4 : 0; }
     ck_go(G, SC_PAINT);
 }
+uint32_t ck_mural_hex(int v) {
+    if (v < 1 || v > 3 * CK_MURAL_PAL) return 0xFFF6E6;
+    uint32_t h = ck_mural_pal[(v - 1) % CK_MURAL_PAL];
+    int r = h >> 16 & 255, g = h >> 8 & 255, b = h & 255, tier = (v - 1) / CK_MURAL_PAL;
+    if (tier == 1) { r = r * 62 / 100; g = g * 62 / 100; b = b * 62 / 100; }
+    if (tier == 2) { r = (r + 255) / 2; g = (g + 255) / 2; b = (b + 255) / 2; }
+    return (uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b;
+}
+#define C(x, y, r, c) { 0, x, y, r, 0, c }
+#define R(x, y, w, h, c) { 1, x, y, w, h, c }
+const ck_stickerart ck_stickers[CK_STICKERS] = {
+    { "heart", 10, { R(-3, -3, 2, 0, ROLE_MAIN), R(1, -3, 2, 0, ROLE_MAIN), R(-4, -2, 8, 1, ROLE_MAIN), R(-3, 0, 6, 0, ROLE_MAIN), R(-2, 1, 4, 0, ROLE_MAIN),
+                     R(-1, 2, 2, 0, ROLE_MAIN), R(0, 3, 0, 0, ROLE_MAIN), R(-3, -2, 1, 0, ROLE_LIGHT), R(2, 0, 1, 0, ROLE_DARK), R(1, 1, 1, 0, ROLE_DARK) } },
+    { "star", 11, { R(0, -4, 0, 0, ROLE_MAIN), R(-1, -3, 2, 1, ROLE_MAIN), R(-4, -1, 8, 0, ROLE_MAIN), R(-3, 0, 6, 0, ROLE_MAIN), R(-2, 1, 4, 1, ROLE_MAIN),
+                    R(-3, 3, 2, 0, ROLE_MAIN), R(1, 3, 2, 0, ROLE_MAIN), R(-3, 4, 1, 0, ROLE_MAIN), R(2, 4, 1, 0, ROLE_MAIN), R(0, -3, 0, 1, ROLE_LIGHT), R(1, 1, 1, 1, ROLE_DARK) } },
+    { "flower", 7, { C(0, -3, 2, ROLE_MAIN), C(-3, 0, 2, ROLE_MAIN), C(3, 0, 2, ROLE_MAIN), C(0, 3, 2, ROLE_DARK), C(0, 0, 1.6f, ROLE_LIGHT),
+                     R(0, 0, 0, 0, ROLE_WHITE), R(0, -4, 0, 0, ROLE_LIGHT) } },
+    { "smile", 7, { C(0, 0, 4.6f, ROLE_MAIN), R(-2, -2, 0, 1, ROLE_INK), R(2, -2, 0, 1, ROLE_INK), R(-2, 1, 0, 0, ROLE_INK), R(2, 1, 0, 0, ROLE_INK),
+                    R(-1, 2, 2, 0, ROLE_INK), R(-2, -3, 0, 0, ROLE_LIGHT) } },
+    { "robot", 10, { R(-3, -2, 6, 5, ROLE_MAIN), R(0, -4, 0, 1, ROLE_DARK), R(0, -5, 0, 0, ROLE_LIGHT), R(-2, -1, 1, 1, ROLE_WHITE), R(1, -1, 1, 1, ROLE_WHITE),
+                     R(-1, 0, 0, 0, ROLE_INK), R(2, 0, 0, 0, ROLE_INK), R(-2, 2, 4, 0, ROLE_DARK), R(-4, -1, 0, 2, ROLE_DARK), R(4, -1, 0, 2, ROLE_DARK) } },
+    { "fish", 8, { C(-1, 0, 2.9f, ROLE_MAIN), R(2, -1, 0, 2, ROLE_DARK), R(3, -2, 0, 4, ROLE_DARK), R(4, -3, 0, 6, ROLE_DARK), R(-1, -3, 1, 0, ROLE_DARK),
+                   R(-3, 1, 2, 0, ROLE_LIGHT), R(-2, -1, 0, 0, ROLE_WHITE), R(-3, -1, 0, 0, ROLE_INK) } },
+    { "bolt", 10, { R(1, -4, 1, 0, ROLE_MAIN), R(0, -3, 1, 0, ROLE_MAIN), R(-1, -2, 1, 0, ROLE_MAIN), R(-2, -1, 4, 0, ROLE_MAIN), R(0, 0, 1, 0, ROLE_MAIN),
+                    R(-1, 1, 1, 0, ROLE_MAIN), R(-2, 2, 1, 0, ROLE_MAIN), R(-3, 3, 1, 0, ROLE_MAIN), R(2, -4, 0, 0, ROLE_LIGHT), R(-3, 3, 0, 0, ROLE_DARK) } },
+    { "ghost", 10, { C(0, -1, 3.2f, ROLE_MAIN), R(-3, -1, 6, 3, ROLE_MAIN), R(-3, 3, 0, 0, ROLE_MAIN), R(0, 3, 0, 0, ROLE_MAIN), R(3, 3, 0, 0, ROLE_MAIN),
+                     R(-2, -2, 1, 1, ROLE_WHITE), R(1, -2, 1, 1, ROLE_WHITE), R(-1, -1, 0, 0, ROLE_INK), R(2, -1, 0, 0, ROLE_INK), R(-3, -2, 0, 1, ROLE_LIGHT) } },
+};
+#undef C
+#undef R
+void ck_sticker_cells(int kind, int c, int out[CK_STICKER_N][CK_STICKER_N]) {
+    const ck_stickerart *S = &ck_stickers[kind];
+    int role[CK_STICKER_N][CK_STICKER_N], h = CK_STICKER_N / 2;
+    for (int y = 0; y < CK_STICKER_N; y++)
+        for (int x = 0; x < CK_STICKER_N; x++) {
+            float px = x - h, py = y - h;
+            role[y][x] = -1;
+            for (int k = 0; k < S->n; k++) {
+                const ck_fshape *f = &S->s[k];
+                bool in = f->kind == 0 ? (px - f->x) * (px - f->x) + (py - f->y) * (py - f->y) <= f->w * f->w
+                                       : px >= f->x && px <= f->x + f->w && py >= f->y && py <= f->y + f->h;
+                if (in) role[y][x] = (int)f->col;
+            }
+        }
+    for (int y = 0; y < CK_STICKER_N; y++)
+        for (int x = 0; x < CK_STICKER_N; x++) {
+            int r = role[y][x];
+            if (r < 0) {   // the outline: bare cells next to the sticker
+                bool edge = (x > 0 && role[y][x - 1] >= 0) || (x < CK_STICKER_N - 1 && role[y][x + 1] >= 0) || (y > 0 && role[y - 1][x] >= 0) || (y < CK_STICKER_N - 1 && role[y + 1][x] >= 0);
+                r = edge ? ROLE_INK : -1;
+            }
+            int v = -1;
+            if (r >= 0 && c == CK_MURAL_ERASER) v = 0;
+            else if (r == ROLE_MAIN) v = c + 1;
+            else if (r == ROLE_DARK) v = c + 1 + CK_MURAL_PAL;
+            else if (r == ROLE_LIGHT) v = c + 1 + 2 * CK_MURAL_PAL;
+            else if (r == ROLE_WHITE) v = 9;
+            else if (r == ROLE_INK) v = 10;
+            out[y][x] = v;
+        }
+}
+static void mural_sticker(ck_house *H, float px, float py, int kind, int c) {
+    int g[CK_STICKER_N][CK_STICKER_N], h = CK_STICKER_N / 2;
+    int cx = (int)floorf(px / CK_MURAL_CELL), cy = (int)floorf((py - CK_MURAL_Y) / CK_MURAL_CELL);
+    ck_sticker_cells(kind, c, g);
+    for (int y = 0; y < CK_STICKER_N; y++)
+        for (int x = 0; x < CK_STICKER_N; x++) {
+            int mx = cx + x - h, my = cy + y - h;
+            if (g[y][x] < 0 || mx < 0 || my < 0 || mx >= CK_MURAL_W || my >= CK_MURAL_H) continue;
+            H->mural[my * CK_MURAL_W + mx] = (uint8_t)g[y][x];
+        }
+}
 void ck_mural_dab(ck_house *H, float px, float py, int c, int size) {
     int cx = (int)floorf(px / CK_MURAL_CELL), cy = (int)floorf((py - CK_MURAL_Y) / CK_MURAL_CELL);
     for (int dy = -(size / 2); dy <= size - size / 2; dy++)
@@ -425,8 +498,8 @@ static void paint_update(ck_game *G) {
         p->vx += (want * 1.8f - p->vx) * 0.25f;
         // turning round flops the hero to the other side of the brush, so the brush barely moves
         if (want && want != p->face) { p->x += p->face * 16; p->face = want; p->bx += p->face * 2; }
-        // no gravity: A (or up) flies up, down flies down, and letting go hovers in place
-        int wy = HELD(G, s, CK_A) || HELD(G, s, CK_UP) ? -1 : HELD(G, s, CK_DOWN) ? 1 : 0;
+        // no gravity: up flies up, down flies down, and letting go hovers in place
+        int wy = HELD(G, s, CK_UP) ? -1 : HELD(G, s, CK_DOWN) ? 1 : 0;
         p->jet = wy < 0;
         p->vy += (wy * 2.2f - p->vy) * 0.25f;
         if (p->jet && (int)(G->t * 60) % 6 == 0) ck_sfx(G, SFX_HOVER);
@@ -434,18 +507,25 @@ static void paint_update(ck_game *G) {
         p->y += p->vy;
         if (p->y > CK_MURAL_FLOOR) { p->y = CK_MURAL_FLOOR; p->vy = 0; }
         if (p->y < CK_MURAL_Y + 28) { p->y = CK_MURAL_Y + 28; p->vy = 0; }
-        if (HIT(G, s, CK_C)) { p->size = (p->size + 1) % 3; ck_sfx(G, SFX_SELECT); }   // C: a bigger brush, then back to the smallest
+        if (HIT(G, s, CK_B)) { p->stick = !p->stick; p->brush = false; ck_sfx(G, SFX_GRAB); }   // B: swap the brush for a sticker and back
+        if (HIT(G, s, CK_C)) {   // C: a bigger brush, then back to the smallest; or the next sticker
+            if (p->stick) p->kind = (p->kind + 1) % CK_STICKERS;
+            else p->size = (p->size + 1) % 3;
+            ck_sfx(G, SFX_SELECT);
+        }
         if (HIT(G, s, CK_R)) { p->col = (p->col + 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
         if (HIT(G, s, CK_L)) { p->col = (p->col + CK_MURAL_CHOICES - 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
         float bx = p->x + p->face * 9, by = p->y - 16;
-        if (p->col == CK_MURAL_CLEAR) {   // the wipe-all choice: B clears the wall
-            if (HIT(G, s, CK_B)) {
+        if (p->col == CK_MURAL_CLEAR) {   // the wipe-all choice: A clears the wall
+            if (HIT(G, s, CK_A)) {
                 memset(H->mural, 0, sizeof H->mural);
                 ck_sfx(G, SFX_WHOOSH);
                 for (int k = 0; k < 12; k++) ck_puff(G, 20 + k * 25, CK_MURAL_Y + 40 + (k % 3) * 50, 2, 0xFFFFFF, 220);
             }
             p->brush = false;
-        } else if (HELD(G, s, CK_B)) {
+        } else if (p->stick) {   // A stamps the sticker
+            if (HIT(G, s, CK_A)) { mural_sticker(H, bx + p->face * 14, by, p->kind, p->col); ck_sfx(G, SFX_POP); ck_sparks(G, bx + p->face * 14, by, 5, ck_mural_hex(p->col + 1)); }
+        } else if (HELD(G, s, CK_A)) {
             if (!p->brush) { p->bx = bx; p->by = by; p->brush = true; }
             int n = (int)ceilf(hypotf(bx - p->bx, by - p->by) / 2);
             if (n < 1) n = 1;

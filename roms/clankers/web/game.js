@@ -726,7 +726,7 @@ function houseScene(from) {
         if (hit(sl, 'right') && S.cpick[i] % 6 < 5) { S.cpick[i]++; SND.fx.select(); }
         if ((hit(sl, 'up') || hit(sl, 'down')) && !S.dish) { S.cpick[i] = (S.cpick[i] + 6) % ING.length; SND.fx.select(); }   // the other shelf
         if (S.dish) { if (hit(sl, 'a')) { for (const q of S.ps) q.hold = S.dish; S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
-        if (hit(sl, 'a') && S.pan.length < 4) { S.pan.push(ING[S.cpick[i]]); SND.fx.hop(); }
+        if (hit(sl, 'a')) { if (S.pan.length < 4) S.pan.push(ING[S.cpick[i]]); else S.pan[3] = ING[S.cpick[i]]; SND.fx.hop(); }   // a full pan swaps its last one
         if (hit(sl, 'b') && S.pan.length) {
           S.heat += 9; SND.fx.hover(); for (let k = 0; k < 2; k++) puff(150 + Math.random() * 20, 120, 1, 'rgba(255,255,255,0.63)');
           if (S.heat >= 100) {
@@ -949,11 +949,11 @@ function drawSlotPicker(title, sub, pick) {
   text('^ v choose   A ok   B back', W / 2, 188, 7, '#a49db4', 'center', null);
 }
 
-// ---- the paint studio: a big wall to paint on. Fly with the jetpack (hold A), hold B to paint,
-// L and R (or C) change the colour. Both players paint together; the wall is kept.
+// ---- the paint studio: a big wall to paint on. Fly with the jetpack (up and down), hold A to paint,
+// L and R change the colour, B swaps the brush for a sticker (C picks which). Both players paint together; the wall is kept.
 const MURAL = { W: 80, H: 48, CELL: 4, Y: 16, FLOOR: 220,
   PAL: [0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230], ERASER: 10, CLEAR: 11 };
-let mural = (() => { const s = store.get('mural', ''); const a = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === a.length) for (let i = 0; i < a.length; i++) a[i] = Math.min(10, s.charCodeAt(i) - 48); return a; })();
+let mural = (() => { const s = store.get('mural', ''); const a = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === a.length) for (let i = 0; i < a.length; i++) a[i] = Math.min(30, s.charCodeAt(i) - 48); return a; })();
 const saveMural = () => store.set('mural', String.fromCharCode(...mural.map(v => v + 48)));
 function muralDab(px, py, c, size) {   // size 0 is one cell, 2 is three cells across
   const cx = Math.floor(px / MURAL.CELL), cy = Math.floor((py - MURAL.Y) / MURAL.CELL), lo = -Math.floor(size / 2), hi = size - Math.floor(size / 2);
@@ -962,9 +962,47 @@ function muralDab(px, py, c, size) {   // size 0 is one cell, 2 is three cells a
     mural[y * MURAL.W + x] = c === MURAL.ERASER ? 0 : c + 1;
   }
 }
+// stickers (ck_stickers): shapes in cells, [kind, x, y, w or r, h, role]; roles 0 main, 1 dark, 2 light, 3 white, 4 ink
+const STICKERS = [
+  ['heart', [[1, -3, -3, 2, 0, 0], [1, 1, -3, 2, 0, 0], [1, -4, -2, 8, 1, 0], [1, -3, 0, 6, 0, 0], [1, -2, 1, 4, 0, 0], [1, -1, 2, 2, 0, 0], [1, 0, 3, 0, 0, 0], [1, -3, -2, 1, 0, 2], [1, 2, 0, 1, 0, 1], [1, 1, 1, 1, 0, 1]]],
+  ['star', [[1, 0, -4, 0, 0, 0], [1, -1, -3, 2, 1, 0], [1, -4, -1, 8, 0, 0], [1, -3, 0, 6, 0, 0], [1, -2, 1, 4, 1, 0], [1, -3, 3, 2, 0, 0], [1, 1, 3, 2, 0, 0], [1, -3, 4, 1, 0, 0], [1, 2, 4, 1, 0, 0], [1, 0, -3, 0, 1, 2], [1, 1, 1, 1, 1, 1]]],
+  ['flower', [[0, 0, -3, 2, 0, 0], [0, -3, 0, 2, 0, 0], [0, 3, 0, 2, 0, 0], [0, 0, 3, 2, 0, 1], [0, 0, 0, 1.6, 0, 2], [1, 0, 0, 0, 0, 3], [1, 0, -4, 0, 0, 2]]],
+  ['smile', [[0, 0, 0, 4.6, 0, 0], [1, -2, -2, 0, 1, 4], [1, 2, -2, 0, 1, 4], [1, -2, 1, 0, 0, 4], [1, 2, 1, 0, 0, 4], [1, -1, 2, 2, 0, 4], [1, -2, -3, 0, 0, 2]]],
+  ['robot', [[1, -3, -2, 6, 5, 0], [1, 0, -4, 0, 1, 1], [1, 0, -5, 0, 0, 2], [1, -2, -1, 1, 1, 3], [1, 1, -1, 1, 1, 3], [1, -1, 0, 0, 0, 4], [1, 2, 0, 0, 0, 4], [1, -2, 2, 4, 0, 1], [1, -4, -1, 0, 2, 1], [1, 4, -1, 0, 2, 1]]],
+  ['fish', [[0, -1, 0, 2.9, 0, 0], [1, 2, -1, 0, 2, 1], [1, 3, -2, 0, 4, 1], [1, 4, -3, 0, 6, 1], [1, -1, -3, 1, 0, 1], [1, -3, 1, 2, 0, 2], [1, -2, -1, 0, 0, 3], [1, -3, -1, 0, 0, 4]]],
+  ['bolt', [[1, 1, -4, 1, 0, 0], [1, 0, -3, 1, 0, 0], [1, -1, -2, 1, 0, 0], [1, -2, -1, 4, 0, 0], [1, 0, 0, 1, 0, 0], [1, -1, 1, 1, 0, 0], [1, -2, 2, 1, 0, 0], [1, -3, 3, 1, 0, 0], [1, 2, -4, 0, 0, 2], [1, -3, 3, 0, 0, 1]]],
+  ['ghost', [[0, 0, -1, 3.2, 0, 0], [1, -3, -1, 6, 3, 0], [1, -3, 3, 0, 0, 0], [1, 0, 3, 0, 0, 0], [1, 3, 3, 0, 0, 0], [1, -2, -2, 1, 1, 3], [1, 1, -2, 1, 1, 3], [1, -1, -1, 0, 0, 4], [1, 2, -1, 0, 0, 4], [1, -3, -2, 0, 1, 2]]],
+], STICKER_N = 13;
+// a mural cell: 1..10 a palette colour, 11..20 its dark shade, 21..30 its light shade (ck_mural_hex)
+function muralHex(v) {
+  const h = MURAL.PAL[(v - 1) % 10], tier = Math.floor((v - 1) / 10);
+  let r = h >> 16 & 255, gg = h >> 8 & 255, b = h & 255;
+  if (tier === 1) { r = Math.floor(r * 62 / 100); gg = Math.floor(gg * 62 / 100); b = Math.floor(b * 62 / 100); }
+  if (tier === 2) { r = (r + 255) >> 1; gg = (gg + 255) >> 1; b = (b + 255) >> 1; }
+  return (r << 16) | (gg << 8) | b;
+}
+// sticker kind stamped in colour c: a STICKER_N x STICKER_N grid of mural values, -1 where it leaves the wall alone (ck_sticker_cells)
+function stickerCells(kind, c) {
+  const N = STICKER_N, h = N >> 1, role = [];
+  for (let y = 0; y < N; y++) { role.push([]); for (let x = 0; x < N; x++) {
+    const px = x - h, py = y - h; let r = -1;
+    for (const [k, sx, sy, w, hh, ro] of STICKERS[kind][1]) if (k === 0 ? (px - sx) ** 2 + (py - sy) ** 2 <= w * w : px >= sx && px <= sx + w && py >= sy && py <= sy + hh) r = ro;
+    role[y].push(r);
+  } }
+  return role.map((row, y) => row.map((r, x) => {
+    if (r < 0) r = (x > 0 && role[y][x - 1] >= 0) || (x < N - 1 && role[y][x + 1] >= 0) || (y > 0 && role[y - 1][x] >= 0) || (y < N - 1 && role[y + 1][x] >= 0) ? 4 : -1;
+    if (r < 0) return -1;
+    if (c === MURAL.ERASER) return 0;
+    return [c + 1, c + 11, c + 21, 9, 10][r];
+  }));
+}
+function muralSticker(px, py, kind, c) {
+  const g = stickerCells(kind, c), h = STICKER_N >> 1, cx = Math.floor(px / MURAL.CELL), cy = Math.floor((py - MURAL.Y) / MURAL.CELL);
+  g.forEach((row, y) => row.forEach((v, x) => { const mx = cx + x - h, my = cy + y - h; if (v >= 0 && mx >= 0 && my >= 0 && mx < MURAL.W && my < MURAL.H) mural[my * MURAL.W + mx] = v; }));
+}
 function paintScene(house) {
   const S = { song: 'select', t: 0 };
-  S.ps = house.ps.map((h, i) => ({ m: h.m, x: 120 + i * 80, y: MURAL.FLOOR, vx: 0, vy: 0, face: 1, col: i ? 4 : 0, size: 0, bx: null, by: null, jet: false }));
+  S.ps = house.ps.map((h, i) => ({ m: h.m, x: 120 + i * 80, y: MURAL.FLOOR, vx: 0, vy: 0, face: 1, col: i ? 4 : 0, size: 0, stick: false, kind: 0, bx: null, by: null, jet: false }));
   S.update = function () {
     S.t += 1 / 60; stepParticles();
     if (anyHit('start')) { saveMural(); SND.fx.select(); house.resume(); return; }
@@ -973,23 +1011,26 @@ function paintScene(house) {
       p.vx += (want * 1.8 - p.vx) * 0.25;
       // turning round flops the hero to the other side of the brush, so the brush barely moves
       if (want && want !== p.face) { p.x += p.face * 16; p.face = want; if (p.bx != null) p.bx += p.face * 2; }
-      // no gravity: A (or up) flies up, down flies down, and letting go hovers in place
-      const wy = held(sl, 'a') || held(sl, 'up') ? -1 : held(sl, 'down') ? 1 : 0;
+      // no gravity: up flies up, down flies down, and letting go hovers in place
+      const wy = held(sl, 'up') ? -1 : held(sl, 'down') ? 1 : 0;
       p.jet = wy < 0;
       p.vy += (wy * 2.2 - p.vy) * 0.25;
       if (p.jet && S.t * 60 % 6 < 1) SND.fx.hover();
       p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
       if (p.y > MURAL.FLOOR) { p.y = MURAL.FLOOR; p.vy = 0; }
       if (p.y < MURAL.Y + 28) { p.y = MURAL.Y + 28; p.vy = 0; }
-      if (hit(sl, 'c')) { p.size = (p.size + 1) % 3; SND.fx.select(); }   // C: a bigger brush, then back to the smallest
+      if (hit(sl, 'b')) { p.stick = !p.stick; p.bx = null; SND.fx.grab(); }   // B: swap the brush for a sticker and back
+      if (hit(sl, 'c')) { if (p.stick) p.kind = (p.kind + 1) % STICKERS.length; else p.size = (p.size + 1) % 3; SND.fx.select(); }   // C: brush size, or the next sticker
       if (hit(sl, 'r')) { p.col = (p.col + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
       if (hit(sl, 'l')) { p.col = (p.col + MURAL.PAL.length + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
       // the brush is the hero's front hand; a fast stroke fills in between frames
       const bx = p.x + p.face * 9, by = p.y - 16;
-      if (p.col === MURAL.CLEAR) {   // the wipe-all choice: B clears the wall
-        if (hit(sl, 'b')) { mural.fill(0); SND.fx.whoosh(); for (let k = 0; k < 12; k++) puff(20 + k * 25, MURAL.Y + 40 + (k % 3) * 50, 2, 'rgba(255,255,255,0.86)'); }
+      if (p.col === MURAL.CLEAR) {   // the wipe-all choice: A clears the wall
+        if (hit(sl, 'a')) { mural.fill(0); SND.fx.whoosh(); for (let k = 0; k < 12; k++) puff(20 + k * 25, MURAL.Y + 40 + (k % 3) * 50, 2, 'rgba(255,255,255,0.86)'); }
         p.bx = null;
-      } else if (held(sl, 'b')) {
+      } else if (p.stick) {   // A stamps the sticker
+        if (hit(sl, 'a')) { muralSticker(bx + p.face * 14, by, p.kind, p.col); SND.fx.pop(); sparks(bx + p.face * 14, by, 5, hexStr(muralHex(p.col + 1))); }
+      } else if (held(sl, 'a')) {
         if (p.bx == null) { p.bx = bx; p.by = by; }
         const n = Math.max(1, Math.ceil(Math.hypot(bx - p.bx, by - p.by) / 2));
         for (let k = 1; k <= n; k++) muralDab(p.bx + (bx - p.bx) * k / n, p.by + (by - p.by) * k / n, p.col, p.size);
@@ -1000,7 +1041,7 @@ function paintScene(house) {
   S.draw = function () {
     K.g = g; g.fillStyle = '#c98a4b'; g.fillRect(0, 0, W, H);
     g.fillStyle = '#fff6e6'; g.fillRect(0, MURAL.Y, MURAL.W * MURAL.CELL, MURAL.H * MURAL.CELL);
-    for (let y = 0; y < MURAL.H; y++) { let x = 0; while (x < MURAL.W) { const v = mural[y * MURAL.W + x]; let e = x + 1; while (e < MURAL.W && mural[y * MURAL.W + e] === v) e++; if (v) { g.fillStyle = hexStr(MURAL.PAL[v - 1]); g.fillRect(x * MURAL.CELL, MURAL.Y + y * MURAL.CELL, (e - x) * MURAL.CELL, MURAL.CELL); } x = e; } }
+    for (let y = 0; y < MURAL.H; y++) { let x = 0; while (x < MURAL.W) { const v = mural[y * MURAL.W + x]; let e = x + 1; while (e < MURAL.W && mural[y * MURAL.W + e] === v) e++; if (v) { g.fillStyle = hexStr(muralHex(v)); g.fillRect(x * MURAL.CELL, MURAL.Y + y * MURAL.CELL, (e - x) * MURAL.CELL, MURAL.CELL); } x = e; } }
     g.fillStyle = '#9c7552'; g.fillRect(0, MURAL.Y + MURAL.H * MURAL.CELL, W, H);
     // the palette along the bottom; each player's colour is ringed
     for (let k = 0; k <= MURAL.PAL.length + 1; k++) {
@@ -1015,10 +1056,17 @@ function paintScene(house) {
       if (p.jet) K.flame(p.x - p.face * 5, p.y - 8, 14, 6, t);
       drawHeroPose(p.m, p.x, p.y, p.y < MURAL.FLOOR ? 'jet' : 'idle', t, p.face);
       const bx = p.x + p.face * 9, by = p.y - 16, c = p.col < MURAL.PAL.length ? hexStr(MURAL.PAL[p.col]) : '#fff6e6';
+      if (p.stick && p.col !== MURAL.CLEAR) {   // the sticker in hand, just where A would stamp it
+        const h = STICKER_N >> 1, ox = (Math.floor((bx + p.face * 14) / MURAL.CELL) - h) * MURAL.CELL, oy = MURAL.Y + (Math.floor((by - MURAL.Y) / MURAL.CELL) - h) * MURAL.CELL;
+        g.globalAlpha = p.col === MURAL.ERASER ? 0.4 : 0.85;
+        stickerCells(p.kind, p.col === MURAL.ERASER ? 9 : p.col).forEach((row, y) => row.forEach((v, x) => { if (v > 0) { g.fillStyle = hexStr(muralHex(v)); g.fillRect(ox + x * MURAL.CELL, oy + y * MURAL.CELL - 2, MURAL.CELL, MURAL.CELL); } }));
+        g.globalAlpha = 1;
+        continue;
+      }
       const br = 2 + p.size * 2; K.circ(bx, by, br + 1, '#1b1426'); K.circ(bx, by, br, c);   // the tip grows with the brush size (C)
     }
     drawParticles(0);
-    hint('A up   B paint   L R colour   C size   START leave', 11);
+    hint(S.ps[0].stick ? 'A stick   B brush   L R colour   C next sticker   START leave' : 'A paint   B sticker   L R colour   C size   START leave', 11);
   };
   return S;
 }
@@ -1327,7 +1375,7 @@ function loadSlot(n) {
   for (let i = 0; i < 2; i++) Object.assign(party[i], def[i], pa[i] || {});
   party[0].joined = true;
   closet = cleanCloset(store.get('closet', freshCloset()));
-  const s = store.get('mural', ''); mural = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === mural.length) for (let i = 0; i < mural.length; i++) mural[i] = Math.min(10, s.charCodeAt(i) - 48);
+  const s = store.get('mural', ''); mural = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === mural.length) for (let i = 0; i < mural.length; i++) mural[i] = Math.min(30, s.charCodeAt(i) - 48);
   setWorld(store.get('world', 1));
 }
 function slotScene() {

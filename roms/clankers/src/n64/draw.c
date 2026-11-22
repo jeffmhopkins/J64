@@ -1540,7 +1540,7 @@ static void draw_paint(const ck_game *G) {
         while (x < CK_MURAL_W) {
             int v = row[x], e = x + 1;
             while (e < CK_MURAL_W && row[e] == v) e++;
-            if (v) rect(x * CK_MURAL_CELL, CK_MURAL_Y + y * CK_MURAL_CELL, (e - x) * CK_MURAL_CELL, CK_MURAL_CELL, ck_mural_pal[v - 1], 1);
+            if (v) rect(x * CK_MURAL_CELL, CK_MURAL_Y + y * CK_MURAL_CELL, (e - x) * CK_MURAL_CELL, CK_MURAL_CELL, ck_mural_hex(v), 1);
             x = e;
         }
     }
@@ -1558,12 +1558,23 @@ static void draw_paint(const ck_game *G) {
         if (p->jet) blit_o(SPR_CUT_FLAME, (int)(t * 14) % 2, p->x - p->face * 5, p->y - 8, (bopt){ .sx = 0.3f, .sy = 0.3f });
         house_hero(G, p->slot, p->x, p->y, p->y < CK_MURAL_FLOOR ? HP_JET : HP_IDLE, tt, p->face);
         float bx = p->x + p->face * 9, by = p->y - 16;
+        if (p->stick && p->col != CK_MURAL_CLEAR) {   // the sticker in hand, just where A would stamp it
+            int g[CK_STICKER_N][CK_STICKER_N], h = CK_STICKER_N / 2;
+            int cx = (int)floorf((bx + p->face * 14) / CK_MURAL_CELL), cy = (int)floorf((by - CK_MURAL_Y) / CK_MURAL_CELL);
+            ck_sticker_cells(p->kind, p->col == CK_MURAL_ERASER ? 9 : p->col, g);
+            float ox = (cx - h) * CK_MURAL_CELL, oy = CK_MURAL_Y + (cy - h) * CK_MURAL_CELL;
+            for (int y = 0; y < CK_STICKER_N; y++)
+                for (int x = 0; x < CK_STICKER_N; x++)
+                    if (g[y][x] > 0) rect(ox + x * CK_MURAL_CELL, oy + y * CK_MURAL_CELL - 2, CK_MURAL_CELL, CK_MURAL_CELL, ck_mural_hex(g[y][x]), p->col == CK_MURAL_ERASER ? 0.4f : 0.85f);
+            continue;
+        }
         float br = 2 + p->size * 2;   // the brush tip grows with the brush size (C)
         shape(SPR_DOT, bx, by, br + 1, 0x1B1426, 1);
         shape(SPR_DOT, bx, by, br, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : p->col == CK_MURAL_CLEAR ? 0xE04F4F : 0xFFF6E6, 1);
     }
     particles(G, 0);
-    hint(11, "A up   B paint   L R colour   C size   START leave");
+    bool st = Hs->gs[0].stick;
+    hint(11, st ? "A stick   B brush   L R colour   C next sticker   START leave" : "A paint   B sticker   L R colour   C size   START leave");
 }
 
 // The aquarium, three screens wide: two water tiles then the baked beach screen, swaying weed,

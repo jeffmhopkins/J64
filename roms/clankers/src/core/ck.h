@@ -424,6 +424,20 @@ extern const ck_decor ck_decors[CK_HOUSE_DECOR];
 #define CK_MURAL_CLEAR (CK_MURAL_PAL + 1)   // then: B wipes the whole wall
 #define CK_MURAL_CHOICES (CK_MURAL_PAL + 2)
 extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
+// A mural cell holds 0 (bare), 1..10 a palette colour, 11..20 its dark shade, 21..30 its light shade.
+uint32_t ck_mural_hex(int v);
+// Stickers: B swaps the brush for one, A stamps it, C picks which of the 8. Each is drawn in five
+// roles (main, dark, light, white, ink) that take their shades from the colour you have picked,
+// with an ink outline round it, on a grid CK_STICKER_N cells across.
+#define CK_STICKERS 8
+typedef struct { uint8_t kind; float x, y, w, h; uint32_t col; } ck_fshape;   // kind 0: a circle (w is its radius), 1: a box
+#define CK_STICKER_N 13
+enum { ROLE_MAIN, ROLE_DARK, ROLE_LIGHT, ROLE_WHITE, ROLE_INK };
+typedef struct { const char *name; int n; ck_fshape s[12]; } ck_stickerart;   // col holds a ROLE_*; x, y, w, h in cells, boxes inclusive
+extern const ck_stickerart ck_stickers[CK_STICKERS];
+// the cells of sticker `kind` stamped in colour c (CK_MURAL_ERASER rubs out its shape): out[y][x] is
+// the mural value, or -1 where the sticker leaves the wall alone
+void ck_sticker_cells(int kind, int c, int out[CK_STICKER_N][CK_STICKER_N]);
 // the aquarium: water on the left, a beach on the right
 // The aquarium is three screens wide: water, then a beach on the right (its last screen is the
 // baked aqua_bg, the two before it the aqua_water tile).
@@ -569,6 +583,8 @@ typedef struct {
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
     uint64_t hit;              // cars: the obstacles you have bumped, one bit each
     int size;                  // paint: the brush size, 0 (one cell) to 2 (three cells across)
+    bool stick;                // paint: holding a sticker instead of the brush
+    int kind;                  // paint: which sticker
 } ck_hhero;
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
 typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`
@@ -603,7 +619,6 @@ enum {
 extern const int ck_cook_ingr[CK_COOK_INGR];
 // what a pan of n ingredients cooks into: *dish is FOOD_* + 1, name its name
 void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size);
-typedef struct { uint8_t kind; float x, y, w, h; uint32_t col; } ck_fshape;   // kind 0: a circle (w is its radius), 1: a box
 typedef struct { const char *name; int n; ck_fshape s[6]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];
 typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
