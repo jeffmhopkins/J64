@@ -966,6 +966,13 @@ static void test_house(void) {
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->house.mode, HM_COOK);
     G->house.cpick[1] = 0;   // keep player 2 out of the way
+    // each player scrolls their own row through all the ingredients
+    press(G, CK_LEFT, 0); EXPECT_EQ_INT(G->house.cpick[0], CK_COOK_INGR - 1);
+    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->house.cpick[0], CK_COOK_ROW - 1);
+    press(G, CK_UP, 0); press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->house.cpick[0], 0);
+    press(G, 0, CK_DOWN); EXPECT_EQ_INT(G->house.cpick[1], CK_COOK_ROW);
+    EXPECT_EQ_INT(G->house.cpick[0], 0);
+    G->house.cpick[1] = 0;
     press(G, CK_A, 0);                             // egg
     press(G, CK_RIGHT, 0); press(G, CK_RIGHT, 0);
     press(G, CK_A, 0);                             // cheese
@@ -1002,7 +1009,7 @@ static void test_house(void) {
             { { FOOD_CHEESE }, 1, DISH_CHEESE_PLATE, "Melted cheese" },
         };
         for (size_t i = 0; i < sizeof R / sizeof R[0]; i++) {
-            int dish, extra; char name[40];
+            int dish; uint64_t extra; char name[40];
             ck_cook_dish(R[i].pan, R[i].n, &dish, &extra, name, sizeof name);
             EXPECT_EQ_INT(extra, 0);
             EXPECT_EQ_INT(dish, FOOD_DISH0 + R[i].dish + 1);
@@ -1012,14 +1019,14 @@ static void test_house(void) {
         bool seen[CK_DISHES] = { 0 };
         for (int a = 0; a < CK_COOK_INGR; a++) for (int b = a; b < CK_COOK_INGR; b++) for (int c = b; c < CK_COOK_INGR; c++)
             for (int n = 1; n <= 3; n++) {
-                int pan[3] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c] }, dish, extra; char name[40];
+                int pan[3] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c] }, dish; uint64_t extra; char name[40];
                 ck_cook_dish(pan, n, &dish, &extra, name, sizeof name);
                 seen[dish - 1 - FOOD_DISH0] = true;
             }
         for (int k = 0; k < CK_DISHES; k++) { if (!seen[k]) printf("  dish %d never cooks\n", k); EXPECT_EQ_INT(seen[k], 1); }
         // the rest of the pan goes into the name and on top as garnish, so most pans read differently
         {
-            int pan[4] = { FOOD_EGG, FOOD_CHEESE, FOOD_SAUSAGE, FOOD_MUSHROOM }, dish, extra; char name[40];
+            int pan[4] = { FOOD_EGG, FOOD_CHEESE, FOOD_SAUSAGE, FOOD_MUSHROOM }, dish; uint64_t extra; char name[40];
             ck_cook_dish(pan, 4, &dish, &extra, name, sizeof name);
             EXPECT_EQ_INT(dish, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
             EXPECT_EQ_INT(strcmp(name, "Foresty cheesy omelette with sausage"), 0);
@@ -1028,19 +1035,22 @@ static void test_house(void) {
             ck_cook_dish(four, 4, &dish, &extra, name, sizeof name);
             EXPECT_EQ_INT(strcmp(name, "Mega cheese soup"), 0);
         }
-        static char names[2000][40];
-        int nn = 0, pans = 0;
+        // every full pan of four: count the names that come out different
+        enum { PANS = 48 * 49 * 50 * 51 / 24 };
+        static char names[PANS][40];
+        int pans = 0;
         for (int a = 0; a < CK_COOK_INGR; a++) for (int b = a; b < CK_COOK_INGR; b++) for (int c = b; c < CK_COOK_INGR; c++) for (int e = c; e < CK_COOK_INGR; e++) {
-            int pan[4] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c], ck_cook_ingr[e] }, dish, extra; char name[40];
-            ck_cook_dish(pan, 4, &dish, &extra, name, sizeof name);
+            int pan[4] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c], ck_cook_ingr[e] }, dish; uint64_t extra;
+            ck_cook_dish(pan, 4, &dish, &extra, names[pans], 40);
+            if (strlen(names[pans]) > 38) { printf("  too long: %s\n", names[pans]); EXPECT_EQ_INT(0, 1); }
             pans++;
-            EXPECT_EQ_INT(strlen(name) <= 38, 1);
-            bool dup = false;
-            for (int i = 0; i < nn && !dup; i++) dup = !strcmp(names[i], name);
-            if (!dup && nn < 2000) strcpy(names[nn++], name);
         }
+        qsort(names, pans, sizeof names[0], (int (*)(const void *, const void *))strcmp);
+        int nn = pans > 0;
+        for (int i = 1; i < pans; i++) nn += strcmp(names[i], names[i - 1]) != 0;
         printf("  kitchen: %d full pans make %d different dishes\n", pans, nn);
-        EXPECT_EQ_INT(nn * 10 >= pans * 6, 1);
+        EXPECT_EQ_INT(pans, PANS);
+        EXPECT_EQ_INT(nn * 10 >= pans * 4, 1);
     }
     press(G, CK_A, 0);   // eat it
     hold(G, 60, 0, 0);

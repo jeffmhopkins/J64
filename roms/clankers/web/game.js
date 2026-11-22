@@ -294,28 +294,11 @@ function hint(s, y) { const w = textW(s, 7) + 14; panel((W - w) / 2, y - 9, w, 1
 // a message: a dark box with a bright rim, light words (the N64's banner(); dark words on yellow blur on a TV)
 function rimBanner(s, size, y, h, rim = '#ffd23f', col = '#ffd23f') { const ww = Math.min(W - 6, Math.max(120, textW(s, size) + 20)); K.rr((W - ww) / 2, y, ww, h, 5, rim); K.rr((W - ww) / 2 + 2, y + 2, ww - 4, h - 4, 4, '#1b1426'); text(s, W / 2, y + h / 2 + size * 0.36, size, col, 'center', null); }
 // a food from HOUSEART.FOODS (ck_foods) at (x, y), sc times its size
-// a cooked dish's extras on top, a little piece of each (bits of COOK_INGR); garnish_art in draw.c
-function garnishArt(mask, x, y, sc) {
-  if (!mask) return;
-  const box = (x0, y0, w, h, c) => { g.fillStyle = c; g.fillRect(x0, y0, w, h); }, dot = (x0, y0, r, c) => K.circ(x0, y0, r, c);
-  const n = [...Array(12).keys()].filter(i => mask >> i & 1).length;
-  [...Array(12).keys()].filter(i => mask >> i & 1).forEach((i, j) => {
-    const px = x + (j - (n - 1) / 2) * 4.5 * sc, py = y - 3.5 * sc + (j % 2) * 1.5 * sc, s = sc;
-    switch (i) {
-      case 0: dot(px, py, 1.8 * s, '#ffffff'); dot(px, py, 0.9 * s, '#ffc21f'); break;
-      case 1: dot(px, py, 1.5 * s, '#e0402f'); dot(px - 0.4 * s, py - 0.4 * s, 0.5 * s, '#ff9a8a'); break;
-      case 2: box(px - 1.2 * s, py - 1.2 * s, 2.4 * s, 2.4 * s, '#ffd23f'); box(px - 0.4 * s, py - 0.4 * s, 0.7 * s, 0.7 * s, '#e0a92b'); break;
-      case 3: box(px - 0.4 * s, py, 0.8 * s, 1.4 * s, '#f2e6d0'); dot(px, py, 1.4 * s, '#b07a4c'); break;
-      case 4: box(px - 1.6 * s, py - 0.6 * s, 3.2 * s, 1.2 * s, '#ff8a3d'); box(px + 1.4 * s, py - 0.9 * s, 0.8 * s, 0.6 * s, '#49d17a'); break;
-      case 5: box(px - 1.3 * s, py - 1.1 * s, 2.6 * s, 2.2 * s, '#c98a4b'); box(px - 0.9 * s, py - 0.7 * s, 1.8 * s, 1.4 * s, '#f2d49b'); break;
-      case 6: dot(px, py, 1.6 * s, '#f2e6b0'); break;
-      case 7: for (let k = 0; k < 3; k++) dot(px - s + k * s, py + (k % 2) * 0.6 * s, 0.6 * s, '#ffffff'); break;
-      case 8: box(px - 1.5 * s, py - 0.7 * s, 3 * s, 1.4 * s, '#9a4a2a'); dot(px + 1.5 * s, py, 0.7 * s, '#9a4a2a'); break;
-      case 9: for (let k = 0; k < 3; k++) box(px - 1.5 * s + k * s, py - 0.6 * s + (k % 2) * 0.6 * s, s, 0.6 * s, '#f2d27a'); break;
-      case 10: dot(px, py, 1.4 * s, '#e04f4f'); box(px, py - 2 * s, 0.8 * s, 0.8 * s, '#49d17a'); break;
-      case 11: box(px - 1.5 * s, py - 0.5 * s, 3 * s, s, '#ffe066'); box(px - 1.5 * s, py + 0.2 * s, 0.6 * s, 0.6 * s, '#6f4630'); break;
-    }
-  });
+// a cooked dish's extras on top: a little one of each (indices into COOK_INGR); garnish_art in draw.c
+function garnishArt(ex, x, y, sc) {
+  if (!ex || !ex.length) return;
+  const n = ex.length;
+  ex.forEach((i, j) => foodArt(HOUSEART.COOK_INGR[i], x + (j - (n - 1) / 2) * 4.5 * sc, y - 3.5 * sc + (j % 2) * 1.5 * sc, 0.4 * sc));
 }
 function foodArt(k, x, y, sc = 1) { for (const [kind, fx, fy, w, h, c] of HOUSEART.FOODS[k].s) { if (kind === 0) K.circ(x + fx * sc, y + fy * sc, w * sc, hexStr(c)); else { g.fillStyle = hexStr(c); g.fillRect(x + fx * sc, y + fy * sc, w * sc, h * sc); } } }
 
@@ -718,7 +701,7 @@ function houseScene(from) {
     const kind = HL.spots[k][1];
     if (kind === 'back') { SND.fx.confirm(); saveProg(); enterWorld(worldNum - 1, 'exit'); }
     else if (kind === 'mail') { SND.fx.open(); S.letter = S.letter % HOUSEART.LETTERS.length + 1; S.mode = 'letter'; }
-    else if (kind === 'tree') { p.hold = 1; p.garnish = 0; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
+    else if (kind === 'tree') { p.hold = 1; p.garnish = null; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
     else if (kind === 'snack') { SND.fx.open(); S.mode = 'fridge'; }
     else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.heat = 0; S.dish = 0; }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
@@ -749,9 +732,9 @@ function houseScene(from) {
       const ING = HOUSEART.COOK_INGR;
       for (const [i, p] of S.ps.entries()) {
         const sl = p.m.slot;
-        if (hit(sl, 'left') && S.cpick[i] % 6 > 0) { S.cpick[i]--; SND.fx.select(); }
-        if (hit(sl, 'right') && S.cpick[i] % 6 < 5) { S.cpick[i]++; SND.fx.select(); }
-        if ((hit(sl, 'up') || hit(sl, 'down')) && !S.dish) { S.cpick[i] = (S.cpick[i] + 6) % ING.length; SND.fx.select(); }   // the other shelf
+        // each player scrolls their own row: left and right one at a time, up and down six
+        const d = (hit(sl, 'right') ? 1 : 0) - (hit(sl, 'left') ? 1 : 0) + ((hit(sl, 'down') ? 1 : 0) - (hit(sl, 'up') ? 1 : 0)) * 6;
+        if (d && !S.dish) { S.cpick[i] = ((S.cpick[i] + d) % ING.length + ING.length) % ING.length; SND.fx.select(); }
         if (S.dish) { if (hit(sl, 'a') || hit(sl, 'start')) { for (const q of S.ps) { q.hold = S.dish; q.garnish = S.dishExtra; } S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
         if (hit(sl, 'a')) { if (S.pan.length < 4) S.pan.push(ING[S.cpick[i]]); else S.pan[3] = ING[S.cpick[i]]; SND.fx.hop(); }   // a full pan swaps its last one
         if (hit(sl, 'b') && S.pan.length) {
@@ -773,7 +756,7 @@ function houseScene(from) {
         if (hit(sl, 'right') && S.fpick[i] % 3 < 2) { S.fpick[i]++; SND.fx.select(); }
         if (hit(sl, 'up') && S.fpick[i] >= 3) { S.fpick[i] -= 3; SND.fx.select(); }
         if (hit(sl, 'down') && S.fpick[i] < 6) { S.fpick[i] += 3; SND.fx.select(); }
-        if (hit(sl, 'a')) { p.hold = S.fpick[i] + 1; p.garnish = 0; SND.fx.buy(); S.msg = { text: 'Got some ' + HOUSEART.FOODS[S.fpick[i]].name + '!', t: 100 }; S.mode = 'walk'; }
+        if (hit(sl, 'a')) { p.hold = S.fpick[i] + 1; p.garnish = null; SND.fx.buy(); S.msg = { text: 'Got some ' + HOUSEART.FOODS[S.fpick[i]].name + '!', t: 100 }; S.mode = 'walk'; }
       });
       if (S.mode === 'fridge' && (anyHit('b') || anyHit('start'))) { S.mode = 'walk'; SND.fx.select(); }
       return;
@@ -864,11 +847,19 @@ function houseScene(from) {
     if (S.mode === 'cook') {   // the stove: a shelf of ingredients, the pan, the heat bar
       const ING = HOUSEART.COOK_INGR;
       g.fillStyle = 'rgba(15,10,25,0.55)'; g.fillRect(0, 0, W, H);
-      g.fillStyle = '#8a5a3c'; g.fillRect(30, 22, 260, 66); g.fillStyle = '#c98a4b'; g.fillRect(34, 26, 252, 27); g.fillRect(34, 57, 252, 27);   // two shelves of six
-      ING.forEach((f, k) => {
-        const fx = 56 + (k % 6) * 42, fy = 39 + Math.floor(k / 6) * 31;
-        S.ps.forEach((p, j) => { if (S.cpick[j] === k && !S.dish) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 13 + j * 3, 0, P * 2); g.stroke(); } });
-        foodArt(f, fx, fy, 2.0);
+      // a shelf row for each player, six on show, scrolled to keep their pick in view
+      g.fillStyle = '#8a5a3c'; g.fillRect(30, 22, 260, 4 + 31 * S.ps.length);
+      S.ps.forEach((p, j) => {
+        const c = S.cpick[j], first = Math.max(0, Math.min(ING.length - 6, c - 2)), fy = 39 + j * 31, col = p.m.slot ? '#8fd3ff' : '#ffd23f';
+        g.fillStyle = '#c98a4b'; g.fillRect(34, 26 + j * 31, 252, 27);
+        for (let k = 0; k < 6; k++) {
+          const fx = 56 + k * 42;
+          if (first + k === c && !S.dish) { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 13, 0, P * 2); g.stroke(); }
+          foodArt(ING[first + k], fx, fy, 2.0);
+        }
+        if (first > 0) text('<', 26, fy + 3, 8, '#fff6d8');
+        if (first < ING.length - 6) text('>', 294, fy + 3, 8, '#fff6d8');
+        if (!S.dish) text(HOUSEART.FOODS[ING[c]].name, j ? 310 : 10, 222, 8, col, j ? 'right' : 'left');
       });
       g.fillStyle = '#3a3f4a'; g.fillRect(50, 150, 220, 80); g.fillStyle = '#5a5e6a'; g.fillRect(56, 156, 208, 6);
       K.circ(160, 160, 34, S.heat > 0 && !S.dish ? '#ff8a3d' : '#2b2833');
@@ -877,7 +868,7 @@ function houseScene(from) {
       else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 140 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
       if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each' : 'A take it', 226); }
-      else { text(HOUSEART.FOODS[ING[S.cpick[lastIn(S.ps)]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? 'Stick choose   A add   B stir   START leave' : 'Stick choose   A add to the pan   START leave', 14); }
+      else hint(S.pan.length ? 'Stick scroll   A add   B stir   START leave' : 'Stick scroll   A add to the pan   START leave', 14);
     }
     if (S.mode === 'letter') {   // a big letter to read
       const L = HOUSEART.LETTERS[(S.letter + HOUSEART.LETTERS.length - 1) % HOUSEART.LETTERS.length];

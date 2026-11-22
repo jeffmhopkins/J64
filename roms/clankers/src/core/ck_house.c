@@ -58,6 +58,42 @@ const ck_foodart ck_foods[FOOD_COUNT] = {
     { "rice", 3, { R(-4, -4, 8, 9, 0xE8D9B8), R(-4, -4, 8, 2, 0xC9B27A), C(0, 1, 1.5f, 0xFFFFFF) } },
     { "sausage", 4, { R(-5, -1.5f, 10, 3.5f, 0xC0504A), C(-5, 0.25f, 1.75f, 0xC0504A), C(5, 0.25f, 1.75f, 0xC0504A), R(-3, -1, 6, 1, 0xE07A6A) } },
     { "pasta", 5, { R(-3, -6, 1, 12, 0xFFE2A8), R(-1, -6, 1, 12, 0xFFE2A8), R(1, -6, 1, 12, 0xFFE2A8), R(3, -6, 1, 12, 0xFFE2A8), R(-4, -1, 9, 2, 0xE04F4F) } },
+    { "strawberry", 4, { C(0, 1, 4, 0xE0303F), R(-3, -4, 6, 2, 0x49D17A), C(-1.5f, 0, 0.6f, 0xFFE066), C(1.5f, 2, 0.6f, 0xFFE066) } },
+    { "orange", 3, { C(0, 0, 4.5f, 0xFF9A2A), C(-1.5f, -1.5f, 1.2f, 0xFFC27A), R(-0.5f, -6, 1, 2, 0x6F4630) } },
+    { "lemon", 4, { C(0, 0, 4, 0xFFE94A), C(-4, 0, 1.5f, 0xFFE94A), C(4, 0, 1.5f, 0xFFE94A), C(-1, -1.5f, 1, 0xFFF6A0) } },
+    { "grapes", 5, { C(-2, -2, 2, 0x9A4AD1), C(2, -2, 2, 0x9A4AD1), C(0, 1, 2, 0x9A4AD1), C(0, -4.5f, 1.6f, 0xB06AE6), R(-0.5f, -7, 1, 2.5f, 0x6F4630) } },
+    { "cherry", 4, { C(-2.5f, 2, 2.5f, 0xC0203A), C(2.5f, 2, 2.5f, 0xC0203A), R(-1.5f, -5, 1, 5, 0x49A04A), R(1, -5, 1, 5, 0x49A04A) } },
+    { "pear", 3, { C(0, 2, 4, 0xB6D84A), C(0, -2, 2.5f, 0xB6D84A), R(-0.5f, -6, 1, 2, 0x6F4630) } },
+    { "pineapple", 5, { R(-3.5f, -2, 7, 8, 0xE8B43A), R(-3.5f, 0, 7, 1, 0xA0782A), R(-3.5f, 3, 7, 1, 0xA0782A), R(-2.5f, -6, 1.5f, 4, 0x49D17A), R(1, -6, 1.5f, 4, 0x49D17A) } },
+    { "blueberry", 4, { C(-2.5f, 1, 2.2f, 0x3A5AD1), C(2.5f, 1, 2.2f, 0x3A5AD1), C(0, -2.5f, 2.2f, 0x4A6AE6), C(0, -2.5f, 0.6f, 0x1B2A6A) } },
+    { "watermelon", 4, { C(0, 0, 5, 0x3FA04A), C(0, 0, 4, 0xFF5A6A), C(-1.5f, 0, 0.5f, 0x1B1426), C(1.5f, 1, 0.5f, 0x1B1426) } },
+    { "onion", 3, { C(0, 1, 4, 0xE0B8D0), C(0, 1, 2.5f, 0xF2D8E6), R(-0.5f, -5, 1, 2.5f, 0x8A6A3C) } },
+    { "pepper", 3, { R(-3.5f, -3, 7, 8, 0xE0303F), C(0, -3, 3.5f, 0xE0303F), R(-0.5f, -6, 1.5f, 2.5f, 0x49A04A) } },
+    { "broccoli", 4, { R(-1, 0, 2, 5, 0x8FD06A), C(-2.5f, -1.5f, 2.2f, 0x2F8A3C), C(2.5f, -1.5f, 2.2f, 0x2F8A3C), C(0, -3.5f, 2.2f, 0x3FA04A) } },
+    { "peas", 4, { R(-5, -1.5f, 10, 3.5f, 0x5FB04A), C(-2.5f, 0, 1.3f, 0x9AE06A), C(0, 0, 1.3f, 0x9AE06A), C(2.5f, 0, 1.3f, 0x9AE06A) } },
+    { "corn", 5, { R(-2, -5, 4, 10, 0xFFD23F), R(-1, -5, 0.6f, 10, 0xE0A92B), R(0.6f, -5, 0.6f, 10, 0xE0A92B), R(-3.5f, -1, 1.5f, 6, 0x6FBF4A), R(2, -1, 1.5f, 6, 0x6FBF4A) } },
+    { "lettuce", 3, { C(0, 0, 4.5f, 0x6FCF5A), C(-1.5f, -1, 2.5f, 0x9AE67A), C(1.5f, 1.5f, 1.5f, 0x4FAF4A) } },
+    { "cucumber", 4, { R(-5, -1.5f, 10, 3.5f, 0x3F8A3C), C(-5, 0.25f, 1.75f, 0x3F8A3C), C(5, 0.25f, 1.75f, 0x3F8A3C), R(-3, -1, 6, 0.8f, 0x6FBF6A) } },
+    { "pumpkin", 3, { C(0, 1, 4.5f, 0xFF8A2A), R(-0.5f, -3, 1, 8, 0xE0701A), R(-0.5f, -5, 1.5f, 2.5f, 0x6F4630) } },
+    { "beans", 4, { C(-2, 0, 1.8f, 0xB8402A), C(1, -1.5f, 1.8f, 0xB8402A), C(1.5f, 1.5f, 1.8f, 0xB8402A), C(-0.5f, 2.5f, 1.5f, 0xA0301A) } },
+    { "chicken", 5, { C(1, 0, 3.5f, 0xC9783A), C(1, -0.5f, 2.5f, 0xE09A5A), R(-5, -0.5f, 3.5f, 1.5f, 0xFFF6E6), C(-5, -0.8f, 1, 0xFFF6E6), C(-5, 0.8f, 1, 0xFFF6E6) } },
+    { "fish", 3, { C(0, 0, 3.5f, 0x8FB8D8), C(-4, 0, 2.2f, 0x6F98B8), C(2, -1, 0.7f, 0x1B1426) } },
+    { "shrimp", 4, { C(1, 0, 3, 0xFF8A6A), C(-1.5f, 2, 2, 0xFF8A6A), C(-3, 3, 1.2f, 0xFFAA8A), C(2, -1, 0.6f, 0x1B1426) } },
+    { "bacon", 3, { R(-5, -2.5f, 10, 2, 0xD0505A), R(-5, -0.5f, 10, 1, 0xFFD8D0), R(-5, 0.5f, 10, 2, 0xD0505A) } },
+    { "ham", 3, { C(0, 0, 4.5f, 0xF09AA8), C(0, 0, 3, 0xFFB8C0), C(-1, -1, 0.8f, 0xFFFFFF) } },
+    { "tofu", 3, { R(-4, -3, 8, 6, 0xF8F0DA), R(-4, -3, 8, 1.2f, 0xE0D6B8), R(-1, -0.5f, 2, 2, 0xE8E0C8) } },
+    { "chocolate", 4, { R(-4.5f, -3.5f, 9, 7, 0x6A3A20), R(-4, -3, 4, 3, 0x8A5030), R(0.5f, -3, 4, 3, 0x8A5030), R(-4, 0.5f, 4, 3, 0x8A5030) } },
+    { "honey", 3, { R(-3.5f, -3, 7, 8, 0xFFB020), R(-3.5f, -5, 7, 2, 0xC98A4B), R(-2, -1, 4, 2, 0xFFF6A0) } },
+    { "yogurt", 3, { R(-3.5f, -3, 7, 7, 0xFFFFFF), R(-3.5f, -4, 7, 1.5f, 0xC28BFF), C(0, 0.5f, 1.5f, 0xFF8FC7) } },
+    { "cream", 4, { C(0, 2, 4, 0xFFFFFF), C(0, -1, 3, 0xFFF6F0), C(0, -3.5f, 1.8f, 0xFFFFFF), C(0.5f, -5, 0.8f, 0xFFFFFF) } },
+    { "butter", 3, { R(-5, -2, 10, 5, 0xFFE88A), R(-5, -2, 10, 1.2f, 0xFFF6C0), R(-5, 2, 10, 1, 0xD8C060) } },
+    { "jam", 3, { R(-3.5f, -3, 7, 8, 0xC0203A), R(-4, -5, 8, 2.5f, 0xFFFFFF), R(-2, 0, 4, 2.5f, 0xFFF6E6) } },
+    { "flour", 3, { R(-4, -4, 8, 9, 0xF2EAD8), R(-4, -4, 8, 1.5f, 0xC9B27A), R(-2, 0, 4, 2.5f, 0x5AD1FF) } },
+    { "noodles", 5, { C(0, 1, 4.5f, 0xFFFFFF), R(-3, -2, 6, 1, 0xF2D27A), R(-3.5f, 0, 7, 1, 0xF2D27A), R(-3, 2, 6, 1, 0xF2D27A), R(1, -6, 0.7f, 6, 0x8A5A3C) } },
+    { "tortilla", 4, { C(0, 0, 5, 0xF2D49B), C(-2, -1.5f, 0.8f, 0xC98A4B), C(1.5f, 1.5f, 0.8f, 0xC98A4B), C(2, -2, 0.6f, 0xC98A4B) } },
+    { "oats", 3, { R(-3.5f, -4, 7, 9, 0xE0C080), R(-3.5f, -4, 7, 2, 0x5AD1FF), C(0, 1, 1.5f, 0xC9A35A) } },
+    { "nuts", 3, { C(-2, 0, 2.2f, 0xA0704A), C(2, -1, 2.2f, 0xB8844A), C(0, 2, 2, 0x8A5A3C) } },
+    { "sprinkles", 5, { R(-3, -4, 6, 9, 0xFFFFFF), R(-3, -4, 6, 2, 0xFF8FC7), R(-2, 0, 1, 2, 0xE04F4F), R(0, -1, 1, 2, 0x5AD1FF), R(1.5f, 1, 1, 2, 0xFFD23F) } },
     [FOOD_DISH0 + DISH_OMELETTE] = { "Omelette", 3, { C(0, 0, 5, 0xFFE066), C(-2, -1, 1.5f, 0xFFF6A0), C(2, 1, 1, 0xE0A92B) } },
     [FOOD_DISH0 + DISH_CHEESY_OMELETTE] = { "Cheesy omelette", 4, { C(0, 0, 5, 0xFFE066), C(-2, -1, 1.5f, 0xFFF6A0), R(-3, 0, 3, 2, 0xFFB020), R(1, -2, 3, 2, 0xFFB020) } },
     [FOOD_DISH0 + DISH_MUSHROOM_OMELETTE] = { "Mushroom omelette", 5, { C(0, 0, 5, 0xFFE066), C(-2, -1, 1.5f, 0xFFF6A0), C(-2, 1.5f, 1.3f, 0xC98A4B), C(2, -1, 1.3f, 0xC98A4B), R(1.6f, -0.5f, 0.8f, 1.5f, 0xFFF6E6) } },
@@ -96,9 +132,24 @@ const ck_foodart ck_foods[FOOD_COUNT] = {
     [FOOD_DISH0 + DISH_BANANA_BREAD] = { "Banana bread", 4, { R(-5, -3, 10, 6, 0x8A5A3C), R(-4, -2, 8, 4, 0xC98A4B), C(-1.5f, -2.5f, 1, 0xFFE066), C(1.5f, -2.5f, 1, 0xFFE066) } },
     [FOOD_DISH0 + DISH_CARROT_CAKE] = { "Carrot cake", 5, { R(-5, -2, 10, 6, 0xC98A4B), R(-5, -3, 10, 2, 0xFFF6E6), R(-0.5f, -6, 1, 3, 0xFF8A3D), R(-1.5f, -7, 1, 1.5f, 0x49D17A), R(0.5f, -7, 1, 1.5f, 0x49D17A) } },
     [FOOD_DISH0 + DISH_CHEESE_PLATE] = { "Melted cheese", 3, { C(0, 1, 5.5f, 0xFFFFFF), C(0, 0, 4, 0xFFB020), C(-1, -1, 1.2f, 0xFFE066) } },
+    [FOOD_DISH0 + DISH_CURRY] = { "Chicken curry", 5, { R(-6, 0, 12, 4, 0xFFFFFF), C(0, -1, 4.5f, 0xE0A030), C(-2, -2, 1.3f, 0xE09A5A), C(2, -1, 1.3f, 0xE09A5A), C(0, -3, 0.8f, 0x49D17A) } },
+    [FOOD_DISH0 + DISH_ROAST] = { "Roast chicken", 5, { C(0, 1, 6, 0xFFFFFF), C(0, 0, 4.5f, 0xC9783A), C(-1.5f, -1.5f, 1.8f, 0xE09A5A), R(3.5f, -3, 3, 1.5f, 0xFFF6E6), R(-6.5f, -3, 3, 1.5f, 0xFFF6E6) } },
+    [FOOD_DISH0 + DISH_FISH_SUPPER] = { "Fish supper", 5, { C(0, 1, 6, 0xFFFFFF), R(-4.5f, -2, 7, 4, 0xE0A040), C(3, 0, 1.8f, 0xE0A040), R(-4, 2, 3, 1.5f, 0x9AE06A), C(4, 2.5f, 1, 0xFFE94A) } },
+    [FOOD_DISH0 + DISH_SKEWERS] = { "Shrimp skewers", 4, { R(-6, -0.5f, 12, 1, 0xC98A4B), C(-3, 0, 2, 0xFF8A6A), C(0, 0, 2, 0xFF8A6A), C(3, 0, 2, 0xFF8A6A) } },
+    [FOOD_DISH0 + DISH_TACOS] = { "Tacos", 5, { C(0, 1, 5, 0xF2D49B), R(-4, -2, 8, 3, 0xF2D49B), C(-1.5f, -2, 1.3f, 0x6FCF5A), C(1, -2.5f, 1.2f, 0xE0303F), C(2.5f, -1.5f, 1, 0xFFD23F) } },
+    [FOOD_DISH0 + DISH_PORRIDGE] = { "Porridge", 4, { R(-6, 0, 12, 4, 0x5AD1FF), C(0, -1, 4.5f, 0xF2E0B0), C(-1, -2, 1, 0xC98A4B), C(1.5f, -1, 0.8f, 0xFFB020) } },
+    [FOOD_DISH0 + DISH_CHOC_CAKE] = { "Chocolate cake", 4, { R(-5, -2, 10, 6, 0x6A3A20), R(-5, -3, 10, 2, 0x8A5030), R(-5, 0.5f, 10, 1, 0xFFF6E6), C(0, -4.5f, 1.5f, 0xC0203A) } },
+    [FOOD_DISH0 + DISH_SUNDAE] = { "Sundae", 5, { R(-2.5f, 1, 5, 5, 0xBFE8FF), C(0, -1, 4, 0xFFF0F6), C(-1.5f, -2, 2, 0xFF8FC7), C(1.5f, -3, 1.6f, 0x8A5030), C(0, -5, 1.2f, 0xC0203A) } },
+    [FOOD_DISH0 + DISH_SMOOTHIE] = { "Smoothie", 4, { R(-3, -4, 6, 10, 0xBFE8FF), R(-2.5f, -2, 5, 7.5f, 0xFF8FC7), R(1, -8, 0.8f, 5, 0xFFFFFF), C(-1, -3, 0.8f, 0xFFFFFF) } },
+    [FOOD_DISH0 + DISH_PUMPKIN_PIE] = { "Pumpkin pie", 3, { C(0, 0, 5.5f, 0xC98A4B), C(0, -0.5f, 4, 0xFF8A2A), C(0, -1.5f, 1.2f, 0xFFFFFF) } },
+    [FOOD_DISH0 + DISH_FRUIT_SALAD] = { "Fruit salad", 5, { R(-6, 0, 12, 4, 0xFFFFFF), C(0, -1, 4.5f, 0xFFF0D8), C(-2, -2, 1.3f, 0xE0303F), C(1.5f, -1.5f, 1.3f, 0xFF9A2A), C(0, -3, 1.2f, 0x9A4AD1) } },
+    [FOOD_DISH0 + DISH_SALAD] = { "Garden salad", 4, { R(-6, 0, 12, 4, 0xFFFFFF), C(0, -1, 4.5f, 0x6FCF5A), C(-2, -2, 1.2f, 0x9AE67A), C(2, -1.5f, 1.1f, 0xE0303F) } },
+    [FOOD_DISH0 + DISH_STIR_FRY] = { "Stir-fry", 5, { C(0, 1, 6, 0x3A3F4A), C(0, 0, 4.5f, 0xD8A05A), C(-2, -1, 1.2f, 0x2F8A3C), C(1.5f, 0.5f, 1.2f, 0xE0303F), C(0.5f, -2, 1, 0xFFD23F) } },
+    [FOOD_DISH0 + DISH_COOKIES] = { "Cookies", 4, { C(-2, 1, 3, 0xC98A4B), C(2, -1, 3, 0xD8A05A), C(-2.5f, 0.5f, 0.7f, 0x6A3A20), C(2, -1.5f, 0.7f, 0x6A3A20) } },
 };
-const int ck_cook_ingr[CK_COOK_INGR] = { FOOD_EGG, FOOD_TOMATO, FOOD_CHEESE, FOOD_MUSHROOM, FOOD_CARROT, FOOD_BREAD,
-                                         FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA, FOOD_APPLE, FOOD_BANANA };
+const int ck_cook_ingr[CK_COOK_INGR] = {
+    FOOD_EGG, FOOD_TOMATO, FOOD_CHEESE, FOOD_MUSHROOM, FOOD_CARROT, FOOD_BREAD, FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA, FOOD_APPLE, FOOD_BANANA, FOOD_STRAWBERRY, FOOD_ORANGE, FOOD_LEMON, FOOD_GRAPES, FOOD_CHERRY, FOOD_PEAR, FOOD_PINEAPPLE, FOOD_BLUEBERRY, FOOD_WATERMELON, FOOD_ONION, FOOD_PEPPER, FOOD_BROCCOLI, FOOD_PEAS, FOOD_CORN, FOOD_LETTUCE, FOOD_CUCUMBER, FOOD_PUMPKIN, FOOD_BEANS, FOOD_CHICKEN, FOOD_FISH, FOOD_SHRIMP, FOOD_BACON, FOOD_HAM, FOOD_TOFU, FOOD_CHOCOLATE, FOOD_HONEY, FOOD_YOGURT, FOOD_CREAM, FOOD_BUTTER, FOOD_JAM, FOOD_FLOUR, FOOD_NOODLES, FOOD_TORTILLA, FOOD_OATS, FOOD_NUTS, FOOD_SPRINKLES
+};
 #undef C
 #undef R
 const ck_letter ck_letters[CK_LETTERS] = {
@@ -246,8 +297,8 @@ void ck_house_back(ck_game *G) { ck_sfx(G, SFX_SELECT); G->scene = SC_HOUSE; G->
 #define back_to_house ck_house_back
 
 // The stove: the dish is named by what went in the pan (the first rule that fits wins).
-void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int size) {
-    bool has[FOOD_COUNT] = { 0 };
+void ck_cook_dish(const int *pan, int n, int *dish, uint64_t *extra, char *name, int size) {
+    bool has[FOOD_DISH0] = { 0 };
     for (int i = 0; i < n; i++) has[pan[i]] = true;
     int k;
     if (has[FOOD_SAUSAGE] && has[FOOD_BREAD]) k = has[FOOD_CHEESE] ? DISH_CHEESY_HOTDOG : has[FOOD_TOMATO] ? DISH_KETCHUP_HOTDOG : DISH_HOTDOG;
@@ -260,12 +311,24 @@ void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int 
     else if (has[FOOD_EGG]) k = has[FOOD_CHEESE] ? DISH_CHEESY_OMELETTE : has[FOOD_MUSHROOM] ? DISH_MUSHROOM_OMELETTE : has[FOOD_TOMATO] ? DISH_TOMATO_OMELETTE : has[FOOD_SAUSAGE] ? DISH_BIG_BREAKFAST : has[FOOD_POTATO] ? DISH_POTATO_OMELETTE : DISH_OMELETTE;
     else if (has[FOOD_BREAD]) k = has[FOOD_CHEESE] && has[FOOD_TOMATO] ? DISH_PIZZA_TOASTIE : has[FOOD_CHEESE] ? DISH_CHEESE_TOASTIE : has[FOOD_MUSHROOM] ? DISH_MUSHROOM_TOAST : DISH_TOAST;
     else if (has[FOOD_POTATO] && !has[FOOD_TOMATO] && !has[FOOD_CARROT] && !has[FOOD_MUSHROOM]) k = has[FOOD_CHEESE] ? DISH_CHEESY_CHIPS : has[FOOD_SAUSAGE] ? DISH_SAUSAGE_CHIPS : DISH_CHIPS;
+    else if (has[FOOD_CHICKEN]) k = has[FOOD_ONION] || has[FOOD_PEPPER] || has[FOOD_TOMATO] || has[FOOD_PEAS] ? DISH_CURRY : DISH_ROAST;
+    else if (has[FOOD_FISH] || has[FOOD_SHRIMP]) k = has[FOOD_FISH] ? DISH_FISH_SUPPER : DISH_SKEWERS;
+    else if (has[FOOD_TORTILLA]) k = DISH_TACOS;
+    else if (has[FOOD_OATS]) k = DISH_PORRIDGE;
+    else if (has[FOOD_CHOCOLATE] || has[FOOD_FLOUR]) k = DISH_CHOC_CAKE;
+    else if (has[FOOD_CREAM] || has[FOOD_SPRINKLES]) k = DISH_SUNDAE;
+    else if (has[FOOD_YOGURT]) k = DISH_SMOOTHIE;
+    else if (has[FOOD_PUMPKIN]) k = DISH_PUMPKIN_PIE;
+    else if (has[FOOD_STRAWBERRY] || has[FOOD_ORANGE] || has[FOOD_LEMON] || has[FOOD_GRAPES] || has[FOOD_CHERRY] || has[FOOD_PEAR] || has[FOOD_PINEAPPLE] || has[FOOD_BLUEBERRY] || has[FOOD_WATERMELON]) k = DISH_FRUIT_SALAD;
+    else if (has[FOOD_LETTUCE] || has[FOOD_CUCUMBER]) k = DISH_SALAD;
+    else if (has[FOOD_ONION] || has[FOOD_PEPPER] || has[FOOD_BROCCOLI] || has[FOOD_PEAS] || has[FOOD_CORN] || has[FOOD_BEANS] || has[FOOD_BACON] || has[FOOD_HAM] || has[FOOD_TOFU] || has[FOOD_NOODLES]) k = DISH_STIR_FRY;
+    else if (has[FOOD_HONEY] || has[FOOD_JAM] || has[FOOD_BUTTER] || has[FOOD_NUTS]) k = DISH_COOKIES;
     else k = has[FOOD_POTATO] ? DISH_VEGGIE_STEW : has[FOOD_SAUSAGE] ? DISH_SAUSAGE_STEW : has[FOOD_TOMATO] ? DISH_TOMATO_SOUP : has[FOOD_MUSHROOM] ? DISH_MUSHROOM_SOUP
          : has[FOOD_CARROT] ? DISH_CARROT_SOUP : n == 1 ? DISH_CHEESE_PLATE : DISH_CHEESE_SOUP;
     *dish = FOOD_DISH0 + k + 1;
     // which ingredients the dish's own name already covers
-#define B(f) (1u << (f))
-    static const uint32_t core[CK_DISHES] = {
+#define B(f) (1ull << (f))
+    static const uint64_t core[CK_DISHES] = {
         [DISH_OMELETTE] = B(FOOD_EGG), [DISH_CHEESY_OMELETTE] = B(FOOD_EGG) | B(FOOD_CHEESE), [DISH_MUSHROOM_OMELETTE] = B(FOOD_EGG) | B(FOOD_MUSHROOM),
         [DISH_TOMATO_OMELETTE] = B(FOOD_EGG) | B(FOOD_TOMATO), [DISH_POTATO_OMELETTE] = B(FOOD_EGG) | B(FOOD_POTATO), [DISH_BIG_BREAKFAST] = B(FOOD_EGG) | B(FOOD_SAUSAGE),
         [DISH_TOAST] = B(FOOD_BREAD), [DISH_CHEESE_TOASTIE] = B(FOOD_BREAD) | B(FOOD_CHEESE), [DISH_PIZZA_TOASTIE] = B(FOOD_BREAD) | B(FOOD_CHEESE) | B(FOOD_TOMATO),
@@ -280,11 +343,25 @@ void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int 
         [DISH_APPLE_PIE] = B(FOOD_APPLE), [DISH_FRUIT_PIE] = B(FOOD_APPLE) | B(FOOD_BANANA), [DISH_PANCAKES] = B(FOOD_BANANA) | B(FOOD_EGG),
         [DISH_CHIPS] = B(FOOD_POTATO), [DISH_CHEESY_CHIPS] = B(FOOD_POTATO) | B(FOOD_CHEESE), [DISH_SAUSAGE_CHIPS] = B(FOOD_POTATO) | B(FOOD_SAUSAGE),
         [DISH_BANANA_BREAD] = B(FOOD_BANANA) | B(FOOD_BREAD), [DISH_CARROT_CAKE] = B(FOOD_CARROT) | B(FOOD_EGG), [DISH_CHEESE_PLATE] = B(FOOD_CHEESE),
+        [DISH_CURRY] = B(FOOD_CHICKEN),
+        [DISH_ROAST] = B(FOOD_CHICKEN),
+        [DISH_FISH_SUPPER] = B(FOOD_FISH),
+        [DISH_SKEWERS] = B(FOOD_SHRIMP),
+        [DISH_TACOS] = B(FOOD_TORTILLA),
+        [DISH_PORRIDGE] = B(FOOD_OATS),
+        [DISH_CHOC_CAKE] = B(FOOD_CHOCOLATE) | B(FOOD_FLOUR),
+        [DISH_SUNDAE] = B(FOOD_CREAM),
+        [DISH_SMOOTHIE] = B(FOOD_YOGURT),
+        [DISH_PUMPKIN_PIE] = B(FOOD_PUMPKIN),
+        [DISH_FRUIT_SALAD] = 0,
+        [DISH_SALAD] = B(FOOD_LETTUCE),
+        [DISH_STIR_FRY] = 0,
+        [DISH_COOKIES] = 0,
     };
 #undef B
     // the rest of the pan becomes words: the first extra a word in front, the next two "with" and "and"
-    static const char *adj[CK_COOK_INGR] = { "eggy", "saucy", "cheesy", "foresty", "crunchy", "crusty", "spuddy", "fluffy", "meaty", "noodly", "appley", "tropical" };
-    static const char *noun[CK_COOK_INGR] = { "egg", "tomato", "cheese", "mushrooms", "carrots", "toast", "mash", "rice", "sausage", "noodles", "apple", "banana" };
+    static const char *const adj[CK_COOK_INGR] = { "eggy", "saucy", "cheesy", "foresty", "crunchy", "crusty", "spuddy", "fluffy", "meaty", "noodly", "appley", "tropical", "berry", "zesty", "lemony", "grapey", "cherry", "pear", "pineapple", "blue", "melony", "oniony", "peppery", "green", "pea", "corny", "leafy", "cool", "pumpkin", "beany", "chicken", "fishy", "shrimpy", "bacon", "hammy", "tofu", "chocolatey", "honey", "creamy", "whipped", "buttery", "jammy", "floury", "slurpy", "wrapped", "oaty", "nutty", "sparkly" };
+    static const char *const noun[CK_COOK_INGR] = { "egg", "tomato", "cheese", "mushrooms", "carrots", "toast", "mash", "rice", "sausage", "pasta", "apple", "banana", "strawberries", "orange", "lemon", "grapes", "cherries", "pear", "pineapple", "blueberries", "melon", "onions", "peppers", "broccoli", "peas", "corn", "lettuce", "cucumber", "pumpkin", "beans", "chicken", "fish", "shrimp", "bacon", "ham", "tofu", "chocolate", "honey", "yogurt", "cream", "butter", "jam", "dumplings", "noodles", "tortilla", "oats", "nuts", "sprinkles" };
     // a doubled main ingredient makes it a "double" dish; a doubled extra makes that word "extra"
     int ex[CK_COOK_INGR], nex = 0, most = 0, mostI = -1;
     *extra = 0;
@@ -292,7 +369,7 @@ void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int 
         int f = ck_cook_ingr[i], cnt = 0;
         for (int j = 0; j < n; j++) cnt += pan[j] == f;
         if (cnt > most) { most = cnt; mostI = i; }
-        if (cnt && !(core[k] >> f & 1)) { ex[nex++] = i; *extra |= 1 << i; }
+        if (cnt && !(core[k] >> f & 1)) { ex[nex++] = i; *extra |= 1ull << i; }
     }
     bool coreMost = most >= 2 && (core[k] >> ck_cook_ingr[mostI] & 1);
     for (int e = 1; e < nex; e++)   // the doubled extra goes first
@@ -317,9 +394,9 @@ static void cook_update(ck_game *G) {
     for (int i = 0; i < H->np; i++) {
         ck_hhero *p = &H->ps[i];
         int s = p->slot, *c = &H->cpick[i];
-        if (HIT(G, s, CK_LEFT) && *c % CK_COOK_ROW > 0) { (*c)--; ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, s, CK_RIGHT) && *c % CK_COOK_ROW < CK_COOK_ROW - 1) { (*c)++; ck_sfx(G, SFX_SELECT); }
-        if ((HIT(G, s, CK_UP) || HIT(G, s, CK_DOWN)) && !H->dish) { *c = (*c + CK_COOK_ROW) % CK_COOK_INGR; ck_sfx(G, SFX_SELECT); }   // the other shelf
+        // each player scrolls their own row of the shelf: left and right one at a time, up and down six
+        int d = (HIT(G, s, CK_RIGHT) ? 1 : 0) - (HIT(G, s, CK_LEFT) ? 1 : 0) + ((HIT(G, s, CK_DOWN) ? 1 : 0) - (HIT(G, s, CK_UP) ? 1 : 0)) * CK_COOK_ROW;
+        if (d && !H->dish) { *c = ((*c + d) % CK_COOK_INGR + CK_COOK_INGR) % CK_COOK_INGR; ck_sfx(G, SFX_SELECT); }
         if (H->dish) {   // done: A (or START) takes the dish, and everyone playing gets one
             if (HIT(G, s, CK_A) || HIT(G, s, CK_START)) {
                 for (int k = 0; k < H->np; k++) { H->ps[k].hold = H->dish; H->ps[k].garnish = H->dishExtra; }

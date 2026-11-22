@@ -1340,29 +1340,15 @@ static void food_art(int kind, float x, float y, float sc) {
         else rect(x + s->x * sc, y + s->y * sc, s->w * sc, s->h * sc, s->col, 1);
     }
 }
-// A cooked dish's extras on top, a little piece of each (bits of ck_cook_ingr, the same order).
+// A cooked dish's extras on top: a little one of each ingredient (bits of ck_cook_ingr).
 // web/game.js garnishArt draws the same.
-static void garnish_art(int mask, float x, float y, float sc) {
+static void garnish_art(uint64_t mask, float x, float y, float sc) {
     int n = 0;
     for (int i = 0; i < CK_COOK_INGR; i++) n += mask >> i & 1;
     for (int i = 0, j = 0; i < CK_COOK_INGR; i++) {
         if (!(mask >> i & 1)) continue;
-        float px = x + (j - (n - 1) / 2.0f) * 4.5f * sc, py = y - 3.5f * sc + (j % 2) * 1.5f * sc;
+        food_art(ck_cook_ingr[i], x + (j - (n - 1) / 2.0f) * 4.5f * sc, y - 3.5f * sc + (j % 2) * 1.5f * sc, 0.4f * sc);
         j++;
-        switch (ck_cook_ingr[i]) {
-        case FOOD_EGG: shape(SPR_DOT, px, py, 1.8f * sc, 0xFFFFFF, 1); shape(SPR_DOT, px, py, 0.9f * sc, 0xFFC21F, 1); break;
-        case FOOD_TOMATO: shape(SPR_DOT, px, py, 1.5f * sc, 0xE0402F, 1); shape(SPR_DOT, px - 0.4f * sc, py - 0.4f * sc, 0.5f * sc, 0xFF9A8A, 1); break;
-        case FOOD_CHEESE: rect(px - 1.2f * sc, py - 1.2f * sc, 2.4f * sc, 2.4f * sc, 0xFFD23F, 1); rect(px - 0.4f * sc, py - 0.4f * sc, 0.7f * sc, 0.7f * sc, 0xE0A92B, 1); break;
-        case FOOD_MUSHROOM: rect(px - 0.4f * sc, py, 0.8f * sc, 1.4f * sc, 0xF2E6D0, 1); shape(SPR_DOT, px, py, 1.4f * sc, 0xB07A4C, 1); break;
-        case FOOD_CARROT: rect(px - 1.6f * sc, py - 0.6f * sc, 3.2f * sc, 1.2f * sc, 0xFF8A3D, 1); rect(px + 1.4f * sc, py - 0.9f * sc, 0.8f * sc, 0.6f * sc, 0x49D17A, 1); break;
-        case FOOD_BREAD: rect(px - 1.3f * sc, py - 1.1f * sc, 2.6f * sc, 2.2f * sc, 0xC98A4B, 1); rect(px - 0.9f * sc, py - 0.7f * sc, 1.8f * sc, 1.4f * sc, 0xF2D49B, 1); break;
-        case FOOD_POTATO: shape(SPR_DOT, px, py, 1.6f * sc, 0xF2E6B0, 1); break;
-        case FOOD_RICE: for (int k = 0; k < 3; k++) shape(SPR_DOT, px - sc + k * sc, py + (k % 2) * 0.6f * sc, 0.6f * sc, 0xFFFFFF, 1); break;
-        case FOOD_SAUSAGE: rect(px - 1.5f * sc, py - 0.7f * sc, 3 * sc, 1.4f * sc, 0x9A4A2A, 1); shape(SPR_DOT, px + 1.5f * sc, py, 0.7f * sc, 0x9A4A2A, 1); break;
-        case FOOD_PASTA: for (int k = 0; k < 3; k++) rect(px - 1.5f * sc + k * sc, py - 0.6f * sc + (k % 2) * 0.6f * sc, sc, 0.6f * sc, 0xF2D27A, 1); break;
-        case FOOD_APPLE: shape(SPR_DOT, px, py, 1.4f * sc, 0xE04F4F, 1); rect(px, py - 2 * sc, 0.8f * sc, 0.8f * sc, 0x49D17A, 1); break;
-        case FOOD_BANANA: rect(px - 1.5f * sc, py - 0.5f * sc, 3 * sc, sc, 0xFFE066, 1); rect(px - 1.5f * sc, py + 0.2f * sc, 0.6f * sc, 0.6f * sc, 0x6F4630, 1); break;
-        }
     }
 }
 static void house_hero(const ck_game *G, int slot, float x, float y, int pose, float t, int face) {
@@ -1511,13 +1497,21 @@ static void draw_house(const ck_game *G) {
     }
     if (Hs->mode == HM_COOK) {   // the stove: a shelf of ingredients, the pan, the heat bar
         rect(0, 0, W, H, 0x0F0A19, 0.55f);
-        rect(30, 22, 260, 66, 0x8A5A3C, 1);   // two shelves of six
-        rect(34, 26, 252, 27, 0xC98A4B, 1);
-        rect(34, 57, 252, 27, 0xC98A4B, 1);
-        for (int k = 0; k < CK_COOK_INGR; k++) {
-            float fx = 56 + (k % CK_COOK_ROW) * 42, fy = 39 + (k / CK_COOK_ROW) * 31;
-            for (int j = 0; j < Hs->np; j++) if (Hs->cpick[j] == k && !Hs->dish) shape(SPR_RING, fx, fy, 13 + j * 3, Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F, 1);
-            food_art(ck_cook_ingr[k], fx, fy, 2.0f);
+        // a shelf row for each player, six on show, scrolled to keep their pick in view
+        rect(30, 22, 260, 4 + 31 * Hs->np, 0x8A5A3C, 1);
+        for (int j = 0; j < Hs->np; j++) {
+            int c = Hs->cpick[j], first = c - 2 < 0 ? 0 : c - 2 > CK_COOK_INGR - CK_COOK_ROW ? CK_COOK_INGR - CK_COOK_ROW : c - 2;
+            float fy = 39 + j * 31;
+            uint32_t col = Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F;
+            rect(34, 26 + j * 31, 252, 27, 0xC98A4B, 1);
+            for (int k = 0; k < CK_COOK_ROW; k++) {
+                float fx = 56 + k * 42;
+                if (first + k == c && !Hs->dish) shape(SPR_RING, fx, fy, 13, col, 1);
+                food_art(ck_cook_ingr[first + k], fx, fy, 2.0f);
+            }
+            if (first > 0) txt(F_SMALL, ST_CREAM, 26, fy + 3, ALIGN_CENTER, "<");
+            if (first < CK_COOK_INGR - CK_COOK_ROW) txt(F_SMALL, ST_CREAM, 294, fy + 3, ALIGN_CENTER, ">");
+            if (!Hs->dish) txt(F_SMALL, Hs->ps[j].slot ? ST_BLUE : ST_YELLOW, j ? 310 : 10, 222, j ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ck_foods[ck_cook_ingr[c]].name);
         }
         rect(50, 150, 220, 80, 0x3A3F4A, 1);   // the stove top
         rect(56, 156, 208, 6, 0x5A5E6A, 1);
@@ -1534,8 +1528,7 @@ static void draw_house(const ck_game *G) {
         rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
         if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, Hs->np > 1 ? "A take one each" : "A take it"); }
         else {
-            txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[Hs->last]]].name);
-            hint(14, Hs->npan ? "Stick choose   A add   B stir   START leave" : "Stick choose   A add to the pan   START leave");
+            hint(14, Hs->npan ? "Stick scroll   A add   B stir   START leave" : "Stick scroll   A add to the pan   START leave");
         }
     }
     if (Hs->mode == HM_LETTER) {   // a big letter to read
@@ -1980,7 +1973,13 @@ static float PY(float y) { return (y - pin_cam) * CK_PIN_ZOOM; }
 #define PZ(v) ((v) * CK_PIN_ZOOM)
 static void pin_line(float x0, float y0, float x1, float y1, float w, uint32_t hex) { line(PX(x0), PY(y0), PX(x1), PY(y1), PZ(w), hex, 1); }
 static void pin_dot(float x, float y, float r, uint32_t hex, float a) { shape(SPR_DOT, PX(x), PY(y), PZ(r), hex, a); }
-static void pin_rect(float x, float y, float w, float h, uint32_t hex) { rect(PX(x), PY(y), PZ(w), PZ(h), hex, 1); }
+// thin seams land on whole pixels, or a fractional scroll makes them come and go as the view moves
+static void pin_rect(float x, float y, float w, float h, uint32_t hex) {
+    float sx = PX(x), sy = PY(y), sw = PZ(w), sh = PZ(h);
+    if (sh < 2) { sy = floorf(sy); sh = 2; }   // two lines tall, so a 480i field never drops it
+    if (sw < 2) { sx = floorf(sx); sw = 1; }
+    rect(sx, sy, sw, sh, hex, 1);
+}
 static void pin_hazard(float x0, float y0, float x1, float y1, float w, int n) { hazard(PX(x0), PY(y0), PX(x1), PY(y1), PZ(w), n); }
 static const char *pin_msg(int m) {
     return m == PINMSG_BONUS ? "BONUS!" : m == PINMSG_LOCK ? "BALL LOCKED" : m == PINMSG_MULTI ? "MULTIBALL!" : m == PINMSG_DOUBLE ? "DOUBLE SCORE!" : "";
@@ -1993,8 +1992,8 @@ static void draw_pinball(const ck_game *G) {
     rect(0, 0, W, H, 0x2B2240, 1);
     for (int k = 0; k < 24; k++) shape(SPR_DOT, (k * 53) % 320, (k * 37) % 240, 1, 0x5A4F78, 1);
     pin_rect(10, 10, 220, CK_PIN_H - 10, 0x34404F);   // the steel plate, its seams and rivets
-    for (int y = 50; y < CK_PIN_H; y += 50) pin_rect(10, y, 220, 1, 0x283240);
-    for (int x = 66; x < 212; x += 56) pin_rect(x, 10, 1, CK_PIN_H - 10, 0x283240);
+    for (int y = 50; y < CK_PIN_H; y += 50) pin_rect(10, y, 220, 1, 0x2E3A48);
+    for (int x = 66; x < 212; x += 56) pin_rect(x, 10, 1, CK_PIN_H - 10, 0x2E3A48);
     for (int y = 50; y < CK_PIN_H; y += 50) for (int x = 66; x < 212; x += 56) pin_dot(x, y, 1.5f, 0x6A7888, 1);
     pin_rect(10, 10, 24, 240, 0x2C3644);   // the left orbit's lane
     // the robot face painted on the table

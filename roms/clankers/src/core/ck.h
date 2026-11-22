@@ -631,7 +631,7 @@ typedef struct {
     int place;                 // cars: where you finished (1 first), 0 still racing
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
-    int garnish;               // a cooked dish's extras on top (bits of ck_cook_ingr)
+    uint64_t garnish;          // a cooked dish's extras on top (bits of ck_cook_ingr)
     uint64_t hit;              // cars: the obstacles you have bumped, one bit each
     int size;                  // paint: the brush size, 0 (one cell) to 2 (three cells across)
     bool stick;                // paint: holding a sticker instead of the brush
@@ -648,7 +648,8 @@ enum { HM_WALK, HM_SLOTS, HM_SLEEP, HM_FRIDGE, HM_LETTER, HM_COOK };
 // Each is drawn from a few circles and boxes, the same in both frontends.
 enum { FOOD_APPLE, FOOD_BANANA, FOOD_CHEESE, FOOD_CARROT, FOOD_CAKE, FOOD_ICECREAM, FOOD_MILK, FOOD_PIZZA, FOOD_COOKIE,   // the fridge
        FOOD_EGG, FOOD_TOMATO, FOOD_MUSHROOM, FOOD_BREAD, FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA,                 // stove ingredients
-       FOOD_DISH0, FOOD_COUNT = FOOD_DISH0 + 38 };   // then every dish the stove cooks, in DISH_* order
+       FOOD_STRAWBERRY, FOOD_ORANGE, FOOD_LEMON, FOOD_GRAPES, FOOD_CHERRY, FOOD_PEAR, FOOD_PINEAPPLE, FOOD_BLUEBERRY, FOOD_WATERMELON, FOOD_ONION, FOOD_PEPPER, FOOD_BROCCOLI, FOOD_PEAS, FOOD_CORN, FOOD_LETTUCE, FOOD_CUCUMBER, FOOD_PUMPKIN, FOOD_BEANS, FOOD_CHICKEN, FOOD_FISH, FOOD_SHRIMP, FOOD_BACON, FOOD_HAM, FOOD_TOFU, FOOD_CHOCOLATE, FOOD_HONEY, FOOD_YOGURT, FOOD_CREAM, FOOD_BUTTER, FOOD_JAM, FOOD_FLOUR, FOOD_NOODLES, FOOD_TORTILLA, FOOD_OATS, FOOD_NUTS, FOOD_SPRINKLES,
+       FOOD_DISH0 };   // then every dish the stove cooks, in DISH_* order
 // what the stove cooks: food FOOD_DISH0 + DISH_*, each its own name and look
 enum {
     DISH_OMELETTE, DISH_CHEESY_OMELETTE, DISH_MUSHROOM_OMELETTE, DISH_TOMATO_OMELETTE, DISH_POTATO_OMELETTE,
@@ -658,13 +659,16 @@ enum {
     DISH_MAC_CHEESE, DISH_MUSHROOM_PASTA, DISH_BUTTER_PASTA, DISH_FRIED_RICE, DISH_SAUSAGE_RICE,
     DISH_VEGGIE_RICE, DISH_RICE_PUDDING, DISH_RICE_BOWL, DISH_APPLE_PIE, DISH_FRUIT_PIE, DISH_PANCAKES,
     DISH_CHIPS, DISH_CHEESY_CHIPS, DISH_SAUSAGE_CHIPS, DISH_BANANA_BREAD, DISH_CARROT_CAKE,
-    DISH_CHEESE_PLATE, CK_DISHES
+    DISH_CHEESE_PLATE,
+    DISH_CURRY, DISH_ROAST, DISH_FISH_SUPPER, DISH_SKEWERS, DISH_TACOS, DISH_PORRIDGE, DISH_CHOC_CAKE, DISH_SUNDAE, DISH_SMOOTHIE, DISH_PUMPKIN_PIE, DISH_FRUIT_SALAD, DISH_SALAD, DISH_STIR_FRY, DISH_COOKIES,
+    CK_DISHES
 };
+#define FOOD_COUNT (FOOD_DISH0 + CK_DISHES)
 #define CK_FRIDGE_FOODS 9
-// The stove: twelve ingredients on a shelf in two rows of six (CK_COOK_INGR from ck_cook_ingr), up
-// to four in the pan, B stirs it till the heat bar fills, and out comes a dish named by what went
-// in. Everyone playing gets one.
-#define CK_COOK_INGR 12
+// The stove: 48 ingredients (ck_cook_ingr) on a shelf with a row for each player, six on show at a
+// time; the stick scrolls along your row (up and down jump six). Up to four in the pan, B stirs it
+// till the heat bar fills, and out comes a dish named by what went in. Everyone playing gets one.
+#define CK_COOK_INGR 48
 #define CK_COOK_ROW 6
 #define CK_COOK_PAN 4
 extern const int ck_cook_ingr[CK_COOK_INGR];
@@ -672,7 +676,7 @@ extern const int ck_cook_ingr[CK_COOK_INGR];
 // The stove's dish: its kind (FOOD_* + 1) from the main ingredients, then a name built from
 // everything in the pan ("Double meaty cheesy omelette with carrots"), and *extra: a bit per
 // ck_cook_ingr that is in the pan but not in the dish's name already, drawn on top as garnish.
-void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int size);
+void ck_cook_dish(const int *pan, int n, int *dish, uint64_t *extra, char *name, int size);
 typedef struct { const char *name; int n; ck_fshape s[6]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];
 typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
@@ -717,7 +721,7 @@ typedef struct {
     float heat;                // HM_COOK: 0..100, the dish is done at 100
     int dish;                  // HM_COOK: the cooked dish, FOOD_* + 1 (0: still cooking)
     char dishName[40];
-    int dishExtra;
+    uint64_t dishExtra;
     ck_thrown thrown[CK_THROWN];
     int nthrown;
     int chestT[CK_AQUA_CHESTS];   // aquarium: frames a chest stays open

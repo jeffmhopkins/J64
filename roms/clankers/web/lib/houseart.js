@@ -349,6 +349,43 @@ const HOUSEART = (() => {
     ['rice', [[1, -4, -4, 8, 9, 0xE8D9B8], [1, -4, -4, 8, 2, 0xC9B27A], [0, 0, 1, 1.5, 0, 0xFFFFFF]]],
     ['sausage', [[1, -5, -1.5, 10, 3.5, 0xC0504A], [0, -5, 0.25, 1.75, 0, 0xC0504A], [0, 5, 0.25, 1.75, 0, 0xC0504A], [1, -3, -1, 6, 1, 0xE07A6A]]],
     ['pasta', [[1, -3, -6, 1, 12, 0xFFE2A8], [1, -1, -6, 1, 12, 0xFFE2A8], [1, 1, -6, 1, 12, 0xFFE2A8], [1, 3, -6, 1, 12, 0xFFE2A8], [1, -4, -1, 9, 2, 0xE04F4F]]],
+    // the stove's newer ingredients (FOOD_STRAWBERRY on)
+    ['strawberry', [[0, 0, 1, 4, 0, 0xE0303F], [1, -3, -4, 6, 2, 0x49D17A], [0, -1.5, 0, 0.6, 0, 0xFFE066], [0, 1.5, 2, 0.6, 0, 0xFFE066]]],
+    ['orange', [[0, 0, 0, 4.5, 0, 0xFF9A2A], [0, -1.5, -1.5, 1.2, 0, 0xFFC27A], [1, -0.5, -6, 1, 2, 0x6F4630]]],
+    ['lemon', [[0, 0, 0, 4, 0, 0xFFE94A], [0, -4, 0, 1.5, 0, 0xFFE94A], [0, 4, 0, 1.5, 0, 0xFFE94A], [0, -1, -1.5, 1, 0, 0xFFF6A0]]],
+    ['grapes', [[0, -2, -2, 2, 0, 0x9A4AD1], [0, 2, -2, 2, 0, 0x9A4AD1], [0, 0, 1, 2, 0, 0x9A4AD1], [0, 0, -4.5, 1.6, 0, 0xB06AE6], [1, -0.5, -7, 1, 2.5, 0x6F4630]]],
+    ['cherry', [[0, -2.5, 2, 2.5, 0, 0xC0203A], [0, 2.5, 2, 2.5, 0, 0xC0203A], [1, -1.5, -5, 1, 5, 0x49A04A], [1, 1, -5, 1, 5, 0x49A04A]]],
+    ['pear', [[0, 0, 2, 4, 0, 0xB6D84A], [0, 0, -2, 2.5, 0, 0xB6D84A], [1, -0.5, -6, 1, 2, 0x6F4630]]],
+    ['pineapple', [[1, -3.5, -2, 7, 8, 0xE8B43A], [1, -3.5, 0, 7, 1, 0xA0782A], [1, -3.5, 3, 7, 1, 0xA0782A], [1, -2.5, -6, 1.5, 4, 0x49D17A], [1, 1, -6, 1.5, 4, 0x49D17A]]],
+    ['blueberry', [[0, -2.5, 1, 2.2, 0, 0x3A5AD1], [0, 2.5, 1, 2.2, 0, 0x3A5AD1], [0, 0, -2.5, 2.2, 0, 0x4A6AE6], [0, 0, -2.5, 0.6, 0, 0x1B2A6A]]],
+    ['watermelon', [[0, 0, 0, 5, 0, 0x3FA04A], [0, 0, 0, 4, 0, 0xFF5A6A], [0, -1.5, 0, 0.5, 0, 0x1B1426], [0, 1.5, 1, 0.5, 0, 0x1B1426]]],
+    ['onion', [[0, 0, 1, 4, 0, 0xE0B8D0], [0, 0, 1, 2.5, 0, 0xF2D8E6], [1, -0.5, -5, 1, 2.5, 0x8A6A3C]]],
+    ['pepper', [[1, -3.5, -3, 7, 8, 0xE0303F], [0, 0, -3, 3.5, 0, 0xE0303F], [1, -0.5, -6, 1.5, 2.5, 0x49A04A]]],
+    ['broccoli', [[1, -1, 0, 2, 5, 0x8FD06A], [0, -2.5, -1.5, 2.2, 0, 0x2F8A3C], [0, 2.5, -1.5, 2.2, 0, 0x2F8A3C], [0, 0, -3.5, 2.2, 0, 0x3FA04A]]],
+    ['peas', [[1, -5, -1.5, 10, 3.5, 0x5FB04A], [0, -2.5, 0, 1.3, 0, 0x9AE06A], [0, 0, 0, 1.3, 0, 0x9AE06A], [0, 2.5, 0, 1.3, 0, 0x9AE06A]]],
+    ['corn', [[1, -2, -5, 4, 10, 0xFFD23F], [1, -1, -5, 0.6, 10, 0xE0A92B], [1, 0.6, -5, 0.6, 10, 0xE0A92B], [1, -3.5, -1, 1.5, 6, 0x6FBF4A], [1, 2, -1, 1.5, 6, 0x6FBF4A]]],
+    ['lettuce', [[0, 0, 0, 4.5, 0, 0x6FCF5A], [0, -1.5, -1, 2.5, 0, 0x9AE67A], [0, 1.5, 1.5, 1.5, 0, 0x4FAF4A]]],
+    ['cucumber', [[1, -5, -1.5, 10, 3.5, 0x3F8A3C], [0, -5, 0.25, 1.75, 0, 0x3F8A3C], [0, 5, 0.25, 1.75, 0, 0x3F8A3C], [1, -3, -1, 6, 0.8, 0x6FBF6A]]],
+    ['pumpkin', [[0, 0, 1, 4.5, 0, 0xFF8A2A], [1, -0.5, -3, 1, 8, 0xE0701A], [1, -0.5, -5, 1.5, 2.5, 0x6F4630]]],
+    ['beans', [[0, -2, 0, 1.8, 0, 0xB8402A], [0, 1, -1.5, 1.8, 0, 0xB8402A], [0, 1.5, 1.5, 1.8, 0, 0xB8402A], [0, -0.5, 2.5, 1.5, 0, 0xA0301A]]],
+    ['chicken', [[0, 1, 0, 3.5, 0, 0xC9783A], [0, 1, -0.5, 2.5, 0, 0xE09A5A], [1, -5, -0.5, 3.5, 1.5, 0xFFF6E6], [0, -5, -0.8, 1, 0, 0xFFF6E6], [0, -5, 0.8, 1, 0, 0xFFF6E6]]],
+    ['fish', [[0, 0, 0, 3.5, 0, 0x8FB8D8], [0, -4, 0, 2.2, 0, 0x6F98B8], [0, 2, -1, 0.7, 0, 0x1B1426]]],
+    ['shrimp', [[0, 1, 0, 3, 0, 0xFF8A6A], [0, -1.5, 2, 2, 0, 0xFF8A6A], [0, -3, 3, 1.2, 0, 0xFFAA8A], [0, 2, -1, 0.6, 0, 0x1B1426]]],
+    ['bacon', [[1, -5, -2.5, 10, 2, 0xD0505A], [1, -5, -0.5, 10, 1, 0xFFD8D0], [1, -5, 0.5, 10, 2, 0xD0505A]]],
+    ['ham', [[0, 0, 0, 4.5, 0, 0xF09AA8], [0, 0, 0, 3, 0, 0xFFB8C0], [0, -1, -1, 0.8, 0, 0xFFFFFF]]],
+    ['tofu', [[1, -4, -3, 8, 6, 0xF8F0DA], [1, -4, -3, 8, 1.2, 0xE0D6B8], [1, -1, -0.5, 2, 2, 0xE8E0C8]]],
+    ['chocolate', [[1, -4.5, -3.5, 9, 7, 0x6A3A20], [1, -4, -3, 4, 3, 0x8A5030], [1, 0.5, -3, 4, 3, 0x8A5030], [1, -4, 0.5, 4, 3, 0x8A5030]]],
+    ['honey', [[1, -3.5, -3, 7, 8, 0xFFB020], [1, -3.5, -5, 7, 2, 0xC98A4B], [1, -2, -1, 4, 2, 0xFFF6A0]]],
+    ['yogurt', [[1, -3.5, -3, 7, 7, 0xFFFFFF], [1, -3.5, -4, 7, 1.5, 0xC28BFF], [0, 0, 0.5, 1.5, 0, 0xFF8FC7]]],
+    ['cream', [[0, 0, 2, 4, 0, 0xFFFFFF], [0, 0, -1, 3, 0, 0xFFF6F0], [0, 0, -3.5, 1.8, 0, 0xFFFFFF], [0, 0.5, -5, 0.8, 0, 0xFFFFFF]]],
+    ['butter', [[1, -5, -2, 10, 5, 0xFFE88A], [1, -5, -2, 10, 1.2, 0xFFF6C0], [1, -5, 2, 10, 1, 0xD8C060]]],
+    ['jam', [[1, -3.5, -3, 7, 8, 0xC0203A], [1, -4, -5, 8, 2.5, 0xFFFFFF], [1, -2, 0, 4, 2.5, 0xFFF6E6]]],
+    ['flour', [[1, -4, -4, 8, 9, 0xF2EAD8], [1, -4, -4, 8, 1.5, 0xC9B27A], [1, -2, 0, 4, 2.5, 0x5AD1FF]]],
+    ['noodles', [[0, 0, 1, 4.5, 0, 0xFFFFFF], [1, -3, -2, 6, 1, 0xF2D27A], [1, -3.5, 0, 7, 1, 0xF2D27A], [1, -3, 2, 6, 1, 0xF2D27A], [1, 1, -6, 0.7, 6, 0x8A5A3C]]],
+    ['tortilla', [[0, 0, 0, 5, 0, 0xF2D49B], [0, -2, -1.5, 0.8, 0, 0xC98A4B], [0, 1.5, 1.5, 0.8, 0, 0xC98A4B], [0, 2, -2, 0.6, 0, 0xC98A4B]]],
+    ['oats', [[1, -3.5, -4, 7, 9, 0xE0C080], [1, -3.5, -4, 7, 2, 0x5AD1FF], [0, 0, 1, 1.5, 0, 0xC9A35A]]],
+    ['nuts', [[0, -2, 0, 2.2, 0, 0xA0704A], [0, 2, -1, 2.2, 0, 0xB8844A], [0, 0, 2, 2, 0, 0x8A5A3C]]],
+    ['sprinkles', [[1, -3, -4, 6, 9, 0xFFFFFF], [1, -3, -4, 6, 2, 0xFF8FC7], [1, -2, 0, 1, 2, 0xE04F4F], [1, 0, -1, 1, 2, 0x5AD1FF], [1, 1.5, 1, 1, 2, 0xFFD23F]]],
     ['Omelette', [[0, 0, 0, 5, 0, 0xFFE066], [0, -2, -1, 1.5, 0, 0xFFF6A0], [0, 2, 1, 1, 0, 0xE0A92B]]],
     ['Cheesy omelette', [[0, 0, 0, 5, 0, 0xFFE066], [0, -2, -1, 1.5, 0, 0xFFF6A0], [1, -3, 0, 3, 2, 0xFFB020], [1, 1, -2, 3, 2, 0xFFB020]]],
     ['Mushroom omelette', [[0, 0, 0, 5, 0, 0xFFE066], [0, -2, -1, 1.5, 0, 0xFFF6A0], [0, -2, 1.5, 1.3, 0, 0xC98A4B], [0, 2, -1, 1.3, 0, 0xC98A4B], [1, 1.6, -0.5, 0.8, 1.5, 0xFFF6E6]]],
@@ -387,6 +424,20 @@ const HOUSEART = (() => {
     ['Banana bread', [[1, -5, -3, 10, 6, 0x8A5A3C], [1, -4, -2, 8, 4, 0xC98A4B], [0, -1.5, -2.5, 1, 0, 0xFFE066], [0, 1.5, -2.5, 1, 0, 0xFFE066]]],
     ['Carrot cake', [[1, -5, -2, 10, 6, 0xC98A4B], [1, -5, -3, 10, 2, 0xFFF6E6], [1, -0.5, -6, 1, 3, 0xFF8A3D], [1, -1.5, -7, 1, 1.5, 0x49D17A], [1, 0.5, -7, 1, 1.5, 0x49D17A]]],
     ['Melted cheese', [[0, 0, 1, 5.5, 0, 0xFFFFFF], [0, 0, 0, 4, 0, 0xFFB020], [0, -1, -1, 1.2, 0, 0xFFE066]]],
+    ['Chicken curry', [[1, -6, 0, 12, 4, 0xFFFFFF], [0, 0, -1, 4.5, 0, 0xE0A030], [0, -2, -2, 1.3, 0, 0xE09A5A], [0, 2, -1, 1.3, 0, 0xE09A5A], [0, 0, -3, 0.8, 0, 0x49D17A]]],
+    ['Roast chicken', [[0, 0, 1, 6, 0, 0xFFFFFF], [0, 0, 0, 4.5, 0, 0xC9783A], [0, -1.5, -1.5, 1.8, 0, 0xE09A5A], [1, 3.5, -3, 3, 1.5, 0xFFF6E6], [1, -6.5, -3, 3, 1.5, 0xFFF6E6]]],
+    ['Fish supper', [[0, 0, 1, 6, 0, 0xFFFFFF], [1, -4.5, -2, 7, 4, 0xE0A040], [0, 3, 0, 1.8, 0, 0xE0A040], [1, -4, 2, 3, 1.5, 0x9AE06A], [0, 4, 2.5, 1, 0, 0xFFE94A]]],
+    ['Shrimp skewers', [[1, -6, -0.5, 12, 1, 0xC98A4B], [0, -3, 0, 2, 0, 0xFF8A6A], [0, 0, 0, 2, 0, 0xFF8A6A], [0, 3, 0, 2, 0, 0xFF8A6A]]],
+    ['Tacos', [[0, 0, 1, 5, 0, 0xF2D49B], [1, -4, -2, 8, 3, 0xF2D49B], [0, -1.5, -2, 1.3, 0, 0x6FCF5A], [0, 1, -2.5, 1.2, 0, 0xE0303F], [0, 2.5, -1.5, 1, 0, 0xFFD23F]]],
+    ['Porridge', [[1, -6, 0, 12, 4, 0x5AD1FF], [0, 0, -1, 4.5, 0, 0xF2E0B0], [0, -1, -2, 1, 0, 0xC98A4B], [0, 1.5, -1, 0.8, 0, 0xFFB020]]],
+    ['Chocolate cake', [[1, -5, -2, 10, 6, 0x6A3A20], [1, -5, -3, 10, 2, 0x8A5030], [1, -5, 0.5, 10, 1, 0xFFF6E6], [0, 0, -4.5, 1.5, 0, 0xC0203A]]],
+    ['Sundae', [[1, -2.5, 1, 5, 5, 0xBFE8FF], [0, 0, -1, 4, 0, 0xFFF0F6], [0, -1.5, -2, 2, 0, 0xFF8FC7], [0, 1.5, -3, 1.6, 0, 0x8A5030], [0, 0, -5, 1.2, 0, 0xC0203A]]],
+    ['Smoothie', [[1, -3, -4, 6, 10, 0xBFE8FF], [1, -2.5, -2, 5, 7.5, 0xFF8FC7], [1, 1, -8, 0.8, 5, 0xFFFFFF], [0, -1, -3, 0.8, 0, 0xFFFFFF]]],
+    ['Pumpkin pie', [[0, 0, 0, 5.5, 0, 0xC98A4B], [0, 0, -0.5, 4, 0, 0xFF8A2A], [0, 0, -1.5, 1.2, 0, 0xFFFFFF]]],
+    ['Fruit salad', [[1, -6, 0, 12, 4, 0xFFFFFF], [0, 0, -1, 4.5, 0, 0xFFF0D8], [0, -2, -2, 1.3, 0, 0xE0303F], [0, 1.5, -1.5, 1.3, 0, 0xFF9A2A], [0, 0, -3, 1.2, 0, 0x9A4AD1]]],
+    ['Garden salad', [[1, -6, 0, 12, 4, 0xFFFFFF], [0, 0, -1, 4.5, 0, 0x6FCF5A], [0, -2, -2, 1.2, 0, 0x9AE67A], [0, 2, -1.5, 1.1, 0, 0xE0303F]]],
+    ['Stir-fry', [[0, 0, 1, 6, 0, 0x3A3F4A], [0, 0, 0, 4.5, 0, 0xD8A05A], [0, -2, -1, 1.2, 0, 0x2F8A3C], [0, 1.5, 0.5, 1.2, 0, 0xE0303F], [0, 0.5, -2, 1, 0, 0xFFD23F]]],
+    ['Cookies', [[0, -2, 1, 3, 0, 0xC98A4B], [0, 2, -1, 3, 0, 0xD8A05A], [0, -2.5, 0.5, 0.7, 0, 0x6A3A20], [0, 2, -1.5, 0.7, 0, 0x6A3A20]]],
   ].map(([name, s]) => ({ name, s }));
   // the mailbox's letters (ck_letters)
   const LETTERS = [
@@ -453,8 +504,8 @@ const HOUSEART = (() => {
 
   const FRIDGE_FOODS = 9;
   const FOOD = Object.fromEntries(FOODS.map((f, i) => [f.name, i]));
-  // two shelves of six at the stove (ck_cook_ingr)
-  const COOK_INGR = ['egg', 'tomato', 'cheese', 'mushroom', 'carrot', 'bread', 'potato', 'rice', 'sausage', 'pasta', 'apple', 'banana'].map(n => FOOD[n]);
+  // the stove's shelf, a scrolling row for each player (ck_cook_ingr)
+  const COOK_INGR = ['egg', 'tomato', 'cheese', 'mushroom', 'carrot', 'bread', 'potato', 'rice', 'sausage', 'pasta', 'apple', 'banana', 'strawberry', 'orange', 'lemon', 'grapes', 'cherry', 'pear', 'pineapple', 'blueberry', 'watermelon', 'onion', 'pepper', 'broccoli', 'peas', 'corn', 'lettuce', 'cucumber', 'pumpkin', 'beans', 'chicken', 'fish', 'shrimp', 'bacon', 'ham', 'tofu', 'chocolate', 'honey', 'yogurt', 'cream', 'butter', 'jam', 'flour', 'noodles', 'tortilla', 'oats', 'nuts', 'sprinkles'].map(n => FOOD[n]);
   // what a pan cooks into (ck_cook_dish): [food index + 1, its name]; the first rule that fits wins
   function cookDish(pan) {
     const has = n => pan.includes(FOOD[n]);
@@ -468,6 +519,13 @@ const HOUSEART = (() => {
       : has('egg') ? (has('cheese') ? 'Cheesy omelette' : has('mushroom') ? 'Mushroom omelette' : has('tomato') ? 'Tomato omelette' : has('sausage') ? 'Big breakfast' : has('potato') ? 'Potato omelette' : 'Omelette')
       : has('bread') ? (has('cheese') && has('tomato') ? 'Pizza toastie' : has('cheese') ? 'Cheese toastie' : has('mushroom') ? 'Mushroom toast' : 'Toast')
       : has('potato') && !has('tomato') && !has('carrot') && !has('mushroom') ? (has('cheese') ? 'Cheesy chips' : has('sausage') ? 'Sausage and chips' : 'Chips')
+      : has('chicken') ? (has('onion') || has('pepper') || has('tomato') || has('peas') ? 'Chicken curry' : 'Roast chicken')
+      : has('fish') || has('shrimp') ? (has('fish') ? 'Fish supper' : 'Shrimp skewers')
+      : has('tortilla') ? 'Tacos' : has('oats') ? 'Porridge' : has('chocolate') || has('flour') ? 'Chocolate cake'
+      : has('cream') || has('sprinkles') ? 'Sundae' : has('yogurt') ? 'Smoothie' : has('pumpkin') ? 'Pumpkin pie'
+      : has('strawberry') || has('orange') || has('lemon') || has('grapes') || has('cherry') || has('pear') || has('pineapple') || has('blueberry') || has('watermelon') ? 'Fruit salad' : has('lettuce') || has('cucumber') ? 'Garden salad'
+      : has('onion') || has('pepper') || has('broccoli') || has('peas') || has('corn') || has('beans') || has('bacon') || has('ham') || has('tofu') || has('noodles') ? 'Stir-fry'
+      : has('honey') || has('jam') || has('butter') || has('nuts') ? 'Cookies'
       : has('potato') ? 'Veggie stew' : has('sausage') ? 'Sausage stew' : has('tomato') ? 'Tomato soup' : has('mushroom') ? 'Mushroom soup' : has('carrot') ? 'Carrot soup' : pan.length === 1 ? 'Melted cheese' : 'Cheese soup';
     // which ingredients the dish's own name already covers; the rest go into the name and on top
     const CORE = {
@@ -480,14 +538,15 @@ const HOUSEART = (() => {
       'Apple pie': 'apple', 'Fruit pie': 'apple banana', 'Banana pancakes': 'banana egg',
       'Chips': 'potato', 'Cheesy chips': 'potato cheese', 'Sausage and chips': 'potato sausage',
       'Banana bread': 'banana bread', 'Carrot cake': 'carrot egg', 'Melted cheese': 'cheese',
+      'Chicken curry': 'chicken', 'Roast chicken': 'chicken', 'Fish supper': 'fish', 'Shrimp skewers': 'shrimp', 'Tacos': 'tortilla', 'Porridge': 'oats', 'Chocolate cake': 'chocolate flour', 'Sundae': 'cream', 'Smoothie': 'yogurt', 'Pumpkin pie': 'pumpkin', 'Fruit salad': '', 'Garden salad': 'lettuce', 'Stir-fry': '', 'Cookies': '',
     }[k].split(' ').map(n => FOOD[n]);
-    const ADJ = ['eggy', 'saucy', 'cheesy', 'foresty', 'crunchy', 'crusty', 'spuddy', 'fluffy', 'meaty', 'noodly', 'appley', 'tropical'];
-    const NOUN = ['egg', 'tomato', 'cheese', 'mushrooms', 'carrots', 'toast', 'mash', 'rice', 'sausage', 'noodles', 'apple', 'banana'];
-    let ex = [], most = 0, mostI = -1, extra = 0;
+    const ADJ = ['eggy', 'saucy', 'cheesy', 'foresty', 'crunchy', 'crusty', 'spuddy', 'fluffy', 'meaty', 'noodly', 'appley', 'tropical', 'berry', 'zesty', 'lemony', 'grapey', 'cherry', 'pear', 'pineapple', 'blue', 'melony', 'oniony', 'peppery', 'green', 'pea', 'corny', 'leafy', 'cool', 'pumpkin', 'beany', 'chicken', 'fishy', 'shrimpy', 'bacon', 'hammy', 'tofu', 'chocolatey', 'honey', 'creamy', 'whipped', 'buttery', 'jammy', 'floury', 'slurpy', 'wrapped', 'oaty', 'nutty', 'sparkly'];
+    const NOUN = ['egg', 'tomato', 'cheese', 'mushrooms', 'carrots', 'toast', 'mash', 'rice', 'sausage', 'pasta', 'apple', 'banana', 'strawberries', 'orange', 'lemon', 'grapes', 'cherries', 'pear', 'pineapple', 'blueberries', 'melon', 'onions', 'peppers', 'broccoli', 'peas', 'corn', 'lettuce', 'cucumber', 'pumpkin', 'beans', 'chicken', 'fish', 'shrimp', 'bacon', 'ham', 'tofu', 'chocolate', 'honey', 'yogurt', 'cream', 'butter', 'jam', 'dumplings', 'noodles', 'tortilla', 'oats', 'nuts', 'sprinkles'];
+    let ex = [], most = 0, mostI = -1;
     COOK_INGR.forEach((f, i) => {
       const cnt = pan.filter(p => p === f).length;
       if (cnt > most) { most = cnt; mostI = i; }
-      if (cnt && !CORE.includes(f)) { ex.push(i); extra |= 1 << i; }
+      if (cnt && !CORE.includes(f)) ex.push(i);
     });
     // a doubled main ingredient makes it a "double" dish; a doubled extra makes that word "extra"
     const coreMost = most >= 2 && CORE.includes(COOK_INGR[mostI]);
@@ -500,7 +559,7 @@ const HOUSEART = (() => {
       if (s.length + add.length > 38) break;
       s += add;
     }
-    return [FOOD[k] + 1, s[0].toUpperCase() + s.slice(1), extra];
+    return [FOOD[k] + 1, s[0].toUpperCase() + s.slice(1), ex.slice().sort((a, b) => a - b)];   // extras as shelf indices (the N64's bit mask)
   }
    // the aquarium's treasure chests (ck_aqua_chest_x)
   return { FOODS, FOOD, FRIDGE_FOODS, COOK_INGR, cookDish, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, fancyFish, aquaDecor, RACE, TRACKS, raceObst, raceCurve, racePad, raceProject, raceView, carBack, KEYS, hx };
