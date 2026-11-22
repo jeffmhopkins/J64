@@ -439,14 +439,23 @@ extern const ck_stickerart ck_stickers[CK_STICKERS];
 // the mural value, or -1 where the sticker leaves the wall alone
 void ck_sticker_cells(int kind, int c, int out[CK_STICKER_N][CK_STICKER_N]);
 // the aquarium: water on the left, a beach on the right
-// The aquarium is three screens wide: water, then a beach on the right (its last screen is the
-// baked aqua_bg, the two before it the aqua_water tile).
-#define CK_AQUA_W 960
+// The aquarium is six screens wide: five of water, each its own place with its own fish (the
+// sections below), then a beach on the right (its last screen is the baked aqua_bg, the ones
+// before it the aqua_water tile with each section's plants and things drawn on top).
+#define CK_AQUA_W 1920
+#define CK_AQUA_SECTIONS 5
+#define CK_AQUA_SEC_W 320
+enum { SEC_KELP, SEC_REEF, SEC_WRECK, SEC_DEEP, SEC_CAVES };
+extern const char *const ck_aqua_sections[CK_AQUA_SECTIONS];
+// fish kinds: the first three are sprites, the rest are drawn from shapes
+enum { AFISH_ORANGE, AFISH_YELLOW, AFISH_PINK, AFISH_ANGEL, AFISH_PUFFER, AFISH_JELLY, AFISH_EEL, AFISH_CLOWN, AFISH_TANG, AFISH_RAY, AFISH_KINDS };
+#define CK_AQUA_PER_SEC 6
+extern const int ck_aqua_pop[CK_AQUA_SECTIONS][CK_AQUA_PER_SEC];   // the kinds of fish living in each section
 #define CK_AQUA_TOP 44
 #define CK_AQUA_SEABED 222
-#define CK_AQUA_BEACH_X 876       // world x (236 on the last screen)
+#define CK_AQUA_BEACH_X 1836      // world x (236 on the last screen)
 #define CK_AQUA_BEACH_Y 182
-#define CK_AQUA_FISH 14
+#define CK_AQUA_FISH (CK_AQUA_SECTIONS * CK_AQUA_PER_SEC)
 #define CK_AQUA_SHRIMP 8
 #define CK_AQUA_CRABS 3
 #define CK_AQUA_FOOD 12           // fish food flakes sinking at once
@@ -587,7 +596,7 @@ typedef struct {
     int kind;                  // paint: which sticker
 } ck_hhero;
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
-typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`
+typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who, home; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`; home: its section
 typedef struct { float x, y; int life; } ck_flake;
 typedef struct { float x, y, vx, vy; int face, rest, held, spin; } ck_shrimp;   // held: in hero held - 1's hand; spin: frames tumbling after a throw
 typedef struct { float x, vx, y, vy; int snap, wait, run; } ck_crab;   // y: a jump when poked; run: frames of running away
@@ -626,7 +635,7 @@ typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
 #define CK_LETTERS 6
 typedef struct { const char *from; const char *lines[3]; } ck_letter;
 extern const ck_letter ck_letters[CK_LETTERS];
-#define CK_AQUA_CHESTS 2
+#define CK_AQUA_CHESTS 4
 extern const float ck_aqua_chest_x[CK_AQUA_CHESTS];
 typedef struct {
     ck_hhero ps[2];            // in the house

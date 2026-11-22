@@ -169,7 +169,9 @@ const HOUSEART = (() => {
   function weed(g, t, h) { g.strokeStyle = '#2f9a5a'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); for (let y = 0; y > -h; y -= 6) g.lineTo(Math.sin(t * 2 + y * 0.15) * 3, y - 6); g.stroke(); }
 
   // ---- the aquarium swim: water on the left, a dry sandy beach with crabs on the right
-  const AQUA = { W: 960, WATER_TOP: 44, SEABED: 222, BEACH_X: 876, BEACH_LX: 236, BEACH_Y: 182 };   // BEACH_LX: on the last screen
+  const AQUA = { W: 1920, WATER_TOP: 44, SEABED: 222, BEACH_X: 1836, BEACH_LX: 236, BEACH_Y: 182, SECTIONS: ['Kelp Forest', 'Coral Reef', 'Shipwreck', 'Deep Blue', 'Rocky Caves'], SEC_W: 320,
+    // the kinds of fish living in each section (ck_aqua_pop): 0-2 the classic fish, then angel, puffer, jelly, eel, clown, tang, ray
+    POP: [[0, 1, 2, 0, 8, 1], [7, 8, 3, 7, 4, 3], [6, 0, 4, 6, 2, 1], [5, 5, 9, 5, 9, 8], [6, 4, 1, 2, 8, 3]] };   // BEACH_LX: on the last screen
   // the aquarium's last screen, with the beach (beach = false: one of the plain water screens before it)
   function aquaBg(g, beach = true) {
     const BX = beach ? AQUA.BEACH_LX : 330;
@@ -395,7 +397,60 @@ const HOUSEART = (() => {
     ['the paint studio', ['The wall is waiting.', 'Fly up high and', 'paint us a picture!']],
     ['the parts shop', ['New hats in stock!', 'Bolts buy cool things.', 'See you soon!']],
   ].map(([from, lines]) => ({ from, lines }));
-  const CHESTS = [119, 439];
+  const CHESTS = [119, 439, 1050, 1500];
+  // ---- the aquarium's other fish and each section's plants and things (fancy_fish and aqua_decor in draw.c)
+  const ln = (g, x0, y0, x1, y1, w, c, a = 1) => { g.globalAlpha = a; g.strokeStyle = hx(c); g.lineWidth = w; g.lineCap = 'butt'; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); g.globalAlpha = 1; };
+  const bx2 = (g, x, y, w, h, c, a = 1) => { g.globalAlpha = a; g.fillStyle = hx(c); g.fillRect(x, y, w, h); g.globalAlpha = 1; };
+  const dt2 = (g, x, y, r, c, a = 1) => { if (r <= 0) return; g.globalAlpha = a; g.fillStyle = hx(c); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; };
+  const rg2 = (g, x, y, r, c, a = 1) => { g.globalAlpha = a; g.strokeStyle = hx(c); g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, Math.max(0.1, r - 0.75), 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1; };
+  function fancyFish(g, kind, x, y, d, t) {
+    switch (kind) {
+      case 3: bx2(g, x - d * 8 - 2, y - 3, 4, 6, 0xFFB020); bx2(g, x - 2, y - 11, 4, 7, 0xFFE066); bx2(g, x - 2, y + 4, 4, 7, 0xFFE066); dt2(g, x, y, 5, 0xFFE066); bx2(g, x - 1, y - 6, 2, 12, 0x2B2230); dt2(g, x + d * 3, y - 1, 1.2, 0x1B1426); break;
+      case 4: dt2(g, x - d * 7, y, 3, 0xE0A92B); for (let k = 0; k < 8; k++) dt2(g, x + Math.cos(k * 0.785) * 7, y + Math.sin(k * 0.785) * 7, 1.2, 0xC9A35A); dt2(g, x, y, 6, 0xFFD23F); dt2(g, x, y + 2, 3.5, 0xFFF6A0); dt2(g, x + d * 3, y - 2, 1.6, 0xFFFFFF); dt2(g, x + d * 3.4, y - 2, 0.8, 0x1B1426); break;
+      case 5: for (let k = 0; k < 4; k++) { const tx = x - 4 + k * 2.7; ln(g, tx, y + 2, tx + Math.sin(t * 3 + k) * 2, y + 13, 1, 0xE6B8FF, 0.9); } dt2(g, x, y, 6, 0xC28BFF, 0.75); dt2(g, x - 2, y - 2, 1.5, 0xFFFFFF, 0.8); break;
+      case 6: for (let k = 6; k >= 0; k--) dt2(g, x - d * k * 4, y + Math.sin(t * 5 - k * 0.9) * 2.5, 3.2 - k * 0.25, k % 2 ? 0x4F9A6E : 0x3F7D5E); dt2(g, x + d * 1.5, y - 1, 1, 0xFFE066); break;
+      case 7: bx2(g, x - d * 9 - 2, y - 3, 4, 6, 0xFF8A3D); dt2(g, x, y, 5, 0xFF8A3D); bx2(g, x + d * 1.5 - 1, y - 4.5, 2, 9, 0xFFFFFF); bx2(g, x - d * 4 - 1, y - 4, 2, 8, 0xFFFFFF); dt2(g, x + d * 3.5, y - 1, 1, 0x1B1426); break;
+      case 8: bx2(g, x - d * 9 - 2, y - 3, 4, 6, 0xFFD23F); dt2(g, x, y, 5, 0x3A6FC0); bx2(g, x - 3, y - 1, 6, 2, 0x1B2A5A); dt2(g, x + d * 3, y - 1.5, 1, 0xFFFFFF); break;
+      default: { const fl = Math.sin(t * 3) * 2; ln(g, x - d * 5, y, x - d * 18, y + 1, 1.5, 0x3A4A6A); dt2(g, x - d, y - 5 + fl, 4, 0x5A6E8A); dt2(g, x - d, y + 5 - fl, 4, 0x5A6E8A); dt2(g, x, y, 5, 0x6E86A8); dt2(g, x + d * 3, y - 1.5, 0.9, 0x1B1426); }
+    }
+  }
+  // drawn in world coordinates (the caller has shifted by the camera); cam picks which sections show
+  function aquaDecor(g, cam, t) {
+    const S = AQUA.SEABED, TOP = AQUA.WATER_TOP;
+    if (cam < 340) [[40, 120], [95, 150], [150, 100], [205, 160], [260, 130], [300, 110]].forEach(([kx, kh], k) => {
+      for (let y = 0; y < kh; y += 8) {
+        const sw = Math.sin(t * 1.4 + k + y * 0.03) * y * 0.06, sw2 = Math.sin(t * 1.4 + k + (y + 8) * 0.03) * (y + 8) * 0.06;
+        ln(g, kx + sw, S - y, kx + sw2, S - y - 8, 4, 0x2F8A4A);
+        if (y % 16 === 8) dt2(g, kx + sw + (y % 32 ? 4 : -4), S - y, 3, 0x49D17A);
+      }
+    });
+    if (cam > 0 && cam < 660) {
+      [[360, 10, 0xFF8FC7], [470, 8, 0xFFB347], [590, 11, 0xC28BFF]].forEach(([x, r, c]) => { dt2(g, x, S - 4, r, c); rg2(g, x, S - 4, r * 0.6, 0xFFFFFF, 0.5); });
+      [400, 520, 615].forEach((x, k) => { const c = k % 2 ? 0xFF8A3D : 0xE04F4F; ln(g, x, S, x, S - 30, 3, c); ln(g, x, S - 17, x - 10, S - 32, 3, c); ln(g, x, S - 22, x + 9, S - 36, 3, c); dt2(g, x, S - 31, 2, c); dt2(g, x - 10, S - 33, 2, c); dt2(g, x + 9, S - 37, 2, c); });
+      for (let k = 0; k < 7; k++) { const a = -2.6 + k * 0.35; ln(g, 440, S, 440 + Math.cos(a) * 34, S + Math.sin(a) * 34, 2, 0x9C5AD1); dt2(g, 440 + Math.cos(a) * 34, S + Math.sin(a) * 34, 2, 0xC28BFF); }
+      for (let k = 0; k < 6; k++) { const a = -2.4 + k * 0.34 + Math.sin(t * 2 + k) * 0.12; ln(g, 560, S - 4, 560 + Math.cos(a) * 16, S - 4 + Math.sin(a) * 16, 3, 0xFF8FC7); }
+    }
+    if (cam > 320 && cam < 980) {
+      const x = 700;
+      ln(g, x + 80, S - 44, x + 110, S - 130, 5, 0x6F4630); ln(g, x + 90, S - 100, x + 128, S - 90, 3, 0x6F4630); bx2(g, x + 96, S - 96, 22, 18, 0xE8DCC0, 0.75);
+      bx2(g, x, S - 40, 150, 40, 0x5A3A22); bx2(g, x, S - 44, 150, 6, 0x6F4630); for (let k = 1; k < 5; k++) bx2(g, x, S - 40 + k * 8, 150, 1, 0x3A2618);
+      for (let k = 0; k < 4; k++) { dt2(g, x + 20 + k * 30, S - 26, 4, 0x2B3A4A); rg2(g, x + 20 + k * 30, S - 26, 5, 0xC9A35A); }
+      const ax = 900; ln(g, ax, S - 32, ax, S - 6, 3, 0x6E6A80); ln(g, ax - 8, S - 26, ax + 8, S - 26, 3, 0x6E6A80); rg2(g, ax, S - 36, 4, 0x6E6A80); ln(g, ax - 9, S - 9, ax, S - 4, 3, 0x6E6A80); ln(g, ax + 9, S - 9, ax, S - 4, 3, 0x6E6A80);
+    }
+    if (cam > 640 && cam < 1300) {
+      const x = 960;
+      bx2(g, x + 16, TOP, 288, S - TOP, 0x0A1840, 0.45);
+      for (let k = 0; k < 4; k++) { bx2(g, x + k * 4, TOP, 4, S - TOP, 0x0A1840, 0.1 + k * 0.09); bx2(g, x + 304 + (3 - k) * 4, TOP, 4, S - TOP, 0x0A1840, 0.1 + k * 0.09); }
+      for (let k = 0; k < 7; k++) { const wx = x + 30 + k * 40, h = 20 + (k * 13) % 22; ln(g, wx, S, wx, S - h, 3, 0x3A3650); dt2(g, wx, S - h, 3, k % 2 ? 0x5AD1FF : 0xFF8FC7, 0.5 + 0.5 * Math.sin(t * 2 + k)); }
+    }
+    if (cam > 960) {
+      [[1320, 30], [1400, 22], [1520, 36]].forEach(([x, r], k) => { dt2(g, x, S + 6, r, k % 2 ? 0x7D798F : 0x6E6A80); dt2(g, x - r * 0.3, S - r * 0.4, r * 0.3, 0x8F8AA8); });
+      K.star(1360, S - 30, 6, '#ff8a3d'); K.star(1478, S - 22, 5, '#ff8fc7');
+      [1440, 1580].forEach(x => { for (let j = 0; j < 8; j++) ln(g, x, S - 5, x + Math.cos(j * 0.785) * 9, S - 5 + Math.sin(j * 0.785) * 9, 1, 0x1B1426); dt2(g, x, S - 5, 5, 0x2B2240); });
+      for (let k = 0; k < 3; k++) bx2(g, 1556 + k * 7, S - 14 - k * 5, 5, 14 + k * 5, 0xFFD23F);
+    }
+  }
+
   const FRIDGE_FOODS = 9;
   const FOOD = Object.fromEntries(FOODS.map((f, i) => [f.name, i]));
   // two shelves of six at the stove (ck_cook_ingr)
@@ -417,5 +472,5 @@ const HOUSEART = (() => {
     return [FOOD[k] + 1, k];
   }
    // the aquarium's treasure chests (ck_aqua_chest_x)
-  return { FOODS, FOOD, FRIDGE_FOODS, COOK_INGR, cookDish, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, RACE, TRACKS, raceObst, raceCurve, racePad, raceProject, raceView, carBack, KEYS, hx };
+  return { FOODS, FOOD, FRIDGE_FOODS, COOK_INGR, cookDish, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, fancyFish, aquaDecor, RACE, TRACKS, raceObst, raceCurve, racePad, raceProject, raceView, carBack, KEYS, hx };
 })();

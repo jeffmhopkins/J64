@@ -108,7 +108,15 @@ const ck_letter ck_letters[CK_LETTERS] = {
     { "the paint studio", { "The wall is waiting.", "Fly up high and", "paint us a picture!" } },
     { "the parts shop", { "New hats in stock!", "Bolts buy cool things.", "See you soon!" } },
 };
-const float ck_aqua_chest_x[CK_AQUA_CHESTS] = { 119, 439 };
+const float ck_aqua_chest_x[CK_AQUA_CHESTS] = { 119, 439, 1050, 1500 };
+const char *const ck_aqua_sections[CK_AQUA_SECTIONS] = { "Kelp Forest", "Coral Reef", "Shipwreck", "Deep Blue", "Rocky Caves" };
+const int ck_aqua_pop[CK_AQUA_SECTIONS][CK_AQUA_PER_SEC] = {
+    { AFISH_ORANGE, AFISH_YELLOW, AFISH_PINK, AFISH_ORANGE, AFISH_TANG, AFISH_YELLOW },
+    { AFISH_CLOWN, AFISH_TANG, AFISH_ANGEL, AFISH_CLOWN, AFISH_PUFFER, AFISH_ANGEL },
+    { AFISH_EEL, AFISH_ORANGE, AFISH_PUFFER, AFISH_EEL, AFISH_PINK, AFISH_YELLOW },
+    { AFISH_JELLY, AFISH_JELLY, AFISH_RAY, AFISH_JELLY, AFISH_RAY, AFISH_TANG },
+    { AFISH_EEL, AFISH_PUFFER, AFISH_YELLOW, AFISH_PINK, AFISH_TANG, AFISH_ANGEL },
+};
 const uint32_t ck_mural_pal[CK_MURAL_PAL] = { 0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230 };
 
 #define HOUSE_SPEED 1.7f
@@ -548,8 +556,10 @@ static void aqua_start(ck_game *G) {
     hseed = 11;
     for (int i = 0; i < CK_AQUA_FISH; i++) {
         ck_fish *f = &H->fish[i];
-        f->kind = i % 3; f->x = 20 + hrng() * (CK_AQUA_BEACH_X - 60); f->y = 70 + hrng() * 130;
-        f->vx = (hrng() < 0.5f ? -1 : 1) * (0.4f + hrng() * 0.5f); f->scare = 0; f->happy = 0; f->follow = 0; f->who = 0; f->ph = hrng() * 6;
+        f->home = i / CK_AQUA_PER_SEC; f->kind = ck_aqua_pop[f->home][i % CK_AQUA_PER_SEC];
+        f->x = f->home * CK_AQUA_SEC_W + 20 + hrng() * (CK_AQUA_SEC_W - 40); f->y = 70 + hrng() * 130;
+        float sp = f->kind == AFISH_JELLY ? 0.15f : f->kind == AFISH_RAY ? 0.5f : 0.4f + hrng() * 0.5f;
+        f->vx = (hrng() < 0.5f ? -1 : 1) * sp; f->scare = 0; f->happy = 0; f->follow = 0; f->who = 0; f->ph = hrng() * 6;
     }
     for (int i = 0; i < CK_AQUA_SHRIMP; i++) {
         ck_shrimp *s = &H->shrimp[i];
@@ -558,7 +568,7 @@ static void aqua_start(ck_game *G) {
     for (int i = 0; i < CK_AQUA_CRABS; i++) { H->crabs[i] = (ck_crab){ .x = CK_AQUA_BEACH_X + 14 + i * 22, .vx = (i % 2 ? -1 : 1) * 0.5f }; }
     H->nfood = 0;
     H->gcam = 0;
-    H->chestT[0] = H->chestT[1] = 0;
+    memset(H->chestT, 0, sizeof H->chestT);
     H->chestGot = 0;
     ck_go(G, SC_AQUA);
 }
@@ -673,7 +683,12 @@ static void aqua_update(ck_game *G) {
             if (fabsf(f->vx) < 0.15f) f->vx = p->face * 0.15f;
             f->y += ck_clampf((ty - f->y) * 0.05f, -1.2f, 1.2f);
             f->follow--;
-        } else if (f->scare > 0 && --f->scare == 0) f->vx = (f->vx > 0 ? 1 : -1) * 0.6f;
+        } else if (f->scare > 0 && --f->scare == 0) f->vx = (f->vx > 0 ? 1 : -1) * (f->kind == AFISH_JELLY ? 0.15f : 0.6f);
+        else if (f->scare <= 0) {   // home again: each fish keeps to its own section
+            float lo = f->home * CK_AQUA_SEC_W + 12, hi = lo + CK_AQUA_SEC_W - 24;
+            if (f->x < lo) f->vx = fabsf(f->vx);
+            if (f->x > hi) f->vx = -fabsf(f->vx);
+        }
         // swimming into a fish boops it: a wiggle and a bubble
         for (int k = 0; k < H->np; k++) {
             const ck_hhero *p = &H->gs[k];
@@ -684,7 +699,7 @@ static void aqua_update(ck_game *G) {
         }
         if (f->happy > 0) f->happy--;
         f->x += f->vx;
-        f->y += sinf(G->t * 1.5f + f->ph) * 0.25f;
+        f->y += sinf(G->t * (f->kind == AFISH_JELLY ? 1.2f : 1.5f) + f->ph) * (f->kind == AFISH_JELLY ? 0.6f : 0.25f);   // jellies bob
         if (f->x < 12) { f->x = 12; f->vx = fabsf(f->vx); }
         if (f->x > CK_AQUA_BEACH_X - 16) { f->x = CK_AQUA_BEACH_X - 16; f->vx = -fabsf(f->vx); }
         f->y = ck_clampf(f->y, CK_AQUA_TOP + 14, CK_AQUA_SEABED - 14);

@@ -1579,19 +1579,108 @@ static void draw_paint(const ck_game *G) {
 
 // The aquarium, three screens wide: two water tiles then the baked beach screen, swaying weed,
 // fish food, then shrimp, fish, crabs and the heroes (a diving bubble round the head in the water).
+// The aquarium's fish that are not sprites, facing d (1 right, -1 left); fancyFish in
+// web/lib/houseart.js draws the same.
+static void fancy_fish(int kind, float x, float y, float d, float t) {
+    switch (kind) {
+    case AFISH_ANGEL:
+        rect(x - d * 8 - 2, y - 3, 4, 6, 0xFFB020, 1);
+        rect(x - 2, y - 11, 4, 7, 0xFFE066, 1); rect(x - 2, y + 4, 4, 7, 0xFFE066, 1);
+        shape(SPR_DOT, x, y, 5, 0xFFE066, 1);
+        rect(x - 1, y - 6, 2, 12, 0x2B2230, 1);
+        shape(SPR_DOT, x + d * 3, y - 1, 1.2f, 0x1B1426, 1); break;
+    case AFISH_PUFFER:
+        shape(SPR_DOT, x - d * 7, y, 3, 0xE0A92B, 1);
+        for (int k = 0; k < 8; k++) shape(SPR_DOT, x + cosf(k * 0.785f) * 7, y + sinf(k * 0.785f) * 7, 1.2f, 0xC9A35A, 1);
+        shape(SPR_DOT, x, y, 6, 0xFFD23F, 1); shape(SPR_DOT, x, y + 2, 3.5f, 0xFFF6A0, 1);
+        shape(SPR_DOT, x + d * 3, y - 2, 1.6f, 0xFFFFFF, 1); shape(SPR_DOT, x + d * 3.4f, y - 2, 0.8f, 0x1B1426, 1); break;
+    case AFISH_JELLY:
+        for (int k = 0; k < 4; k++) { float tx = x - 4 + k * 2.7f; line(tx, y + 2, tx + sinf(t * 3 + k) * 2, y + 13, 1, 0xE6B8FF, 0.9f); }
+        shape(SPR_DOT, x, y, 6, 0xC28BFF, 0.75f); shape(SPR_DOT, x - 2, y - 2, 1.5f, 0xFFFFFF, 0.8f); break;
+    case AFISH_EEL:
+        for (int k = 6; k >= 0; k--) shape(SPR_DOT, x - d * k * 4, y + sinf(t * 5 - k * 0.9f) * 2.5f, 3.2f - k * 0.25f, k % 2 ? 0x4F9A6E : 0x3F7D5E, 1);
+        shape(SPR_DOT, x + d * 1.5f, y - 1, 1, 0xFFE066, 1); break;
+    case AFISH_CLOWN:
+        rect(x - d * 9 - 2, y - 3, 4, 6, 0xFF8A3D, 1);
+        shape(SPR_DOT, x, y, 5, 0xFF8A3D, 1);
+        rect(x + d * 1.5f - 1, y - 4.5f, 2, 9, 0xFFFFFF, 1); rect(x - d * 4 - 1, y - 4, 2, 8, 0xFFFFFF, 1);
+        shape(SPR_DOT, x + d * 3.5f, y - 1, 1, 0x1B1426, 1); break;
+    case AFISH_TANG:
+        rect(x - d * 9 - 2, y - 3, 4, 6, 0xFFD23F, 1);
+        shape(SPR_DOT, x, y, 5, 0x3A6FC0, 1); rect(x - 3, y - 1, 6, 2, 0x1B2A5A, 1);
+        shape(SPR_DOT, x + d * 3, y - 1.5f, 1, 0xFFFFFF, 1); break;
+    default: {   // a ray, gliding with its wings
+        float fl = sinf(t * 3) * 2;
+        line(x - d * 5, y, x - d * 18, y + 1, 1.5f, 0x3A4A6A, 1);
+        shape(SPR_DOT, x - d * 1, y - 5 + fl, 4, 0x5A6E8A, 1); shape(SPR_DOT, x - d * 1, y + 5 - fl, 4, 0x5A6E8A, 1);
+        shape(SPR_DOT, x, y, 5, 0x6E86A8, 1);
+        shape(SPR_DOT, x + d * 3, y - 1.5f, 0.9f, 0x1B1426, 1); break;
+    }
+    }
+}
+// The plants and things of each section, behind the fish.
+static void aqua_decor(float cam, float t) {
+    float S = CK_AQUA_SEABED;
+    if (cam < 340) {   // the kelp forest: tall swaying kelp
+        static const float kx[6] = { 40, 95, 150, 205, 260, 300 }, kh[6] = { 120, 150, 100, 160, 130, 110 };
+        for (int k = 0; k < 6; k++)
+            for (float y = 0; y < kh[k]; y += 8) {
+                float sw = sinf(t * 1.4f + k + y * 0.03f) * y * 0.06f, sw2 = sinf(t * 1.4f + k + (y + 8) * 0.03f) * (y + 8) * 0.06f;
+                line(kx[k] + sw - cam, S - y, kx[k] + sw2 - cam, S - y - 8, 4, 0x2F8A4A, 1);
+                if ((int)y % 16 == 8) shape(SPR_DOT, kx[k] + sw - cam + ((int)y % 32 ? 4 : -4), S - y, 3, 0x49D17A, 1);
+            }
+    }
+    if (cam > 0 && cam < 660) {   // the coral reef
+        static const float bx[3] = { 360, 470, 590 }, br[3] = { 10, 8, 11 };
+        static const uint32_t bc[3] = { 0xFF8FC7, 0xFFB347, 0xC28BFF };
+        for (int k = 0; k < 3; k++) { shape(SPR_DOT, bx[k] - cam, S - 4, br[k], bc[k], 1); shape(SPR_RING, bx[k] - cam, S - 4, br[k] * 0.6f, 0xFFFFFF, 0.5f); }
+        static const float cx[3] = { 400, 520, 615 };
+        for (int k = 0; k < 3; k++) {
+            float x = cx[k] - cam; uint32_t c = k % 2 ? 0xFF8A3D : 0xE04F4F;
+            line(x, S, x, S - 30, 3, c, 1); line(x, S - 17, x - 10, S - 32, 3, c, 1); line(x, S - 22, x + 9, S - 36, 3, c, 1);
+            shape(SPR_DOT, x, S - 31, 2, c, 1); shape(SPR_DOT, x - 10, S - 33, 2, c, 1); shape(SPR_DOT, x + 9, S - 37, 2, c, 1);
+        }
+        for (int k = 0; k < 7; k++) { float a = -2.6f + k * 0.35f; line(440 - cam, S, 440 - cam + cosf(a) * 34, S + sinf(a) * 34, 2, 0x9C5AD1, 1); shape(SPR_DOT, 440 - cam + cosf(a) * 34, S + sinf(a) * 34, 2, 0xC28BFF, 1); }
+        for (int k = 0; k < 6; k++) { float a = -2.4f + k * 0.34f + sinf(t * 2 + k) * 0.12f; line(560 - cam, S - 4, 560 - cam + cosf(a) * 16, S - 4 + sinf(a) * 16, 3, 0xFF8FC7, 1); }
+    }
+    if (cam > 320 && cam < 980) {   // the shipwreck
+        float x = 700 - cam;
+        line(x + 80, S - 44, x + 110, S - 130, 5, 0x6F4630, 1);   // the broken mast and its tattered sail
+        line(x + 90, S - 100, x + 128, S - 90, 3, 0x6F4630, 1);
+        rect(x + 96, S - 96, 22, 18, 0xE8DCC0, 0.75f);
+        rect(x, S - 40, 150, 40, 0x5A3A22, 1);
+        rect(x, S - 44, 150, 6, 0x6F4630, 1);
+        for (int k = 1; k < 5; k++) rect(x, S - 40 + k * 8, 150, 1, 0x3A2618, 1);
+        for (int k = 0; k < 4; k++) { shape(SPR_DOT, x + 20 + k * 30, S - 26, 4, 0x2B3A4A, 1); shape(SPR_RING, x + 20 + k * 30, S - 26, 5, 0xC9A35A, 1); }
+        float ax = 900 - cam;   // an anchor
+        line(ax, S - 32, ax, S - 6, 3, 0x6E6A80, 1); line(ax - 8, S - 26, ax + 8, S - 26, 3, 0x6E6A80, 1);
+        shape(SPR_RING, ax, S - 36, 4, 0x6E6A80, 1); line(ax - 9, S - 9, ax, S - 4, 3, 0x6E6A80, 1); line(ax + 9, S - 9, ax, S - 4, 3, 0x6E6A80, 1);
+    }
+    if (cam > 640 && cam < 1300) {   // the deep blue: darker, with glowing tube worms
+        float x = 960 - cam;
+        rect(x + 16, CK_AQUA_TOP, 288, S - CK_AQUA_TOP, 0x0A1840, 0.45f);
+        for (int k = 0; k < 4; k++) { rect(x + k * 4, CK_AQUA_TOP, 4, S - CK_AQUA_TOP, 0x0A1840, 0.1f + k * 0.09f); rect(x + 304 + (3 - k) * 4, CK_AQUA_TOP, 4, S - CK_AQUA_TOP, 0x0A1840, 0.1f + k * 0.09f); }
+        for (int k = 0; k < 7; k++) {
+            float wx = x + 30 + k * 40, h = 20 + (k * 13) % 22;
+            line(wx, S, wx, S - h, 3, 0x3A3650, 1);
+            shape(SPR_DOT, wx, S - h, 3, k % 2 ? 0x5AD1FF : 0xFF8FC7, 0.5f + 0.5f * sinf(t * 2 + k));
+        }
+    }
+    if (cam > 960) {   // the rocky caves
+        static const float rx[3] = { 1320, 1400, 1520 }, rr[3] = { 30, 22, 36 };
+        for (int k = 0; k < 3; k++) { shape(SPR_DOT, rx[k] - cam, S + 6, rr[k], k % 2 ? 0x7D798F : 0x6E6A80, 1); shape(SPR_DOT, rx[k] - cam - rr[k] * 0.3f, S - rr[k] * 0.4f, rr[k] * 0.3f, 0x8F8AA8, 1); }
+        shape(SPR_STAR, 1360 - cam, S - 30, 6, 0xFF8A3D, 1); shape(SPR_STAR, 1478 - cam, S - 22, 5, 0xFF8FC7, 1);
+        static const float ux[2] = { 1440, 1580 };
+        for (int k = 0; k < 2; k++) { float x = ux[k] - cam; for (int j = 0; j < 8; j++) line(x, S - 5, x + cosf(j * 0.785f) * 9, S - 5 + sinf(j * 0.785f) * 9, 1, 0x1B1426, 1); shape(SPR_DOT, x, S - 5, 5, 0x2B2240, 1); }
+        for (int k = 0; k < 3; k++) rect(1556 - cam + k * 7, S - 14 - k * 5, 5, 14 + k * 5, 0xFFD23F, 1);
+    }
+}
 static void draw_aqua(const ck_game *G) {
     const ck_house *Hs = &G->house;
     float t = G->t, cam = Hs->gcam;
-    for (int k = 0; k < 2; k++) if (k * W - cam > -W && k * W - cam < W) blit(SPR_AQUA_WATER, 0, k * W - cam, 0);
-    blit(SPR_AQUA_BG, 0, 2 * W - cam, 0);
-    for (int k = 0; k < 8; k++) {
-        float x0 = 30 + k * 110 + (k % 2) * 22 - cam, y0 = CK_AQUA_SEABED, hgt = 28 + (k * 37 % 3) * 9;
-        if (x0 < -10 || x0 > W + 10 || x0 + cam > CK_AQUA_BEACH_X - 40) continue;
-        for (float y = 0; y > -hgt; y -= 6) {
-            float xa = x0 + sinf(t * 2 + y * 0.15f) * 3, xb = x0 + sinf(t * 2 + (y - 6) * 0.15f) * 3;
-            line(xa, y0 + y, xb, y0 + y - 6, 3, 0x2F9A5A, 1);
-        }
-    }
+    for (int k = 0; k < CK_AQUA_SECTIONS; k++) if (k * W - cam > -W && k * W - cam < W) blit(SPR_AQUA_WATER, 0, k * W - cam, 0);
+    blit(SPR_AQUA_BG, 0, CK_AQUA_SECTIONS * W - cam, 0);
+    aqua_decor(cam, t);
     for (int k = 0; k < CK_AQUA_CHESTS; k++) {   // treasure chests: B opens them
         float x = ck_aqua_chest_x[k] - cam, y = CK_AQUA_SEABED;
         if (x < -30 || x > W + 30) continue;
@@ -1612,7 +1701,8 @@ static void draw_aqua(const ck_game *G) {
         const ck_fish *f = &Hs->fish[i];
         float x = f->x - cam, wig = f->happy > 0 ? sinf(f->happy * 0.8f) * 0.25f : 0;
         if (x < -20 || x > W + 20) continue;
-        blit_o(SPR_HOUSE_FISH, f->kind * 2 + (int)(t * (f->happy > 0 ? 14 : 6) + f->ph) % 2, x, f->y, (bopt){ .flip = f->vx < 0, .rot = wig });
+        if (f->kind >= AFISH_ANGEL) fancy_fish(f->kind, x, f->y, f->vx < 0 ? -1 : 1, t * (f->happy > 0 ? 2.3f : 1) + f->ph);
+        else blit_o(SPR_HOUSE_FISH, f->kind * 2 + (int)(t * (f->happy > 0 ? 14 : 6) + f->ph) % 2, x, f->y, (bopt){ .flip = f->vx < 0, .rot = wig });
         if (f->happy > 20) shape(SPR_STAR, x, f->y - 12, 3, 0xFF8FC7, 1);
     }
     for (int i = 0; i < CK_AQUA_CRABS; i++) { const ck_crab *c = &Hs->crabs[i]; blit(SPR_HOUSE_CRAB, c->snap > 0 && (c->snap / 5) % 2 == 0, c->x - cam, CK_AQUA_BEACH_Y - 5 + c->y); }
@@ -1629,6 +1719,8 @@ static void draw_aqua(const ck_game *G) {
         }
     }
     particles(G, cam);
+    int sec = (int)((cam + W / 2) / CK_AQUA_SEC_W);
+    txt(F_SMALL, ST_CREAM, 8, 234, ALIGN_LEFT, "%s", sec < CK_AQUA_SECTIONS ? ck_aqua_sections[sec] : "The Beach");
     hint(14, "Stick swim   A up   B feed, grab, throw   START leave");
 }
 

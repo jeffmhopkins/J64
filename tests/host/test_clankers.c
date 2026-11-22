@@ -1124,10 +1124,20 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->house.shrimp[0].spin > 0, 1);
     hold(G, 20, 0, 0);
     EXPECT_EQ_INT(G->house.shrimp[0].x > sx + 20, 1);
-    // the tank scrolls: the beach is three screens along
-    hold(G, 700, CK_RIGHT | CK_UP, 0);
+    // five sections of water, each with its own kinds of fish living in it
+    {
+        int kinds = 0; bool seen[AFISH_KINDS] = { 0 };
+        for (int k = 0; k < CK_AQUA_FISH; k++) {
+            const ck_fish *f = &G->house.fish[k];
+            if (!seen[f->kind]) { seen[f->kind] = true; kinds++; }
+            EXPECT_EQ_INT(f->home, k / CK_AQUA_PER_SEC);
+        }
+        EXPECT_EQ_INT(kinds, AFISH_KINDS);
+    }
+    // the tank scrolls: the beach is six screens along
+    hold(G, 1500, CK_RIGHT | CK_UP, 0);
     hold(G, 100, CK_RIGHT, 0);
-    EXPECT_EQ_INT(G->house.gcam > 600, 1);
+    EXPECT_EQ_INT(G->house.gcam > 1500, 1);
     EXPECT_EQ_INT(G->house.gs[0].land, 1);
     EXPECT_EQ_INT(G->house.gs[0].y, CK_AQUA_BEACH_Y);
     // poke a crab: it hops and runs
@@ -1139,6 +1149,11 @@ static void test_house(void) {
     for (int i = 0; i < 600; i++) {
         ck_game_step(G, 0, 0);
         for (int k = 0; k < CK_AQUA_FISH; k++) EXPECT_EQ_INT(G->house.fish[k].x >= 12 && G->house.fish[k].x <= CK_AQUA_BEACH_X - 16, 1);
+    }
+    for (int k = 0; k < CK_AQUA_FISH; k++) {   // left alone, the fish keep to their own sections
+        const ck_fish *f = &G->house.fish[k];
+        if (f->follow > 0) continue;
+        EXPECT_EQ_INT(f->x > f->home * CK_AQUA_SEC_W - 10 && f->x < (f->home + 1) * CK_AQUA_SEC_W + 10, 1);
     }
     press(G, CK_START, 0);
     // the garage: a side-on race; a scripted driver jumps every cone and crate
@@ -1277,9 +1292,10 @@ static void test_house(void) {
     EXPECT_EQ_INT(P->balls, CK_PIN_BALLS);
     EXPECT_EQ_INT(P->x > 232, 1);
     press(G, CK_A, 0);
-    for (int i = 0; i < 120; i += 4) { if (getenv("PINDBG")) printf("  %d: %.1f %.1f  v %.2f %.2f\n", i, P->x, P->y, P->vx, P->vy); hold(G, 4, 0, 0); }
-    EXPECT_EQ_INT(P->y < 150, 1);
-    EXPECT_EQ_INT(P->x < 232, 1);   // out of the lane onto the table
+    float topY = 999, leftX = 999;
+    for (int i = 0; i < 120; i += 4) { if (getenv("PINDBG")) printf("  %d: %.1f %.1f  v %.2f %.2f\n", i, P->x, P->y, P->vx, P->vy); hold(G, 4, 0, 0); topY = fminf(topY, P->y); leftX = fminf(leftX, P->x); }
+    EXPECT_EQ_INT(topY < 60, 1);   // up the lane...
+    EXPECT_EQ_INT(leftX < 200, 1);   // ...and out onto the table
     // a ball dropping on the left flipper gets flicked up
     P->x = 148; P->y = 196; P->vx = 0; P->vy = 1;
     hold(G, 3, 0, 0);

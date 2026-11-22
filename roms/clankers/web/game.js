@@ -1074,9 +1074,12 @@ function paintScene(house) {
 // ---- the aquarium: swim round the tank with the fish and shrimp in a diving bubble, or climb out
 // onto the sandy beach where the crabs live. A swims up, B blows a bubble, START gets out.
 function aquaScene(house) {
-  const A = HOUSEART.AQUA, S = { song: 'select', t: 0, cam: 0, food: [], chestT: [0, 0], chestGot: 0 }, q = hrng(11);
+  const A = HOUSEART.AQUA, S = { song: 'select', t: 0, cam: 0, food: [], chestT: [0, 0, 0, 0], chestGot: 0 }, q = hrng(11);
   S.ps = house.ps.map((h, i) => ({ m: h.m, x: 60 + i * 40, y: 120, vx: 0, vy: 0, face: 1, land: false, ground: false, bubT: 0 }));
-  S.fish = Array.from({ length: 14 }, (_, i) => ({ kind: i % 3, x: 20 + q() * (A.BEACH_X - 60), y: 70 + q() * 130, vx: (q() < 0.5 ? -1 : 1) * (0.4 + q() * 0.5), scare: 0, happy: 0, follow: 0, who: 0, ph: q() * 6 }));
+  S.fish = Array.from({ length: A.POP.length * 6 }, (_, i) => {   // six fish to a section, each section its own kinds
+    const home = Math.floor(i / 6), kind = A.POP[home][i % 6], x = home * A.SEC_W + 20 + q() * (A.SEC_W - 40), y = 70 + q() * 130, sp = kind === 5 ? 0.15 : kind === 9 ? 0.5 : 0.4 + q() * 0.5;
+    return { kind, home, x, y, vx: (q() < 0.5 ? -1 : 1) * sp, scare: 0, happy: 0, follow: 0, who: 0, ph: q() * 6 };
+  });
   S.shrimp = Array.from({ length: 8 }, () => ({ x: 20 + q() * (A.BEACH_X - 70), y: A.SEABED - 2, vx: 0, vy: 0, face: q() < 0.5 ? -1 : 1, rest: Math.floor(q() * 200) }));
   S.crabs = Array.from({ length: 3 }, (_, i) => ({ x: A.BEACH_X + 14 + i * 22, vx: (i % 2 ? -1 : 1) * 0.5, y: 0, vy: 0, snap: 0, wait: 0, run: 0 }));
   const floorAt = x => x >= A.BEACH_X ? A.BEACH_Y : x > A.BEACH_X - 30 ? A.SEABED - (x - (A.BEACH_X - 30)) / 30 * (A.SEABED - A.BEACH_Y) : A.SEABED;
@@ -1141,7 +1144,8 @@ function aquaScene(house) {
         const p = S.ps[f.who], i = S.fish.indexOf(f), tx = p.x - p.face * (20 + (i % 3) * 8), ty = p.y - 20 + (i % 3) * 6 - 6;
         f.vx = clamp((tx - f.x) * 0.05, -1.8, 1.8); if (Math.abs(f.vx) < 0.15) f.vx = p.face * 0.15;
         f.y += clamp((ty - f.y) * 0.05, -1.2, 1.2); f.follow--;
-      } else if (f.scare > 0 && --f.scare === 0) f.vx = Math.sign(f.vx) * 0.6;
+      } else if (f.scare > 0 && --f.scare === 0) f.vx = Math.sign(f.vx) * (f.kind === 5 ? 0.15 : 0.6);
+      else if (f.scare <= 0) { const lo = f.home * A.SEC_W + 12, hi = lo + A.SEC_W - 24; if (f.x < lo) f.vx = Math.abs(f.vx); if (f.x > hi) f.vx = -Math.abs(f.vx); }   // each fish keeps to its own section
       // swimming into a fish boops it: a wiggle and a bubble
       for (const p of S.ps) {
         if (p.land || f.happy > 0 || f.follow > 0 || Math.hypot(p.x - f.x, p.y - 18 - f.y) > 14) continue;
@@ -1149,7 +1153,7 @@ function aquaScene(house) {
         particles.push({ x: f.x, y: f.y - 6, vx: 0, vy: -0.8, life: 50, max: 50, r: 3, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
       }
       if (f.happy > 0) f.happy--;
-      f.x += f.vx; f.y += Math.sin(S.t * 1.5 + f.ph) * 0.25;
+      f.x += f.vx; f.y += Math.sin(S.t * (f.kind === 5 ? 1.2 : 1.5) + f.ph) * (f.kind === 5 ? 0.6 : 0.25);   // jellies bob
       if (f.x < 12) { f.x = 12; f.vx = Math.abs(f.vx); } if (f.x > A.BEACH_X - 16) { f.x = A.BEACH_X - 16; f.vx = -Math.abs(f.vx); }
       f.y = clamp(f.y, A.WATER_TOP + 14, A.SEABED - 14);
     }
@@ -1191,9 +1195,9 @@ function aquaScene(house) {
   };
   S.draw = function () {
     K.g = g;
-    for (let k = 0; k < 3; k++) { g.save(); g.translate(k * W - S.cam, 0); HOUSEART.aquaBg(g, k === 2); g.restore(); }
+    for (let k = 0; k <= A.SECTIONS.length; k++) { if (k * W - S.cam <= -W || k * W - S.cam >= W) continue; g.save(); g.translate(k * W - S.cam, 0); HOUSEART.aquaBg(g, k === A.SECTIONS.length); g.restore(); }
     g.save(); g.translate(-S.cam, 0);
-    for (let k = 0; k < 8; k++) { const x = 30 + k * 110 + (k % 2) * 22; if (x > A.BEACH_X - 40) continue; g.save(); g.translate(x, A.SEABED); HOUSEART.weed(g, S.t, 28 + (k * 37 % 3) * 9); g.restore(); }
+    HOUSEART.aquaDecor(g, S.cam, S.t);
     HOUSEART.CHESTS.forEach((x, k) => {   // treasure chests: B opens them
       const y = A.SEABED; g.fillStyle = '#a8672f'; g.fillRect(x - 11, y - 14, 22, 14);
       if (S.chestT[k] > 0) { g.fillStyle = '#3a2618'; g.fillRect(x - 9, y - 13, 18, 4); K.circ(x - 4, y - 13, 3, '#ffd23f'); K.circ(x + 3, y - 14, 3, '#ffd23f'); g.fillStyle = '#c98a4b'; g.fillRect(x - 11, y - 24, 22, 6); if (Math.floor(S.t * 6) % 2) K.star(x + 2, y - 18, 3, '#fff6a0'); }
@@ -1201,7 +1205,7 @@ function aquaScene(house) {
     });
     for (const f of S.food) K.circ(f.x, f.y, 1.6, '#e8b46a');
     for (const s of S.shrimp) { g.save(); g.translate(s.x, s.y - 3); g.scale(s.face, 1); HOUSEART.shrimp(g, S.t); g.restore(); }
-    for (const f of S.fish) { g.save(); g.translate(f.x, f.y); g.rotate(f.happy > 0 ? Math.sin(f.happy * 0.8) * 0.25 : 0); g.scale(f.vx > 0 ? 1 : -1, 1); HOUSEART.fish(g, f.kind, (S.t + f.ph) * (f.happy > 0 ? 2.3 : 1)); g.restore(); if (f.happy > 20) K.star(f.x, f.y - 12, 3, '#ff8fc7'); }
+    for (const f of S.fish) { if (f.kind >= 3) { HOUSEART.fancyFish(g, f.kind, f.x, f.y, f.vx < 0 ? -1 : 1, S.t * (f.happy > 0 ? 2.3 : 1) + f.ph); if (f.happy > 20) K.star(f.x, f.y - 12, 3, '#ff8fc7'); continue; } g.save(); g.translate(f.x, f.y); g.rotate(f.happy > 0 ? Math.sin(f.happy * 0.8) * 0.25 : 0); g.scale(f.vx > 0 ? 1 : -1, 1); HOUSEART.fish(g, f.kind, (S.t + f.ph) * (f.happy > 0 ? 2.3 : 1)); g.restore(); if (f.happy > 20) K.star(f.x, f.y - 12, 3, '#ff8fc7'); }
     for (const c of S.crabs) { g.save(); g.translate(c.x, A.BEACH_Y - 5 + c.y); HOUSEART.crab(g, c.wait > 0 ? 0 : S.t, c.snap > 0 && Math.floor(c.snap / 5) % 2 === 0); g.restore(); }
     for (const p of S.ps) {
       const t = S.t + p.m.slot * 0.7, st = p.land ? (!p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle') : 'jump';
@@ -1210,6 +1214,8 @@ function aquaScene(house) {
     }
     g.restore();
     drawParticles(S.cam);
+    const sec = Math.floor((S.cam + W / 2) / A.SEC_W);
+    text(sec < A.SECTIONS.length ? A.SECTIONS[sec] : 'The Beach', 8, 234, 8, '#fff6d8', 'left');
     hint('Stick swim   A up   B feed, grab, throw   START leave', 14);
   };
   return S;
