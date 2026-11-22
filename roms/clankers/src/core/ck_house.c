@@ -8,30 +8,34 @@
 #include "ck_internal.h"
 
 const ck_room ck_rooms[CK_HOUSE_ROOMS] = {
-    { 0, 320, "The yard", 0x8FD3FF, 0xBDE8FF, 0x5DBB63 },
-    { 320, 500, "Bedroom", 0xFFD3E2, 0xFFC1D6, 0x8C6A55 },
-    { 500, 680, "Kitchen", 0xBDE7D2, 0xA9DCC3, 0xD9CDB8 },
-    { 680, 860, "Paint studio", 0xFFF1D6, 0xF6E1BA, 0x9C7552 },
-    { 860, 1040, "Music room", 0xC9B8F0, 0xB8A3E9, 0x7A4E3A },
-    { 1040, 1220, "Aquarium", 0x9FD8F0, 0x88CBE6, 0x5D7C99 },
-    { 1220, 1440, "Garage", 0xB5BAC4, 0xA4AAB6, 0x6E7280 },
+    { 0, 400, "The yard", 0x8FD3FF, 0xBDE8FF, 0x5DBB63 },
+    { 400, 580, "Bedroom", 0xFFD3E2, 0xFFC1D6, 0x8C6A55 },
+    { 580, 760, "Kitchen", 0xBDE7D2, 0xA9DCC3, 0xD9CDB8 },
+    { 760, 940, "Paint studio", 0xFFF1D6, 0xF6E1BA, 0x9C7552 },
+    { 940, 1120, "Music room", 0xC9B8F0, 0xB8A3E9, 0x7A4E3A },
+    { 1120, 1300, "Aquarium", 0x9FD8F0, 0x88CBE6, 0x5D7C99 },
+    { 1300, 1520, "Garage", 0xB5BAC4, 0xA4AAB6, 0x6E7280 },
+    { 1520, 1720, "Arcade", 0x3A2E5C, 0x46386E, 0x2B2240 },
 };
 // indexed by SPOT_*; the bedroom is first so saving is quick
 const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
-    { 535, SPOT_SNACK, FURN_FRIDGE, "Open the fridge" },
-    { 770, SPOT_PAINT, FURN_EASEL, "Paint the mural" },
-    { 925, SPOT_PIANO, FURN_PIANO, "Play the piano" },
-    { 1130, SPOT_AQUA, FURN_TANK, "Swim with the fish" },
-    { 410, SPOT_BED, FURN_BED, "Sleep and save" },
-    { 1320, SPOT_CARS, FURN_CAR, "Race the cars" },
-    { 1005, SPOT_DRUMS, FURN_DRUM, "Play the drums" },
+    { 615, SPOT_SNACK, FURN_FRIDGE, "Open the fridge" },
+    { 850, SPOT_PAINT, FURN_EASEL, "Paint the mural" },
+    { 1005, SPOT_PIANO, FURN_PIANO, "Play the piano" },
+    { 1210, SPOT_AQUA, FURN_TANK, "Swim with the fish" },
+    { 490, SPOT_BED, FURN_BED, "Sleep and save" },
+    { 1400, SPOT_CARS, FURN_CAR, "Race the cars" },
+    { 1085, SPOT_DRUMS, FURN_DRUM, "Play the drums" },
     { 262, SPOT_MAIL, FURN_MAILBOX, "Check the mail" },
     { 120, SPOT_TREE, FURN_TREE, "Pick an apple" },
     { 44, SPOT_BACK, FURN_SIGN, "Back a world" },
-    { 605, SPOT_STOVE, FURN_STOVE, "Cook something" },
+    { 685, SPOT_STOVE, FURN_STOVE, "Cook something" },
+    { 1580, SPOT_PINBALL, FURN_PINBALL, "Play pinball" },
+    { 1665, SPOT_BLAST, FURN_ARCADE, "Play Bug Blaster" },
+    { 345, SPOT_POND, FURN_POND, "Go fishing" },
 };
 const ck_decor ck_decors[CK_HOUSE_DECOR] = {
-    { 648, FURN_TABLE }, { 840, FURN_PLANT }, { 1205, FURN_PLANT }, { 475, FURN_LAMP }, { 1410, FURN_TOOLS },
+    { 728, FURN_TABLE }, { 920, FURN_PLANT }, { 1285, FURN_PLANT }, { 555, FURN_LAMP }, { 1490, FURN_TOOLS },
 };
 #define C(x, y, r, c) { 0, x, y, r, 0, c }
 #define R(x, y, w, h, c) { 1, x, y, w, h, c }
@@ -144,7 +148,7 @@ int ck_house_near(const ck_game *G, const ck_hhero *p) {
 static void say(ck_house *H, const char *s) { snprintf(H->msg, sizeof H->msg, "%s", s); H->msgT = 100; }
 
 // the heroes as they come into one of the house's games
-static void game_heroes(ck_game *G) {
+void ck_house_game_heroes(ck_game *G) {
     ck_house *H = &G->house;
     for (int i = 0; i < H->np; i++) { memset(&H->gs[i], 0, sizeof H->gs[i]); H->gs[i].slot = H->ps[i].slot; H->gs[i].face = 1; }
 }
@@ -182,11 +186,15 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
     case SPOT_DRUMS: ck_sfx(G, SFX_OPEN); piano_start(G, true); break;
     case SPOT_AQUA: ck_sfx(G, SFX_OPEN); aqua_start(G); break;
     case SPOT_CARS: ck_sfx(G, SFX_OPEN); cars_start(G); break;
+    case SPOT_PINBALL: ck_sfx(G, SFX_OPEN); ck_pin_start(G); break;
+    case SPOT_BLAST: ck_sfx(G, SFX_OPEN); ck_blast_start(G); break;
+    case SPOT_POND: ck_sfx(G, SFX_OPEN); ck_fish_start(G); break;
     case SPOT_BED: ck_sfx(G, SFX_SELECT); H->mode = HM_SLOTS; H->pick = G->slot; break;
     }
 }
 
-static void back_to_house(ck_game *G) { ck_sfx(G, SFX_SELECT); G->scene = SC_HOUSE; G->t = 0; ck_play(G, SONG_SELECT); }
+void ck_house_back(ck_game *G) { ck_sfx(G, SFX_SELECT); G->scene = SC_HOUSE; G->t = 0; ck_play(G, SONG_SELECT); }
+#define back_to_house ck_house_back
 
 // The stove: the dish is named by what went in the pan.
 static void cook_name(ck_house *H) {
@@ -342,14 +350,14 @@ void ck_house_update(ck_game *G) {
 // colour. The wall stays painted until the console is switched off.
 static void paint_start(ck_game *G) {
     ck_house *H = &G->house;
-    game_heroes(G);
+    ck_house_game_heroes(G);
     for (int i = 0; i < H->np; i++) { ck_hhero *p = &H->gs[i]; p->x = 120 + i * 80; p->y = CK_MURAL_FLOOR; p->col = i ? 4 : 0; }
     ck_go(G, SC_PAINT);
 }
-void ck_mural_dab(ck_house *H, float px, float py, int c) {
+void ck_mural_dab(ck_house *H, float px, float py, int c, int size) {
     int cx = (int)floorf(px / CK_MURAL_CELL), cy = (int)floorf((py - CK_MURAL_Y) / CK_MURAL_CELL);
-    for (int dy = -1; dy <= 1; dy++)
-        for (int dx = -1; dx <= 1; dx++) {
+    for (int dy = -(size / 2); dy <= size - size / 2; dy++)
+        for (int dx = -(size / 2); dx <= size - size / 2; dx++) {
             int x = cx + dx, y = cy + dy;
             if (x < 0 || y < 0 || x >= CK_MURAL_W || y >= CK_MURAL_H) continue;
             H->mural[y * CK_MURAL_W + x] = (uint8_t)(c == CK_MURAL_ERASER ? 0 : c + 1);
@@ -374,7 +382,8 @@ static void paint_update(ck_game *G) {
         p->y += p->vy;
         if (p->y > CK_MURAL_FLOOR) { p->y = CK_MURAL_FLOOR; p->vy = 0; }
         if (p->y < CK_MURAL_Y + 28) { p->y = CK_MURAL_Y + 28; p->vy = 0; }
-        if (HIT(G, s, CK_C) || HIT(G, s, CK_R)) { p->col = (p->col + 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_C)) { p->size = (p->size + 1) % 3; ck_sfx(G, SFX_SELECT); }   // C: a bigger brush, then back to the smallest
+        if (HIT(G, s, CK_R)) { p->col = (p->col + 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
         if (HIT(G, s, CK_L)) { p->col = (p->col + CK_MURAL_CHOICES - 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
         float bx = p->x + p->face * 9, by = p->y - 16;
         if (p->col == CK_MURAL_CLEAR) {   // the wipe-all choice: B clears the wall
@@ -388,7 +397,7 @@ static void paint_update(ck_game *G) {
             if (!p->brush) { p->bx = bx; p->by = by; p->brush = true; }
             int n = (int)ceilf(hypotf(bx - p->bx, by - p->by) / 2);
             if (n < 1) n = 1;
-            for (int k = 1; k <= n; k++) ck_mural_dab(H, p->bx + (bx - p->bx) * k / n, p->by + (by - p->by) * k / n, p->col);
+            for (int k = 1; k <= n; k++) ck_mural_dab(H, p->bx + (bx - p->bx) * k / n, p->by + (by - p->by) * k / n, p->col, p->size);
             p->bx = bx; p->by = by;
         } else p->brush = false;
     }
@@ -402,7 +411,7 @@ static float aqua_floor(float x) {
 }
 static void aqua_start(ck_game *G) {
     ck_house *H = &G->house;
-    game_heroes(G);
+    ck_house_game_heroes(G);
     for (int i = 0; i < H->np; i++) { H->gs[i].x = 60 + i * 40; H->gs[i].y = 120; }
     hseed = 11;
     for (int i = 0; i < CK_AQUA_FISH; i++) {
@@ -631,7 +640,7 @@ static void cars_reset(ck_game *G) {
     }
     H->count = 3; H->win = -1; H->endT = 0; H->clock = 0; H->pickTrack = true;
 }
-static void cars_start(ck_game *G) { game_heroes(G); cars_reset(G); ck_go(G, SC_CARS); }
+static void cars_start(ck_game *G) { ck_house_game_heroes(G); cars_reset(G); ck_go(G, SC_CARS); }
 // Before each race: left and right pick the track, A starts the countdown.
 static void cars_update(ck_game *G) {
     ck_house *H = &G->house;
@@ -704,7 +713,7 @@ const ck_drum ck_drums[CK_DRUMS] = {
 
 static void piano_start(ck_game *G, bool drums) {
     ck_house *H = &G->house;
-    game_heroes(G);
+    ck_house_game_heroes(G);
     H->drums = drums;
     for (int i = 0; i < H->np; i++) H->gs[i].key = i ? 16 : 7;
     memset(H->lit, 0, sizeof H->lit);
@@ -768,5 +777,8 @@ void ck_house_step(ck_game *G) {
     case SC_AQUA: aqua_update(G); break;
     case SC_CARS: cars_update(G); break;
     case SC_PIANO: piano_update(G); break;
+    case SC_PINBALL: ck_pin_update(G); break;
+    case SC_BLAST: ck_blast_update(G); break;
+    case SC_FISH: ck_fish_update(G); break;
     }
 }

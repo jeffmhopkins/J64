@@ -22,6 +22,16 @@ void ck_sparks(ck_game *G, float x, float y, int n, uint32_t col);
 void ck_confetti(ck_game *G, float x, float y, int n);
 void ck_debris(ck_game *G, float x, float y);
 void ck_step_parts(ck_game *G);
+
+// house.c and arcade.c: the house's little games
+void ck_house_game_heroes(ck_game *G);    // the heroes as they come into one of the house's games
+void ck_house_back(ck_game *G);           // leave a game for the house
+void ck_pin_start(ck_game *G);
+void ck_pin_update(ck_game *G);
+void ck_blast_start(ck_game *G);
+void ck_blast_update(ck_game *G);
+void ck_fish_start(ck_game *G);
+void ck_fish_update(ck_game *G);
 void ck_save(ck_game *G);
 
 // level.c
@@ -42,7 +52,7 @@ void ck_save_to_slot(ck_game *G, int k);  // the bed: this game is now saved in 
 // house.c
 void ck_house_enter(ck_game *G, bool fromShop);
 void ck_house_step(ck_game *G);
-void ck_mural_dab(ck_house *H, float px, float py, int c);
+void ck_mural_dab(ck_house *H, float px, float py, int c, int size);   // size 0 (one cell) to 2 (three across)
 
 // cut.c
 void ck_cut_start(ck_game *G, int k);

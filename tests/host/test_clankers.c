@@ -1007,6 +1007,20 @@ static void test_house(void) {
     int left = 0;
     for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) left += G->house.mural[i] != 0;
     EXPECT_EQ_INT(left, 0);
+    // the brush starts at one cell; C makes it two, then three cells across
+    press(G, CK_R, 0);
+    EXPECT_EQ_INT(G->house.gs[0].col, 0);
+    hold(G, 40, 0, 0);
+    static const int sizes[3] = { 1, 4, 9 };
+    for (int sz = 0; sz < 3; sz++) {
+        EXPECT_EQ_INT(G->house.gs[0].size, sz);
+        ck_game_step(G, CK_B, 0); ck_game_step(G, 0, 0);
+        left = 0;
+        for (int i = 0; i < CK_MURAL_W * CK_MURAL_H; i++) left += G->house.mural[i] != 0;
+        EXPECT_EQ_INT(left, sizes[sz]);
+        press(G, CK_C, 0);
+    }
+    EXPECT_EQ_INT(G->house.gs[0].size, 0);
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
     EXPECT_EQ_INT(painted > 0, 1);   // the wall keeps its paint
@@ -1036,6 +1050,7 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->prog.bolts, bolts0 + 5);
     // a shrimp: B picks it up, it rides in your hand, and B throws it the way you face
     G->house.gs[0].x = 280; G->house.gs[0].y = CK_AQUA_SEABED; G->house.gs[0].face = 1;
+    for (int k = 1; k < CK_AQUA_SHRIMP; k++) G->house.shrimp[k].x = 600;
     G->house.shrimp[0].x = 284; G->house.shrimp[0].y = CK_AQUA_SEABED - 2; G->house.shrimp[0].spin = 0;
     press(G, CK_B, 0);
     EXPECT_EQ_INT(G->house.shrimp[0].held, 1);
@@ -1162,6 +1177,125 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->house.mode, HM_SLEEP);
     hold(G, 200, 0, 0);
     EXPECT_EQ_INT(G->house.mode, HM_WALK);
+    // the arcade's pinball table: A fires the ball up the lane, the flippers flick it
+    walk_to(G, ck_spots[SPOT_PINBALL].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_PINBALL);
+    ck_pinball *P = &G->house.pin;
+    EXPECT_EQ_INT(P->balls, CK_PIN_BALLS);
+    EXPECT_EQ_INT(P->x > 232, 1);
+    press(G, CK_A, 0);
+    for (int i = 0; i < 120; i += 4) { if (getenv("PINDBG")) printf("  %d: %.1f %.1f  v %.2f %.2f\n", i, P->x, P->y, P->vx, P->vy); hold(G, 4, 0, 0); }
+    EXPECT_EQ_INT(P->y < 150, 1);
+    EXPECT_EQ_INT(P->x < 232, 1);   // out of the lane onto the table
+    // a ball dropping on the left flipper gets flicked up
+    P->x = 148; P->y = 196; P->vx = 0; P->vy = 1;
+    hold(G, 3, 0, 0);
+    hold(G, 6, CK_B, 0);
+    EXPECT_EQ_INT(P->flip[0] < 0, 1);
+    EXPECT_EQ_INT(P->vy < -3, 1);
+    hold(G, 30, 0, 0);
+    // play on with a flipper now and then until the balls run out; the score never goes down
+    int last = P->score, falls = 0;
+    for (int i = 0; i < 60 * 600 && !P->over; i++) {
+        int b0 = P->balls;
+        ck_game_step(G, (i / 7) % 5 == 0 ? CK_A : (i / 9) % 4 == 0 ? CK_B : 0, 0);
+        EXPECT_EQ_INT(P->score >= last, 1);
+        last = P->score;
+        if (P->balls < b0) falls++;
+        if (P->y < -10 || P->x < 60 || P->x > 260) { printf("  pinball: the ball got out at %.0f, %.0f\n", P->x, P->y); break; }
+    }
+    EXPECT_EQ_INT(P->over, 1);
+    EXPECT_EQ_INT(falls >= 1, 1);
+    EXPECT_EQ_INT(P->best, P->score);
+    printf("  pinball: %d points\n", P->score);
+    hold(G, 70, 0, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(P->over, 0);
+    EXPECT_EQ_INT(P->balls, CK_PIN_BALLS);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    // Bug Blaster: shoot the bottom bug in a column, clear a wave, and lose the cannons to bombs
+    walk_to(G, ck_spots[SPOT_BLAST].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_BLAST);
+    ck_blaster *B = &G->house.blast;
+    hold(G, 95, 0, 0);   // "wave 1"
+    float bx, by;
+    ck_bug_at(B, 3 * CK_BUG_COLS + 2, &bx, &by);
+    B->gun[0] = bx; B->stepT = -1000;   // hold the bugs still
+    press(G, CK_A, 0);
+    for (int i = 0; i < 60 && B->shot[0].on; i++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(B->bugs & (1u << (3 * CK_BUG_COLS + 2)), 0);
+    EXPECT_EQ_INT(B->score, 10);
+    B->bugs = 1u << 2;   // only one bug in the top row left
+    ck_bug_at(B, 2, &bx, &by);
+    B->gun[0] = bx;
+    press(G, CK_A, 0);
+    for (int i = 0; i < 60 && B->wave == 0; i++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(B->wave, 1);
+    EXPECT_EQ_INT(B->bugs == 0xFFFFFFFFu, 1);
+    EXPECT_EQ_INT(B->score, 50);
+    hold(G, 95, 0, 0);
+    B->stepT = -1000;
+    B->bomb[0] = (ck_shot){ B->gun[0], CK_BLAST_Y - 4, true };
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(B->lives, 2);
+    EXPECT_EQ_INT(B->inv[0] > 0, 1);
+    B->lives = 1; B->inv[0] = 0;
+    B->bomb[0] = (ck_shot){ B->gun[0], CK_BLAST_Y - 4, true };
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(B->over, 1);
+    EXPECT_EQ_INT(B->best, 50);
+    hold(G, 70, 0, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(B->over, 0);
+    EXPECT_EQ_INT(B->lives, 3);
+    // left alone, the bugs march down to the shields: game over
+    for (int i = 0; i < 60 * 120 && !B->over; i++) { ck_game_step(G, 0, 0); B->inv[0] = B->inv[1] = 10; }
+    EXPECT_EQ_INT(B->over, 1);
+    press(G, CK_START, 0);
+    // the pond: cast, wait for a bite, hook it with A, reel it in
+    walk_to(G, ck_spots[SPOT_POND].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_FISH);
+    ck_pond *Pd = &G->house.pond;
+    ck_rod *R = &Pd->rod[0];
+    hold(G, 40, CK_A, 0);
+    EXPECT_EQ_INT(R->state, ROD_CHARGE);
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(R->state, ROD_FLY);
+    for (int i = 0; i < 200 && R->state == ROD_FLY; i++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(R->state, ROD_WAIT);
+    EXPECT_EQ_INT(R->x > CK_POND_BANK + 40, 1);
+    for (int k = 0; k < CK_POND_FISH; k++) { Pd->fish[k].x = 300; Pd->fish[k].scare = 9999; }
+    Pd->fish[0] = (ck_pfish){ CATCH_GOLDFISH, R->x + 20, R->y + 10, -0.5f, 0 };
+    for (int i = 0; i < 600 && R->state == ROD_WAIT; i++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(R->state, ROD_BITE);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(R->state, ROD_REEL);
+    int fishBolts0 = G->prog.bolts;
+    for (int i = 0; i < 3000 && R->state == ROD_REEL; i++) ck_game_step(G, R->tension < 60 ? CK_A : 0, 0);
+    EXPECT_EQ_INT(R->state, ROD_GOT);
+    EXPECT_EQ_INT(Pd->caught, 1);
+    EXPECT_EQ_INT(Pd->got[CATCH_GOLDFISH], 1);
+    EXPECT_EQ_INT(G->prog.bolts, fishBolts0 + ck_catches[CATCH_GOLDFISH].bolts);
+    // holding A while a big fish pulls snaps the line
+    hold(G, 160, 0, 0);
+    EXPECT_EQ_INT(R->state, ROD_IDLE);
+    hold(G, 40, CK_A, 0);
+    for (int i = 0; i < 200 && R->state != ROD_WAIT; i++) ck_game_step(G, 0, 0);
+    for (int k = 0; k < CK_POND_FISH; k++) { Pd->fish[k].x = 300; Pd->fish[k].scare = 9999; }
+    Pd->fish[1] = (ck_pfish){ CATCH_BASS, R->x, R->y, 0.5f, 0 };
+    for (int i = 0; i < 600 && R->state == ROD_WAIT; i++) ck_game_step(G, 0, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(R->state, ROD_REEL);
+    R->pulling = true; R->t = 1;
+    for (int i = 0; i < 300 && R->state == ROD_REEL; i++) ck_game_step(G, CK_A, 0);
+    EXPECT_EQ_INT(R->state, ROD_SNAP);
+    EXPECT_EQ_INT(Pd->caught, 1);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
     // START (or walking off the yard) goes back to the map
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_MAP);

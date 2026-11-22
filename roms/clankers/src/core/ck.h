@@ -391,19 +391,21 @@ typedef struct {
 // The shop node on every map is the heroes' house: the yard, then rooms in a row along one floor
 // (web/lib/houseart.js has the same layout). Down at a room's thing uses it; some open a little
 // game of their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO). Rescued baby bots wander about.
-#define CK_HOUSE_W 1440
+#define CK_HOUSE_W 1720
 #define CK_HOUSE_FLOOR 200
 #define CK_HOUSE_CEIL 20
 #define CK_HOUSE_PILLAR 8
 #define CK_HOUSE_DOOR_TOP 120
-#define CK_HOUSE_ROOMS 7
-#define CK_HOUSE_SPOTS 11
+#define CK_HOUSE_ROOMS 8
+#define CK_HOUSE_SPOTS 14
 #define CK_HOUSE_DECOR 5
 #define CK_HOUSE_BABIES 16
-enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE };
+enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE,
+       SPOT_PINBALL, SPOT_BLAST, SPOT_POND };
 // furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
 enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
-       FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN, FURN_COUNT };
+       FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN,
+       FURN_PINBALL, FURN_ARCADE, FURN_POND, FURN_COUNT };
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
 typedef struct { int x, kind, furn; const char *label; } ck_spot;
 typedef struct { int x, furn; } ck_decor;
@@ -466,6 +468,75 @@ void ck_piano_key(int i, float *x, bool *black);
 enum { DRUM_DRUM, DRUM_CYMBAL, DRUM_HANDS };
 typedef struct { const char *name, *button; uint16_t btn; int kind; float x, y, r; uint32_t col; } ck_drum;
 extern const ck_drum ck_drums[CK_DRUMS];   // semitone 0..23: the key's middle and colour
+// ---- the arcade room's pinball table (SC_PINBALL): one table, both players share the flippers.
+// B or L flips the left flipper, A or R the right; A also fires a ball waiting in the launch lane.
+#define CK_PIN_R 4                // the ball's radius
+#define CK_PIN_WALLS 9
+#define CK_PIN_BUMPS 5
+#define CK_PIN_LIGHTS 3
+#define CK_PIN_FLIP_LEN 27
+#define CK_PIN_BALLS 3
+typedef struct { float x0, y0, x1, y1; } ck_seg;
+typedef struct { float x, y, r; int score; } ck_bump;
+extern const ck_seg ck_pin_walls[CK_PIN_WALLS];
+extern const ck_bump ck_pin_bumps[CK_PIN_BUMPS];
+extern const ck_seg ck_pin_gate;   // over the launch lane's top: the ball only goes out through it
+extern const float ck_pin_lights[CK_PIN_LIGHTS][2];
+extern const float ck_pin_pivot[2][2];
+// flipper side 0 (left) or 1 (right) at angle a: from its pivot to its tip
+void ck_pin_flipper(int side, float a, float *x0, float *y0, float *x1, float *y1);
+typedef struct {
+    float x, y, vx, vy;        // the ball
+    float flip[2], flipW[2];   // each flipper's angle and how far it turned this frame
+    int balls, score, best;
+    int flash[CK_PIN_BUMPS];   // frames a bumper stays lit after a hit
+    int lit, litT;             // the top lights that are lit (bits); litT: the all-lit flash
+    bool over;
+    int overT;
+} ck_pinball;
+// ---- the arcade cabinet (SC_BLAST): Bug Blaster. Rows of glitch bugs march side to side and step
+// down; each player has a cannon on the bottom (the stick moves it, A or B fires). Three shields.
+#define CK_BUG_COLS 8
+#define CK_BUG_ROWS 4
+#define CK_BUG_DX 24
+#define CK_BUG_DY 18
+#define CK_BLAST_Y 216            // the cannons' row
+#define CK_BLAST_BOMBS 6
+#define CK_SHIELDS 3
+#define CK_SHIELD_W 6             // cells across
+#define CK_SHIELD_H 3
+#define CK_SHIELD_CELL 6
+#define CK_SHIELD_Y 180
+extern const float ck_shield_x[CK_SHIELDS];   // each shield's left edge
+typedef struct { float x, y; bool on; } ck_shot;
+typedef struct {
+    uint32_t bugs;             // one bit a bug, row by row
+    float bx, by;              // the top left bug's middle
+    int dir, stepT, frame;
+    float gun[2];
+    int inv[2];
+    ck_shot shot[2], bomb[CK_BLAST_BOMBS];
+    uint8_t shield[CK_SHIELDS][CK_SHIELD_W * CK_SHIELD_H];
+    int lives, score, best, wave, waveT;
+    bool over;
+    int overT;
+} ck_blaster;
+void ck_bug_at(const ck_blaster *B, int k, float *x, float *y);
+// ---- the yard's pond (SC_FISH): fishing. Hold A to swing the rod back, let go to cast; up and
+// down raise and sink the hook; when a fish bites, A hooks it; then hold A to reel in, letting go
+// when the line gets tight so it does not snap. B reels in an empty line.
+#define CK_POND_FISH 6
+#define CK_POND_TOP 112           // the water's surface
+#define CK_POND_BED 226
+#define CK_POND_BANK 70           // the bank's edge: a hooked fish is caught when it gets here
+enum { CATCH_MINNOW, CATCH_GOLDFISH, CATCH_BASS, CATCH_GOLDEN, CATCH_BOOT, CATCH_COUNT };
+typedef struct { const char *name; uint32_t col; float len, speed, pull; int bolts; } ck_catch;
+extern const ck_catch ck_catches[CATCH_COUNT];
+typedef struct { int kind; float x, y, vx; int scare; } ck_pfish;
+enum { ROD_IDLE, ROD_CHARGE, ROD_FLY, ROD_WAIT, ROD_BITE, ROD_REEL, ROD_GOT, ROD_SNAP };
+typedef struct { int state, fish, t, nibble; float power, x, y, vx, vy, tension; bool pulling; } ck_rod;
+typedef struct { ck_pfish fish[CK_POND_FISH]; ck_rod rod[2]; int caught, got[CATCH_COUNT], last; } ck_pond;
+void ck_rod_tip(int i, float *x, float *y);   // player i's rod tip (they stand on the bank)
 // One hero in the house or one of its games (not every game uses every field).
 typedef struct {
     int slot;                  // player slot 0 or 1
@@ -479,6 +550,7 @@ typedef struct {
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
     uint64_t hit;              // cars: the obstacles you have bumped, one bit each
+    int size;                  // paint: the brush size, 0 (one cell) to 2 (three cells across)
 } ck_hhero;
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
 typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`
@@ -545,13 +617,16 @@ typedef struct {
     int chestT[CK_AQUA_CHESTS];   // aquarium: frames a chest stays open
     uint8_t chestGot;          // aquarium: chests whose bolts you have had this visit
     bool drums;                // SC_PIANO shows the drum kit instead of the piano
+    ck_pinball pin;
+    ck_blaster blast;
+    ck_pond pond;
 } ck_house;
 #define CK_SLOTS 3
 typedef struct { bool used; int world, bolts; } ck_slot_info;
 
 // ---------------------------------------------------------------------------- the whole game
 enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU,
-       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS };
+       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH };
 enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
 
 // The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine

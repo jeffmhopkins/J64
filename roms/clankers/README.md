@@ -86,18 +86,19 @@ CRT scanlines on or off. A second controller plays the ostrich.
 ## The house
 
 Each world's map starts at the heroes' house. You start in the yard and walk right through the
-rooms; A uses what you stand at, and A anywhere else jumps. Walk off the yard's left edge to go
-back to the map.
+rooms; A uses what you stand at, and A anywhere else jumps. START leaves any game or screen.
+Walk off the yard's left edge to go back to the map.
 
 | Room | What A does there |
 | --- | --- |
-| Yard | Pick an apple off the tree, open the mailbox for a big letter; from World 2 on, the signpost goes back a world |
+| Yard | Pick an apple off the tree, open the mailbox for a big letter, or go fishing at the pond (hold A and let go to cast, up and down move the hook, A when a fish bites, then hold A to reel and let go when the line goes red); from World 2 on, the signpost goes back a world |
 | Bedroom | Sleep, and save the game to a slot |
 | Kitchen | The fridge: pick one of nine foods. The stove: add up to four ingredients, stir with B till the bar fills, and take the dish (an omelette, a toastie or a soup, named by what went in) |
-| Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall (hold B); L and R change colour, and the last choice, ALL, wipes the wall with B. Turning round keeps the brush where it was |
+| Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall (hold B); L and R change colour, C changes the brush size (one, two or three cells), and the last colour choice, ALL, wipes the wall with B. Turning round keeps the brush where it was |
 | Music room | The piano (the stick picks a key, A plays it, B jumps an octave) or the drums (every button is a different drum) |
-| Aquarium | Dive into a tank three screens wide with a bubble helmet. B sprinkles food (a fed fish follows you for a while), opens a treasure chest (5 bolts each, once a visit) and pokes a crab on the beach; swimming into a fish boops it |
-| Garage | A top-down race, half the screen each for two players: steer across three lanes round cones, crates, oil and slow cars; A or up goes faster, B or down brakes |
+| Aquarium | Dive into a tank three screens wide with a bubble helmet. B sprinkles food (a fed fish follows you for a while), opens a treasure chest (5 bolts each, once a visit), pokes a crab on the beach, and picks up a shrimp (B again throws it); swimming into a fish boops it |
+| Garage | A top-down race, half the screen each for two players, on four tracks (Green Hills, Desert Dash, Snowy Pass, Moon Run) with their own obstacles; pick one with left and right. Steer across three lanes; A or up goes faster, B or down brakes |
+| Arcade | Pinball (B or L flips the left flipper, A or R the right; A fires the ball up the lane) and Bug Blaster (the stick moves your cannon, A or B fires; clear the bugs before they reach the shields) |
 
 Food you hold (from the tree, the fridge or the stove) goes in your hand: A eats it and fills your
 batteries, B throws it the way you face, and a baby that gets to it first munches it.

@@ -73,7 +73,7 @@ void draw_init(void) {
 // Free the big pictures and hero sheets the next scene does not need.
 static void free_for(const ck_game *G) {
     int sc = G->scene;
-    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
+    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
     group = group * 16 + G->worldNum * 4 + (G->scene == SC_CUT ? G->cut % 4 : 0);   // a new world or film needs its own pictures
     waited = false;
     if (group != big_group) {
@@ -1361,10 +1361,10 @@ static void draw_rooms(const ck_game *G, float cam, float t) {
             rect(a, 0, b - a, CK_HOUSE_FLOOR, r->wall, 1);
             rect(a, 120, b - a, 80, r->stripe, 1);
             cloud(60 - cam, 40); cloud(200 - cam, 26);
-            for (int x = 10; x < 300; x += 16) rect(x - cam, 170, 8, 30, 0xFFF6D8, 1);
+            for (int x = 10; x < r->x1 - 20; x += 16) rect(x - cam, 170, 8, 30, 0xFFF6D8, 1);
             rect(a, 178, b - a - 20, 5, 0xFFF6D8, 1);
             rect(a, CK_HOUSE_FLOOR, b - a, H - CK_HOUSE_FLOOR, r->floor, 1);
-            for (int x = 0; x < 320; x += 10) rect(x - cam, CK_HOUSE_FLOOR, 5, 3, 0x4FA856, 1);
+            for (int x = 0; x < r->x1; x += 10) rect(x - cam, CK_HOUSE_FLOOR, 5, 3, 0x4FA856, 1);
             continue;
         }
         rect(a, CK_HOUSE_CEIL, b - a, CK_HOUSE_FLOOR - CK_HOUSE_CEIL, r->wall, 1);
@@ -1554,11 +1554,12 @@ static void draw_paint(const ck_game *G) {
         if (p->jet) blit_o(SPR_CUT_FLAME, (int)(t * 14) % 2, p->x - p->face * 5, p->y - 8, (bopt){ .sx = 0.3f, .sy = 0.3f });
         house_hero(G, p->slot, p->x, p->y, p->y < CK_MURAL_FLOOR ? HP_JET : HP_IDLE, tt, p->face);
         float bx = p->x + p->face * 9, by = p->y - 16;
-        shape(SPR_DOT, bx, by, 4, 0x1B1426, 1);
-        shape(SPR_DOT, bx, by, 3, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : p->col == CK_MURAL_CLEAR ? 0xE04F4F : 0xFFF6E6, 1);
+        float br = 2 + p->size * 2;   // the brush tip grows with the brush size (C)
+        shape(SPR_DOT, bx, by, br + 1, 0x1B1426, 1);
+        shape(SPR_DOT, bx, by, br, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : p->col == CK_MURAL_CLEAR ? 0xE04F4F : 0xFFF6E6, 1);
     }
     particles(G, 0);
-    hint(11, "A up   v down   B paint   L R colour   START leave");
+    hint(11, "A up   B paint   L R colour   C size   START leave");
 }
 
 // The aquarium, three screens wide: two water tiles then the baked beach screen, swaying weed,
@@ -1727,6 +1728,188 @@ static void draw_cars(const ck_game *G) {
     hint(H - 12, "Stick steer   A faster   B brake   START leave");
 }
 
+// ---------------------------------------------------------------------------- the arcade and the pond
+// Mirrors pinballScene, blastScene and fishScene in web/arcade.js: boxes, lines and dots only.
+static void score_box(float x, float y, const char *label, int v, int style) {
+    dark_panel(x, y, 58, 30);
+    txt(F_SMALL, ST_PALE, x + 29, y + 11, ALIGN_CENTER, "%s", label);
+    txt(F_MED, style, x + 29, y + 26, ALIGN_CENTER, "%d", v);
+}
+static void game_over(int score, int best) {
+    char s[32];
+    banner(F_BIG, ST_YELLOW, 0xFFD23F, 70, 160, 34, 93, "GAME OVER");
+    snprintf(s, sizeof s, "Score %d   Best %d", score, best);
+    hint(124, s);
+    hint(142, "A play again");
+}
+static void draw_pinball(const ck_game *G) {
+    const ck_pinball *P = &G->house.pin;
+    rect(0, 0, W, H, 0x2B2240, 1);
+    for (int k = 0; k < 24; k++) shape(SPR_DOT, (k * 53) % 320, (k * 37) % 240, 1, 0x5A4F78, 1);
+    rect(70, 16, 180, H - 16, 0x1B2A4A, 1);
+    for (int y = 30; y < H; y += 20) rect(72, y, 158, 1, 0x22355C, 1);
+    for (int k = 0; k < CK_PIN_WALLS; k++) { const ck_seg *w = &ck_pin_walls[k]; line(w->x0, w->y0, w->x1, w->y1, 3, 0xC9C4E0, 1); }
+    line(ck_pin_gate.x0, ck_pin_gate.y0, ck_pin_gate.x1, ck_pin_gate.y1, 2, 0xFFD23F, 1);
+    for (int k = 0; k < CK_PIN_LIGHTS; k++) {
+        bool on = (P->lit & (1 << k)) || (P->litT > 0 && (P->litT / 6) % 2);
+        shape(SPR_DOT, ck_pin_lights[k][0], ck_pin_lights[k][1], 5, on ? 0xFFD23F : 0x3A3650, 1);
+        shape(SPR_RING, ck_pin_lights[k][0], ck_pin_lights[k][1], 6, 0x8F8AA8, 1);
+    }
+    static const uint32_t bcol[CK_PIN_BUMPS] = { 0xFF5A5A, 0x5AD1FF, 0xC28BFF, 0x49D17A, 0x49D17A };
+    for (int k = 0; k < CK_PIN_BUMPS; k++) {
+        const ck_bump *b = &ck_pin_bumps[k];
+        float r = b->r + (P->flash[k] > 0 ? 2 : 0);
+        shape(SPR_DOT, b->x, b->y, r, P->flash[k] > 0 ? 0xFFFFFF : bcol[k], 1);
+        shape(SPR_DOT, b->x, b->y, r * 0.55f, 0x1B1426, 1);
+        shape(SPR_DOT, b->x, b->y, r * 0.3f, bcol[k], 1);
+    }
+    for (int s = 0; s < 2; s++) {
+        float x0, y0, x1, y1;
+        ck_pin_flipper(s, P->flip[s], &x0, &y0, &x1, &y1);
+        line(x0, y0, x1, y1, 6, 0xFFD23F, 1);
+        shape(SPR_DOT, x0, y0, 4, 0xFF8A3D, 1);
+    }
+    if (!P->over || P->balls > 0) {
+        shape(SPR_DOT, P->x, P->y, CK_PIN_R, 0xE6E6F0, 1);
+        shape(SPR_DOT, P->x - 1.2f, P->y - 1.2f, 1.4f, 0xFFFFFF, 1);
+    }
+    particles(G, 0);
+    score_box(6, 20, "SCORE", P->score, ST_YELLOW);
+    score_box(6, 56, "BALLS", P->balls, ST_CREAM);
+    score_box(256, 20, "BEST", P->best, ST_GREEN);
+    if (P->litT > 0) banner(F_MED, ST_YELLOW, 0xFFD23F, 120, 100, 22, 135, "BONUS!");
+    if (P->over) { game_over(P->score, P->best); return; }
+    if (P->x > 232 && P->y > 218) hint(H - 12, "A launch!   START leave");
+    else hint(H - 12, "B left flipper   A right flipper   START leave");
+}
+
+static void bug(int row, float x, float y, int frame) {
+    uint32_t col = row == 0 ? 0xFF5A5A : row == 1 ? 0xC28BFF : 0x49D17A;
+    float lg = frame ? 2 : -2;
+    rect(x - 8, y + 1 + lg * 0.5f, 3, 4, col, 1); rect(x + 5, y + 1 - lg * 0.5f, 3, 4, col, 1);   // legs
+    rect(x - 5 + lg, y + 4, 2, 4, col, 1); rect(x + 3 - lg, y + 4, 2, 4, col, 1);
+    shape(SPR_DOT, x, y, 6, col, 1);
+    rect(x - 3, y - 9, 1, 4, col, 1); rect(x + 2, y - 9, 1, 4, col, 1);   // feelers
+    shape(SPR_DOT, x - 2.5f, y - 1, 2, 0xFFFFFF, 1); shape(SPR_DOT, x + 2.5f, y - 1, 2, 0xFFFFFF, 1);
+    shape(SPR_DOT, x - 2.5f + (frame ? 0.6f : -0.6f), y - 1, 1, 0x1B1426, 1); shape(SPR_DOT, x + 2.5f + (frame ? 0.6f : -0.6f), y - 1, 1, 0x1B1426, 1);
+}
+static void draw_blast(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    const ck_blaster *B = &Hs->blast;
+    char s[24];
+    rect(0, 0, W, H, 0x14102A, 1);
+    for (int k = 0; k < 40; k++) shape(SPR_DOT, (k * 97) % 320, fmodf((k * 53) % 240 + G->t * (5 + k % 3 * 4), 240), (k % 3 + 1) * 0.5f, 0x8F8AA8, 1);
+    for (int k = 0; k < CK_BUG_COLS * CK_BUG_ROWS; k++) {
+        if (!(B->bugs & (1u << k))) continue;
+        float x, y;
+        ck_bug_at(B, k, &x, &y);
+        bug(k / CK_BUG_COLS, x, y, B->frame);
+    }
+    for (int sh = 0; sh < CK_SHIELDS; sh++)
+        for (int c = 0; c < CK_SHIELD_W * CK_SHIELD_H; c++)
+            if (B->shield[sh][c]) rect(ck_shield_x[sh] + (c % CK_SHIELD_W) * CK_SHIELD_CELL, CK_SHIELD_Y + (c / CK_SHIELD_W) * CK_SHIELD_CELL, CK_SHIELD_CELL, CK_SHIELD_CELL, (c / CK_SHIELD_W + c) % 2 ? 0x49D17A : 0x3FB86A, 1);
+    for (int b = 0; b < CK_BLAST_BOMBS; b++) if (B->bomb[b].on) { shape(SPR_DOT, B->bomb[b].x + sinf(B->bomb[b].y * 0.4f) * 1.5f, B->bomb[b].y, 2.5f, 0xFFD23F, 1); }
+    for (int i = 0; i < Hs->np; i++) {
+        if (B->shot[i].on) rect(B->shot[i].x - 1, B->shot[i].y - 4, 2, 8, 0xFFFFFF, 1);
+        if (B->inv[i] > 0 && (B->inv[i] / 4) % 2) continue;
+        int col = skin_col(G, Hs->gs[i].slot);
+        uint32_t hex = col < CK_NCOLS ? ck_cols[col] : 0xFFFFFF;
+        float x = B->gun[i];
+        rect(x - 9, CK_BLAST_Y - 2, 18, 7, hex, 1);
+        rect(x - 6, CK_BLAST_Y - 5, 12, 4, hex, 1);
+        rect(x - 1.5f, CK_BLAST_Y - 10, 3, 6, 0xE6E6F0, 1);
+        shape(SPR_DOT, x, CK_BLAST_Y - 2, 2, 0xBFF0FF, 1);
+    }
+    particles(G, 0);
+    txt(F_SMALL, ST_YELLOW, 8, 12, ALIGN_LEFT, "SCORE %d", B->score);
+    txt(F_SMALL, ST_GREEN, W / 2, 12, ALIGN_CENTER, "BEST %d", B->best);
+    for (int k = 0; k < B->lives; k++) { rect(W - 16 - k * 16, 5, 12, 5, 0xFFD23F, 1); rect(W - 11 - k * 16, 2, 2, 4, 0xE6E6F0, 1); }
+    if (B->over) { game_over(B->score, B->best); return; }
+    if (B->waveT > 0) { snprintf(s, sizeof s, "WAVE %d", B->wave + 1); banner(F_BIG, ST_YELLOW, 0xFFD23F, 100, 120, 34, 123, s); }
+    hint(H - 6, "Stick move   A or B fire   START leave");
+}
+
+static void pond_fish(int kind, float x, float y, int dir, float t) {
+    const ck_catch *c = &ck_catches[kind];
+    if (kind == CATCH_BOOT) {
+        rect(x - 5, y - 8, 7, 9, c->col, 1); rect(x - 5, y - 1, 13, 5, c->col, 1); rect(x - 6, y + 3, 15, 2, 0x3A2A20, 1);
+        return;
+    }
+    float L = c->len, w = sinf(t * 8) * 1.2f;
+    shape(SPR_DOT, x - dir * L * 0.75f, y + w, L * 0.4f, c->col, 1);   // tail
+    shape(SPR_DOT, x, y, L * 0.55f, c->col, 1);
+    shape(SPR_DOT, x + dir * L * 0.25f, y, L * 0.4f, c->col, 1);
+    shape(SPR_DOT, x + dir * L * 0.35f, y - L * 0.12f, 1.4f, 0x1B1426, 1);
+    if (kind == CATCH_GOLDEN) shape(SPR_STAR, x, y - L * 0.6f, 3, 0xFFFFFF, 0.5f + 0.5f * sinf(t * 6));
+}
+static void draw_fish(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    const ck_pond *Pd = &Hs->pond;
+    float t = G->t;
+    char s[40];
+    rect(0, 0, W, CK_POND_TOP, 0x8FD3FF, 1);
+    cloud(150, 30); cloud(250, 18);
+    for (int k = 0; k < 8; k++) shape(SPR_DOT, 90 + k * 32, CK_POND_TOP - 4, 14 + (k % 3) * 4, 0x3F9D4E, 1);
+    rect(0, CK_POND_TOP, W, H - CK_POND_TOP, 0x3A8FC0, 1);
+    rect(0, CK_POND_TOP + 40, W, 40, 0x347FB0, 1);
+    rect(0, CK_POND_TOP + 80, W, H, 0x2E70A0, 1);
+    rect(0, CK_POND_BED, W, H - CK_POND_BED, 0xC9B27A, 1);
+    for (int k = 0; k < 6; k++) { float x = 100 + k * 40; rect(x, CK_POND_BED - 18 - (k % 3) * 6, 2, 18 + (k % 3) * 6, 0x2F7A3C, 1); }
+    for (int x = 0; x < W; x += 16) rect(x + fmodf(t * 8, 16), CK_POND_TOP, 8, 1, 0xBFE8FF, 1);
+    for (int k = 0; k < CK_POND_FISH; k++) {
+        const ck_pfish *f = &Pd->fish[k];
+        pond_fish(f->kind, f->x, f->y, f->vx < 0 ? -1 : 1, t + k);
+    }
+    rect(0, 100, CK_POND_BANK, H - 100, 0x8A5A3C, 1);   // the bank
+    rect(0, 96, CK_POND_BANK + 4, 8, 0x5DBB63, 1);
+    for (int i = 0; i < Hs->np; i++) {
+        const ck_rod *R = &Pd->rod[i];
+        int slot = Hs->gs[i].slot;
+        float hx = 22 + i * 18, tx, ty;
+        ck_rod_tip(i, &tx, &ty);
+        if (R->state == ROD_CHARGE) { tx -= R->power * 30; ty -= R->power * 6; }   // swung back
+        house_hero(G, slot, hx, 98, R->state == ROD_GOT ? HP_CHEER : HP_IDLE, t + i * 0.7f, 1);
+        line(hx + 6, 78, tx, ty, 2, 0x8A5A3C, 1);
+        if (R->state == ROD_CHARGE) {
+            dark_panel(hx - 14, 30 + i * 8, 30, 7);
+            rect(hx - 13, 31 + i * 8, 28 * R->power, 5, R->power > 0.8f ? 0xFF5A5A : 0xFFD23F, 1);
+        }
+        if (R->state == ROD_FLY) line(tx, ty, R->x, R->y, 1, 0xFFF6D8, 0.9f);
+        if (R->state == ROD_WAIT || R->state == ROD_BITE || R->state == ROD_REEL) {
+            float dip = R->state == ROD_BITE ? 4 + sinf(t * 30) * 2 : (R->fish >= 0 && R->t < 6) ? 2 : sinf(t * 3) * 0.8f;
+            float by = CK_POND_TOP - 2 + dip;
+            line(tx, ty, R->x, by, 1, 0xFFF6D8, 0.9f);
+            line(R->x, by, R->x, R->y, 1, 0xFFF6D8, 0.6f);
+            shape(SPR_DOT, R->x, by, 3, 0xFFFFFF, 1); shape(SPR_DOT, R->x, by - 1.5f, 2, 0xFF5A5A, 1);
+            shape(SPR_RING, R->x, R->y, 2.5f, 0xC9C4E0, 1);
+            if (R->state == ROD_BITE) banner(F_BIG, ST_YELLOW, 0xFF5A5A, by - 40, 30, 26, by - 21, "!");
+        }
+        if (R->state == ROD_REEL) {   // how tight the line is
+            float bx = 96 + i * 120;
+            dark_panel(bx, 4, 104, 16);
+            txt(F_SMALL, ST_PALE, bx + 4, 15, ALIGN_LEFT, "LINE");
+            rect(bx + 30, 8, 70, 8, 0x3A3650, 1);
+            rect(bx + 30, 8, 70 * R->tension / 100, 8, R->tension > 75 ? 0xFF5A5A : R->tension > 45 ? 0xFFD23F : 0x49D17A, 1);
+        }
+        if (R->state == ROD_GOT && Pd->last >= 0) {
+            const ck_catch *c = &ck_catches[Pd->last];
+            snprintf(s, sizeof s, Pd->last == CATCH_BOOT ? "An %s!" : "A %s!", c->name);
+            banner(F_BIG, ST_YELLOW, 0xFFD23F, 40, 160, 32, 62, s);
+            pond_fish(Pd->last, W / 2, 92, 1, t);
+            if (c->bolts) { snprintf(s, sizeof s, "+%d bolts", c->bolts); hint(116, s); }
+        }
+        if (R->state == ROD_SNAP) banner(F_BIG, ST_RED, 0xFF5A5A, 50, 160, 32, 72, "Snap! It got away");
+    }
+    particles(G, 0);
+    snprintf(s, sizeof s, "Caught %d", Pd->caught);
+    dark_panel(W - 74, 4, 70, 16); txt(F_SMALL, ST_CREAM, W - 39, 15, ALIGN_CENTER, "%s", s);
+    const ck_rod *R0 = &Pd->rod[0];
+    const char *help = R0->state == ROD_CHARGE ? "Let go of A to cast!" : R0->state == ROD_WAIT ? "^ v hook depth   B reel in   START leave"
+                     : R0->state == ROD_BITE ? "A bite! Press A!" : R0->state == ROD_REEL ? "Hold A to reel   let go when it goes red"
+                     : "Hold A, let go to cast   START leave";
+    hint(H - 6, help);
+}
+
 // The music room's piano: the keys (lit while they sound), notes floating up, and each hero
 // standing over the key under their hand.
 static void draw_drums(const ck_game *G) {
@@ -1828,6 +2011,9 @@ void draw_frame(const ck_game *G, bool scanlines) {
     case SC_CARS: draw_cars(G); break;
     case SC_PIANO: draw_piano(G); break;
     case SC_SLOTS: draw_slots(G); break;
+    case SC_PINBALL: draw_pinball(G); break;
+    case SC_BLAST: draw_blast(G); break;
+    case SC_FISH: draw_fish(G); break;
     }
     if (scanlines) {
         // a hint of a CRT: darken every other line

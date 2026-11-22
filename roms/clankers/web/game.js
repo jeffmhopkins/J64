@@ -699,6 +699,9 @@ function houseScene(from) {
     else if (kind === 'drums') { SND.fx.open(); go(drumScene(S)); }
     else if (kind === 'aqua') { SND.fx.open(); go(aquaScene(S)); }
     else if (kind === 'cars') { SND.fx.open(); go(carsScene(S)); }
+    else if (kind === 'pinball') { SND.fx.open(); go(pinballScene(S)); }
+    else if (kind === 'blast') { SND.fx.open(); go(blastScene(S)); }
+    else if (kind === 'pond') { SND.fx.open(); go(fishScene(S)); }
     else if (kind === 'bed') { SND.fx.select(); S.mode = 'slots'; S.pick = saveSlot - 1; }
   }
   S.resume = () => go(S);
@@ -874,8 +877,8 @@ function drawHouse(cam, t) {
     if (i === 0) {   // the yard: sky, clouds, grass, a fence
       g.fillStyle = hexStr(wall); g.fillRect(a, 0, b - a, L.FLOOR); g.fillStyle = hexStr(stripe); g.fillRect(a, 120, b - a, 80);
       for (const [cx, cy] of [[60, 40], [200, 26]]) { K.circ(cx - cam, cy, 12, '#ffffff'); K.circ(cx + 12 - cam, cy - 4, 14, '#ffffff'); K.circ(cx + 26 - cam, cy, 11, '#ffffff'); }
-      for (let x = 10; x < 300; x += 16) { K.rr(x - cam, 170, 8, 30, 2, '#fff6d8'); } K.rr(a, 178, b - a - 20, 5, 1, '#fff6d8');
-      g.fillStyle = hexStr(floor); g.fillRect(a, L.FLOOR, b - a, H - L.FLOOR); g.fillStyle = '#4fa856'; for (let x = 0; x < 320; x += 10) g.fillRect(x - cam, L.FLOOR, 5, 3);
+      for (let x = 10; x < x1 - 20; x += 16) { K.rr(x - cam, 170, 8, 30, 2, '#fff6d8'); } K.rr(a, 178, b - a - 20, 5, 1, '#fff6d8');
+      g.fillStyle = hexStr(floor); g.fillRect(a, L.FLOOR, b - a, H - L.FLOOR); g.fillStyle = '#4fa856'; for (let x = 0; x < x1; x += 10) g.fillRect(x - cam, L.FLOOR, 5, 3);
       continue;
     }
     g.fillStyle = hexStr(wall); g.fillRect(a, L.CEIL, b - a, L.FLOOR - L.CEIL);
@@ -954,16 +957,16 @@ const MURAL = { W: 80, H: 48, CELL: 4, Y: 16, FLOOR: 220,
   PAL: [0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230], ERASER: 10, CLEAR: 11 };
 let mural = (() => { const s = store.get('mural', ''); const a = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === a.length) for (let i = 0; i < a.length; i++) a[i] = Math.min(10, s.charCodeAt(i) - 48); return a; })();
 const saveMural = () => store.set('mural', String.fromCharCode(...mural.map(v => v + 48)));
-function muralDab(px, py, c) {
-  const cx = Math.floor(px / MURAL.CELL), cy = Math.floor((py - MURAL.Y) / MURAL.CELL);
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+function muralDab(px, py, c, size) {   // size 0 is one cell, 2 is three cells across
+  const cx = Math.floor(px / MURAL.CELL), cy = Math.floor((py - MURAL.Y) / MURAL.CELL), lo = -Math.floor(size / 2), hi = size - Math.floor(size / 2);
+  for (let dy = lo; dy <= hi; dy++) for (let dx = lo; dx <= hi; dx++) {
     const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= MURAL.W || y >= MURAL.H) continue;
     mural[y * MURAL.W + x] = c === MURAL.ERASER ? 0 : c + 1;
   }
 }
 function paintScene(house) {
   const S = { song: 'select', t: 0 };
-  S.ps = house.ps.map((h, i) => ({ m: h.m, x: 120 + i * 80, y: MURAL.FLOOR, vx: 0, vy: 0, face: 1, col: i ? 4 : 0, bx: null, by: null, jet: false }));
+  S.ps = house.ps.map((h, i) => ({ m: h.m, x: 120 + i * 80, y: MURAL.FLOOR, vx: 0, vy: 0, face: 1, col: i ? 4 : 0, size: 0, bx: null, by: null, jet: false }));
   S.update = function () {
     S.t += 1 / 60; stepParticles();
     if (anyHit('start')) { saveMural(); SND.fx.select(); house.resume(); return; }
@@ -980,7 +983,8 @@ function paintScene(house) {
       p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
       if (p.y > MURAL.FLOOR) { p.y = MURAL.FLOOR; p.vy = 0; }
       if (p.y < MURAL.Y + 28) { p.y = MURAL.Y + 28; p.vy = 0; }
-      if (hit(sl, 'c') || hit(sl, 'r')) { p.col = (p.col + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
+      if (hit(sl, 'c')) { p.size = (p.size + 1) % 3; SND.fx.select(); }   // C: a bigger brush, then back to the smallest
+      if (hit(sl, 'r')) { p.col = (p.col + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
       if (hit(sl, 'l')) { p.col = (p.col + MURAL.PAL.length + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
       // the brush is the hero's front hand; a fast stroke fills in between frames
       const bx = p.x + p.face * 9, by = p.y - 16;
@@ -990,7 +994,7 @@ function paintScene(house) {
       } else if (held(sl, 'b')) {
         if (p.bx == null) { p.bx = bx; p.by = by; }
         const n = Math.max(1, Math.ceil(Math.hypot(bx - p.bx, by - p.by) / 2));
-        for (let k = 1; k <= n; k++) muralDab(p.bx + (bx - p.bx) * k / n, p.by + (by - p.by) * k / n, p.col);
+        for (let k = 1; k <= n; k++) muralDab(p.bx + (bx - p.bx) * k / n, p.by + (by - p.by) * k / n, p.col, p.size);
         p.bx = bx; p.by = by;
       } else p.bx = null;
     }
@@ -1013,10 +1017,10 @@ function paintScene(house) {
       if (p.jet) K.flame(p.x - p.face * 5, p.y - 8, 14, 6, t);
       drawHeroPose(p.m, p.x, p.y, p.y < MURAL.FLOOR ? 'jet' : 'idle', t, p.face);
       const bx = p.x + p.face * 9, by = p.y - 16, c = p.col < MURAL.PAL.length ? hexStr(MURAL.PAL[p.col]) : '#fff6e6';
-      K.circ(bx, by, 4, '#1b1426'); K.circ(bx, by, 3, c);
+      const br = 2 + p.size * 2; K.circ(bx, by, br + 1, '#1b1426'); K.circ(bx, by, br, c);   // the tip grows with the brush size (C)
     }
     drawParticles(0);
-    hint('A up   v down   B paint   L R colour   START leave', 11);
+    hint('A up   B paint   L R colour   C size   START leave', 11);
   };
   return S;
 }

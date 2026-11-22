@@ -9,33 +9,37 @@ const HOUSEART = (() => {
   const K = CK, P = Math.PI;
   const hx = h => '#' + h.toString(16).padStart(6, '0');
   const LAYOUT = {
-    W: 1440, FLOOR: 200, CEIL: 20, PILLAR: 8, DOOR_TOP: 120,
+    W: 1720, FLOOR: 200, CEIL: 20, PILLAR: 8, DOOR_TOP: 120,
     // x0, x1, name, wall, stripe, floor
     rooms: [
-      [0, 320, 'The yard', 0x8FD3FF, 0xBDE8FF, 0x5DBB63],
-      [320, 500, 'Bedroom', 0xFFD3E2, 0xFFC1D6, 0x8C6A55],
-      [500, 680, 'Kitchen', 0xBDE7D2, 0xA9DCC3, 0xD9CDB8],
-      [680, 860, 'Paint studio', 0xFFF1D6, 0xF6E1BA, 0x9C7552],
-      [860, 1040, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
-      [1040, 1220, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
-      [1220, 1440, 'Garage', 0xB5BAC4, 0xA4AAB6, 0x6E7280],
+      [0, 400, 'The yard', 0x8FD3FF, 0xBDE8FF, 0x5DBB63],
+      [400, 580, 'Bedroom', 0xFFD3E2, 0xFFC1D6, 0x8C6A55],
+      [580, 760, 'Kitchen', 0xBDE7D2, 0xA9DCC3, 0xD9CDB8],
+      [760, 940, 'Paint studio', 0xFFF1D6, 0xF6E1BA, 0x9C7552],
+      [940, 1120, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
+      [1120, 1300, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
+      [1300, 1520, 'Garage', 0xB5BAC4, 0xA4AAB6, 0x6E7280],
+      [1520, 1720, 'Arcade', 0x3A2E5C, 0x46386E, 0x2B2240],
     ],
     // x, kind, what A does there, in SPOT_* order (the bedroom is first so saving is quick)
     spots: [
-      [535, 'snack', 'Open the fridge'],
-      [770, 'paint', 'Paint the mural'],
-      [925, 'piano', 'Play the piano'],
-      [1130, 'aqua', 'Swim with the fish'],
-      [410, 'bed', 'Sleep and save'],
-      [1320, 'cars', 'Race the cars'],
-      [1005, 'drums', 'Play the drums'],
+      [615, 'snack', 'Open the fridge'],
+      [850, 'paint', 'Paint the mural'],
+      [1005, 'piano', 'Play the piano'],
+      [1210, 'aqua', 'Swim with the fish'],
+      [490, 'bed', 'Sleep and save'],
+      [1400, 'cars', 'Race the cars'],
+      [1085, 'drums', 'Play the drums'],
       [262, 'mail', 'Check the mail'],
       [120, 'tree', 'Pick an apple'],
       [44, 'back', 'Back a world'],
-      [605, 'stove', 'Cook something'],
+      [685, 'stove', 'Cook something'],
+      [1580, 'pinball', 'Play pinball'],
+      [1665, 'blast', 'Play Bug Blaster'],
+      [345, 'pond', 'Go fishing'],
     ],
     // decorations that are only looked at: x, furniture frame
-    decor: [[648, 'table'], [840, 'plant'], [1205, 'plant'], [475, 'lamp'], [1410, 'tools']],
+    decor: [[728, 'table'], [920, 'plant'], [1285, 'plant'], [555, 'lamp'], [1490, 'tools']],
   };
   // furniture, by name; each fits in 96x96 standing on (0, 0)
   const F = {};
@@ -108,8 +112,38 @@ const HOUSEART = (() => {
   // the yard's signpost back to the last world
   F.sign = g => { K.rr(-2, -40, 4, 40, 1, '#8a5a3c'); K.rr(-20, -44, 36, 14, 3, '#c98a4b'); K.rr(-26, -42, 8, 10, 2, '#c98a4b'); K.rr(-17, -41, 30, 2, 1, '#e8b46a'); K.rr(-14, -37, 22, 2, 1, '#6f4630'); };
   F.tools = g => { K.rr(-26, -60, 52, 46, 3, '#8a7a6a'); for (let i = 0; i < 6; i++) K.circ(-20 + i * 8, -52, 1.2, '#5a4e42'); K.rr(-20, -48, 4, 18, 1, '#e04f4f'); K.rr(-12, -46, 12, 4, 1, '#9aa1b0'); K.rr(4, -50, 3, 20, 1, '#ffd23f'); K.rr(12, -44, 8, 8, 4, '#9aa1b0'); K.rr(-28, -14, 56, 14, 3, '#e04f4f'); K.rr(-28, -14, 56, 3, 1, '#ff8a8a'); };
-  const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools', 'sign'];
-  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign', stove: 'stove' };
+  // the arcade's pinball table: legs, a sloping glass top with bumpers on it, and a lit backbox
+  F.pinball = g => {
+    for (const x of [-24, 20]) K.rr(x, -34, 4, 34, 1, '#2b2833');
+    g.fillStyle = '#c23b6b'; g.beginPath(); g.moveTo(-30, -32); g.lineTo(30, -32); g.lineTo(26, -50); g.lineTo(-26, -50); g.fill();
+    g.fillStyle = '#1b1426'; g.beginPath(); g.moveTo(-26, -35); g.lineTo(26, -35); g.lineTo(23, -48); g.lineTo(-23, -48); g.fill();
+    K.circ(-10, -44, 3, '#ffd23f'); K.circ(8, -44, 3, '#5ad1ff'); K.circ(-1, -40, 3, '#ff8fc7'); K.rr(-8, -37, 6, 2, 1, '#fff6d8'); K.rr(3, -37, 6, 2, 1, '#fff6d8');
+    K.rr(-26, -90, 52, 40, 4, '#c23b6b'); K.rr(-22, -86, 44, 32, 3, '#1b1426');
+    K.circ(-11, -76, 5, '#ffd23f'); K.circ(0, -72, 6, '#ff5a5a'); K.circ(11, -76, 5, '#49d17a');
+    for (let i = 0; i < 5; i++) K.circ(-16 + i * 8, -60, 1.6, i % 2 ? '#fff6d8' : '#ffd23f');
+  };
+  // the arcade cabinet: Bug Blaster, with little bugs on its screen
+  F.arcade = g => {
+    K.rr(-20, -94, 40, 94, 4, '#3a6fc0'); K.rr(-20, -94, 40, 13, 3, '#ffd23f'); K.rr(-14, -91, 28, 3, 1, '#ff5a5a');
+    K.rr(-15, -78, 30, 26, 2, '#1b1426');
+    for (let i = 0; i < 4; i++) { K.circ(-9 + i * 6, -70, 1.8, i % 2 ? '#c28bff' : '#49d17a'); K.circ(-9 + i * 6, -64, 1.8, '#ff5a5a'); }
+    K.rr(-2, -57, 4, 3, 1, '#5ad1ff');
+    K.rr(-23, -50, 46, 9, 2, '#2b4f8c'); K.rr(-12, -55, 2, 6, 1, '#9aa1b0'); K.circ(-11, -55, 3, '#ff5a5a'); K.circ(6, -46, 2.5, '#ffd23f'); K.circ(13, -46, 2.5, '#49d17a');
+    K.rr(-8, -26, 16, 12, 2, '#2b4f8c'); K.rr(-2, -22, 4, 4, 1, '#ffd23f');
+  };
+  // the yard's pond: water lying on the grass, a lily pad, reeds, and a rod by the side
+  F.pond = g => {
+    g.fillStyle = '#3f9d4e'; g.beginPath(); g.ellipse(0, -5, 46, 9, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#3a8fc0'; g.beginPath(); g.ellipse(0, -5, 42, 7, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#7fc8ea'; g.beginPath(); g.ellipse(-8, -7, 18, 2.5, 0, 0, Math.PI * 2); g.fill();
+    K.circ(16, -5, 4, '#49d17a'); K.circ(17, -6, 1.5, '#ff8fc7');
+    for (const [x, h] of [[-44, 22], [-40, 28], [-36, 18]]) { K.rr(x, -h, 2, h, 1, '#2f7a3c'); K.rr(x - 1, -h - 6, 4, 8, 2, '#8a5a3c'); }
+    g.strokeStyle = '#8a5a3c'; g.lineWidth = 2; g.beginPath(); g.moveTo(40, -2); g.lineTo(30, -56); g.stroke();
+    g.strokeStyle = '#fff6d8'; g.lineWidth = 1; g.beginPath(); g.moveTo(30, -56); g.lineTo(22, -8); g.stroke();
+    K.circ(22, -8, 2, '#ff5a5a');
+  };
+  const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools', 'sign', 'pinball', 'arcade', 'pond'];
+  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign', stove: 'stove', pinball: 'pinball', blast: 'arcade', pond: 'pond' };
   function furn(g, name, x, y) { g.save(); g.translate(x, y); F[name](g); g.restore(); }
 
   // ---- the little creatures (drawn around (0, 0), facing right)
