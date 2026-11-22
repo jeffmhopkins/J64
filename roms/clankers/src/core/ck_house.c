@@ -273,8 +273,8 @@ static void cook_update(ck_game *G) {
         if (HIT(G, s, CK_LEFT) && *c % CK_COOK_ROW > 0) { (*c)--; ck_sfx(G, SFX_SELECT); }
         if (HIT(G, s, CK_RIGHT) && *c % CK_COOK_ROW < CK_COOK_ROW - 1) { (*c)++; ck_sfx(G, SFX_SELECT); }
         if ((HIT(G, s, CK_UP) || HIT(G, s, CK_DOWN)) && !H->dish) { *c = (*c + CK_COOK_ROW) % CK_COOK_INGR; ck_sfx(G, SFX_SELECT); }   // the other shelf
-        if (H->dish) {   // done: A takes the dish, and everyone playing gets one
-            if (HIT(G, s, CK_A)) {
+        if (H->dish) {   // done: A (or START) takes the dish, and everyone playing gets one
+            if (HIT(G, s, CK_A) || HIT(G, s, CK_START)) {
                 for (int k = 0; k < H->np; k++) H->ps[k].hold = H->dish;
                 char m[40];
                 snprintf(m, sizeof m, H->np > 1 ? "%s for two!" : "%s!", H->dishName);

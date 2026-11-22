@@ -1443,12 +1443,15 @@ static void test_house(void) {
     EXPECT_EQ_INT(R->state, ROD_BITE);
     press(G, CK_A, 0);
     EXPECT_EQ_INT(R->state, ROD_REEL);
-    int fishBolts0 = G->prog.bolts;
-    for (int i = 0; i < 3000 && R->state == ROD_REEL; i++) ck_game_step(G, R->tension < 60 ? CK_A : 0, 0);
+    int fishBolts0 = G->prog.bolts, fished0 = G->saves.closet.fished;
+    float slant = 0;   // with a fish on, the bobber trails towards the rod: the line under it slants
+    for (int i = 0; i < 3000 && R->state == ROD_REEL; i++) { ck_game_step(G, R->tension < 60 ? CK_A : 0, 0); slant = fmaxf(slant, fabsf(R->bob - R->x)); }
+    EXPECT_EQ_INT(slant > 5, 1);
     EXPECT_EQ_INT(R->state, ROD_GOT);
     EXPECT_EQ_INT(Pd->caught, 1);
     EXPECT_EQ_INT(Pd->got[CATCH_GOLDFISH], 1);
     EXPECT_EQ_INT(G->prog.bolts, fishBolts0 + ck_catches[CATCH_GOLDFISH].bolts);
+    EXPECT_EQ_INT(G->saves.closet.fished, fished0 + 1);   // kept in the save
     // holding A while a big fish pulls snaps the line
     hold(G, 160, 0, 0);
     EXPECT_EQ_INT(R->state, ROD_IDLE);
@@ -1465,6 +1468,38 @@ static void test_house(void) {
     EXPECT_EQ_INT(Pd->caught, 1);
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    // the pond levels up with the fish the family has caught: plain little fish first, bigger later
+    EXPECT_EQ_INT(ck_pond_level(0), 0);
+    EXPECT_EQ_INT(ck_pond_level(ck_pond_level_at[1]), 1);
+    EXPECT_EQ_INT(ck_pond_level(9999), CK_POND_LEVELS - 1);
+    for (int lv = 0; lv < CK_POND_LEVELS; lv += CK_POND_LEVELS - 1) {
+        G->saves.closet.fished = (uint16_t)ck_pond_level_at[lv];
+        press(G, CK_A, 0);
+        EXPECT_EQ_INT(G->scene, SC_FISH);
+        EXPECT_EQ_INT(Pd->level, lv);
+        float biggest = 0;
+        for (int n = 0; n < 20; n++) {   // restock a few times to see who lives there
+            press(G, CK_START, 0); press(G, CK_A, 0);
+            for (int k = 0; k < CK_POND_FISH; k++) if (Pd->fish[k].kind != CATCH_BOOT) biggest = fmaxf(biggest, ck_catches[Pd->fish[k].kind].len);
+        }
+        if (lv == 0) EXPECT_EQ_INT(biggest <= 7, 1);
+        else EXPECT_EQ_INT(biggest >= 18, 1);
+        press(G, CK_START, 0);
+    }
+    // catching the fish that reaches the next level restocks the pond
+    G->saves.closet.fished = (uint16_t)(ck_pond_level_at[1] - 1);
+    press(G, CK_A, 0);
+    hold(G, 40, CK_A, 0);
+    for (int i = 0; i < 200 && R->state != ROD_WAIT; i++) ck_game_step(G, 0, 0);
+    for (int k = 0; k < CK_POND_FISH; k++) { Pd->fish[k].x = 300; Pd->fish[k].scare = 9999; }
+    Pd->fish[0] = (ck_pfish){ CATCH_MINNOW, R->x, R->y, 0.5f, 0 };
+    for (int i = 0; i < 600 && R->state == ROD_WAIT; i++) ck_game_step(G, 0, 0);
+    press(G, CK_A, 0);
+    for (int i = 0; i < 3000 && R->state == ROD_REEL; i++) ck_game_step(G, R->tension < 60 ? CK_A : 0, 0);
+    EXPECT_EQ_INT(R->state, ROD_GOT);
+    EXPECT_EQ_INT(Pd->level, 1);
+    EXPECT_EQ_INT(Pd->levelT > 0, 1);
+    press(G, CK_START, 0);
     // START (or walking off the yard) goes back to the map
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_MAP);

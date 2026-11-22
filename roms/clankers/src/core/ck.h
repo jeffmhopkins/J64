@@ -212,8 +212,12 @@ typedef struct {
     uint8_t paints;                    // bit per hero colour owned (the first two are free)
     uint8_t gear;                      // CK_GEAR_* bits
     uint8_t rainbow;                   // bit per player wearing the rainbow paint (their colour cycles)
+    // added later: fish caught in the pond, valid when magic3 is CK_CLOSET_MAGIC3 (else 0)
+    uint8_t magic3, pad3;
+    uint16_t fished;
 } ck_closet;
 #define CK_CLOSET_MAGIC2 0xC3
+#define CK_CLOSET_MAGIC3 0xC4
 #define CK_FREE_PAINTS 0x03
 enum { CK_GEAR_GUN = 1, CK_GEAR_JET = 2, CK_GEAR_RAINBOW = 4 };   // the bubble gun; the super jetpack (near-level glide); rainbow paint
 // The shop sells the accessories, then (on its last row) the two heroes (free to swap), a paint pot
@@ -594,13 +598,19 @@ void ck_bug_at(const ck_blaster *B, int k, float *x, float *y);
 #define CK_POND_TOP 112           // the water's surface
 #define CK_POND_BED 226
 #define CK_POND_BANK 70           // the bank's edge: a hooked fish is caught when it gets here
-enum { CATCH_MINNOW, CATCH_GOLDFISH, CATCH_BASS, CATCH_GOLDEN, CATCH_BOOT, CATCH_COUNT };
-typedef struct { const char *name; uint32_t col; float len, speed, pull; int bolts; } ck_catch;
+// The pond starts with plain little fish; the more the family catches (saved), the higher the
+// pond's level and the bigger, cooler and harder to reel its fish.
+enum { CATCH_MINNOW, CATCH_GOLDFISH, CATCH_BASS, CATCH_GOLDEN, CATCH_BOOT,
+       CATCH_SARDINE, CATCH_PERCH, CATCH_TROUT, CATCH_CATFISH, CATCH_PIKE, CATCH_KOI, CATCH_ROBO, CATCH_KING, CATCH_COUNT };
+typedef struct { const char *name; uint32_t col, col2; float len, speed, pull; int bolts; } ck_catch;
 extern const ck_catch ck_catches[CATCH_COUNT];
+#define CK_POND_LEVELS 5
+extern const int ck_pond_level_at[CK_POND_LEVELS];   // fish caught to reach each level
+int ck_pond_level(int fished);
 typedef struct { int kind; float x, y, vx; int scare; } ck_pfish;
 enum { ROD_IDLE, ROD_CHARGE, ROD_FLY, ROD_WAIT, ROD_BITE, ROD_REEL, ROD_GOT, ROD_SNAP };
-typedef struct { int state, fish, t, nibble; float power, x, y, vx, vy, tension; bool pulling; } ck_rod;
-typedef struct { ck_pfish fish[CK_POND_FISH]; ck_rod rod[2]; int caught, got[CATCH_COUNT], last; } ck_pond;
+typedef struct { int state, fish, t, nibble; float power, x, y, vx, vy, tension, bob; bool pulling; } ck_rod;   // bob: the bobber's x
+typedef struct { ck_pfish fish[CK_POND_FISH]; ck_rod rod[2]; int caught, got[CATCH_COUNT], last, level, levelT; } ck_pond;
 void ck_rod_tip(int i, float *x, float *y);   // player i's rod tip (they stand on the bank)
 // One hero in the house or one of its games (not every game uses every field).
 typedef struct {

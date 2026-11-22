@@ -165,6 +165,7 @@ static void sanitize_closet(ck_closet *c) {
             if (a < 0 || a >= ACC_COUNT || ck_acc[a].slot != k || !CK_OWNS(c, a)) c->wear[s][k] = 0;
         }
     if (c->magic2 != CK_CLOSET_MAGIC2) { c->magic2 = CK_CLOSET_MAGIC2; c->paints = 0; c->gear = 0; c->rainbow = 0; }
+    if (c->magic3 != CK_CLOSET_MAGIC3) { c->magic3 = CK_CLOSET_MAGIC3; c->pad3 = 0; c->fished = 0; }
     c->paints |= CK_FREE_PAINTS;
     c->gear &= CK_GEAR_GUN | CK_GEAR_JET | CK_GEAR_RAINBOW;
     c->rainbow = c->gear & CK_GEAR_RAINBOW ? c->rainbow & 3 : 0;

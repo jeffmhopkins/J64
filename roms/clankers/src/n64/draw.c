@@ -1507,7 +1507,7 @@ static void draw_house(const ck_game *G) {
         }
         rect(60, 196, 200, 10, 0x1B1426, 1);   // heat
         rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
-        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, Hs->np > 1 ? "A take one each   START leave" : "A take it   START leave"); }
+        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, Hs->np > 1 ? "A take one each" : "A take it"); }
         else {
             txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[Hs->last]]].name);
             hint(14, Hs->npan ? "Stick choose   A add   B stir   START leave" : "Stick choose   A add to the pan   START leave");
@@ -1524,7 +1524,7 @@ static void draw_house(const ck_game *G) {
         txt(F_MED, ST_RED, 58, 64, ALIGN_LEFT, "Dear heroes,");
         for (int r = 0; r < 3; r++) txt(F_MED, ST_CREAM, 60, 96 + r * 22, ALIGN_LEFT, "%s", L->lines[r]);
         txt(F_MED, ST_YELLOW, 262, 188, ALIGN_RIGHT, "Love, %s", L->from);
-        hint(226, "START leave");
+        hint(226, "A close");
     }
 }
 
@@ -2103,11 +2103,28 @@ static void pond_fish(int kind, float x, float y, int dir, float t) {
         rect(x - 5, y - 8, 7, 9, c->col, 1); rect(x - 5, y - 1, 13, 5, c->col, 1); rect(x - 6, y + 3, 15, 2, 0x3A2A20, 1);
         return;
     }
-    float L = c->len, w = sinf(t * 8) * 1.2f;
-    shape(SPR_DOT, x - dir * L * 0.75f, y + w, L * 0.4f, c->col, 1);   // tail
+    float L = c->len, w = sinf(t * 8) * 1.2f, d = (float)dir;
+    if (kind == CATCH_PIKE) shape(SPR_DOT, x - d * L * 0.45f, y, L * 0.4f, c->col, 1);   // a long body
+    if (kind != CATCH_MINNOW && kind != CATCH_SARDINE) {   // fins on the bigger fish
+        shape(SPR_DOT, x - d * L * 0.1f, y - L * 0.45f, L * 0.22f, c->col2, 1);
+        shape(SPR_DOT, x - d * L * 0.1f, y + L * 0.42f, L * 0.16f, c->col2, 1);
+    }
+    shape(SPR_DOT, x - d * L * 0.75f, y + w, L * 0.4f, kind == CATCH_KOI || kind == CATCH_TROUT ? c->col2 : c->col, 1);   // tail
     shape(SPR_DOT, x, y, L * 0.55f, c->col, 1);
-    shape(SPR_DOT, x + dir * L * 0.25f, y, L * 0.4f, c->col, 1);
-    shape(SPR_DOT, x + dir * L * 0.35f, y - L * 0.12f, 1.4f, 0x1B1426, 1);
+    shape(SPR_DOT, x + d * L * 0.25f, y, L * 0.4f, c->col, 1);
+    switch (kind) {
+    case CATCH_PERCH: for (int k = -1; k <= 1; k++) rect(x + d * k * L * 0.25f - 1, y - L * 0.4f, 2, L * 0.7f, c->col2, 1); break;   // stripes
+    case CATCH_TROUT: rect(x - L * 0.5f, y - 1, L, 2.5f, c->col2, 1); break;   // the rainbow along its side
+    case CATCH_KOI: shape(SPR_DOT, x - d * L * 0.15f, y - L * 0.15f, L * 0.25f, c->col2, 1); shape(SPR_DOT, x + d * L * 0.3f, y - L * 0.2f, L * 0.15f, c->col2, 1); break;
+    case CATCH_CATFISH: line(x + d * L * 0.55f, y + 1, x + d * L * 0.95f, y + 4, 2, c->col2, 1); line(x + d * L * 0.55f, y + 2, x + d * L * 0.85f, y + 7, 2, c->col2, 1); break;   // whiskers
+    case CATCH_PIKE: for (int k = 0; k < 3; k++) shape(SPR_DOT, x - d * (k * L * 0.3f), y - L * 0.1f, 1.8f, c->col2, 1); break;
+    case CATCH_ROBO:   // a clockwork fish: rivets and a blinking antenna
+        for (int k = -1; k <= 1; k++) shape(SPR_DOT, x + d * k * L * 0.25f, y + L * 0.15f, 1.2f, 0x5A5E6A, 1);
+        rect(x - 0.5f, y - L * 0.75f, 1.5f, L * 0.3f, 0x5A5E6A, 1);
+        shape(SPR_DOT, x, y - L * 0.78f, 2, sinf(t * 6) > 0 ? c->col2 : 0x2A3A4A, 1); break;
+    case CATCH_KING: blit_o(SPR_STAR, 0, x + d * L * 0.15f, y - L * 0.55f, (bopt){ .sx = 0.5f, .sy = 0.5f, .tinted = true, .tint = hexc(c->col2, 255) }); break;   // its crown
+    }
+    shape(SPR_DOT, x + d * L * 0.35f, y - L * 0.12f, kind == CATCH_ROBO ? 2 : 1.4f, kind == CATCH_ROBO ? c->col2 : 0x1B1426, 1);
     if (kind == CATCH_GOLDEN) shape(SPR_STAR, x, y - L * 0.6f, 3, 0xFFFFFF, 0.5f + 0.5f * sinf(t * 6));
 }
 static void draw_fish(const ck_game *G) {
@@ -2147,16 +2164,17 @@ static void draw_fish(const ck_game *G) {
         if (R->state == ROD_WAIT || R->state == ROD_BITE || R->state == ROD_REEL) {
             float dip = R->state == ROD_BITE ? 4 + sinf(t * 30) * 2 : (R->fish >= 0 && R->t < 6) ? 2 : sinf(t * 3) * 0.8f;
             float by = CK_POND_TOP - 2 + dip;
-            line(tx, ty, R->x, by, 2, 0xFFF6D8, 1);
-            line(R->x, by, R->x, R->y, 2, 0xFFF6D8, 0.7f);
-            shape(SPR_DOT, R->x, by, 3, 0xFFFFFF, 1); shape(SPR_DOT, R->x, by - 1.5f, 2, 0xFF5A5A, 1);
+            float bx = R->state == ROD_REEL ? R->bob : R->x;
+            line(tx, ty, bx, by, 2, 0xFFF6D8, 1);
+            line(bx, by, R->x, R->y, 2, 0xFFF6D8, 0.7f);
+            shape(SPR_DOT, bx, by, 3, 0xFFFFFF, 1); shape(SPR_DOT, bx, by - 1.5f, 2, 0xFF5A5A, 1);
             shape(SPR_RING, R->x, R->y, 2.5f, 0xC9C4E0, 1);
             if (R->state == ROD_BITE) banner(F_BIG, ST_YELLOW, 0xFF5A5A, by - 40, 30, 26, by - 21, "!");
         }
-        if (R->state == ROD_REEL) {   // how tight the line is
-            float bx = 96 + i * 120;
+        if (R->state == ROD_REEL) {   // how tight the line is: player one's top left, two's top right
+            float bx = i ? W - 108 : 4;
             dark_panel(bx, 4, 104, 16);
-            txt(F_SMALL, ST_PALE, bx + 4, 15, ALIGN_LEFT, "LINE");
+            txt(F_SMALL, slot ? ST_BLUE : ST_YELLOW, bx + 4, 15, ALIGN_LEFT, "P%d", i + 1);
             rect(bx + 30, 8, 70, 8, 0x3A3650, 1);
             rect(bx + 30, 8, 70 * R->tension / 100, 8, R->tension > 75 ? 0xFF5A5A : R->tension > 45 ? 0xFFD23F : 0x49D17A, 1);
         }
@@ -2170,8 +2188,9 @@ static void draw_fish(const ck_game *G) {
         if (R->state == ROD_SNAP) banner(F_BIG, ST_RED, 0xFF5A5A, 50, 160, 32, 72, "Snap! It got away");
     }
     particles(G, 0);
-    snprintf(s, sizeof s, "Caught %d", Pd->caught);
-    dark_panel(W - 74, 4, 70, 16); txt(F_SMALL, ST_CREAM, W - 39, 15, ALIGN_CENTER, "%s", s);
+    snprintf(s, sizeof s, "Caught %d   Pond level %d", Pd->caught, Pd->level + 1);
+    dark_panel(W / 2 - 62, 22, 124, 14); txt(F_SMALL, ST_CREAM, W / 2, 32, ALIGN_CENTER, "%s", s);
+    if (Pd->levelT > 0) banner(F_MED, ST_YELLOW, 0xFFD23F, 150, 180, 22, 165, "Bigger fish in the pond!");
     const ck_rod *R0 = &Pd->rod[G->house.last];   // the help follows whoever pressed last
     const char *help = R0->state == ROD_CHARGE ? "Let go of A to cast!" : R0->state == ROD_WAIT ? "^ v hook depth   B reel in   START leave"
                      : R0->state == ROD_BITE ? "A bite! Press A!" : R0->state == ROD_REEL ? "Hold A to reel   let go when it goes red"

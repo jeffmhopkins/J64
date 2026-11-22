@@ -729,7 +729,7 @@ function houseScene(from) {
         if (hit(sl, 'left') && S.cpick[i] % 6 > 0) { S.cpick[i]--; SND.fx.select(); }
         if (hit(sl, 'right') && S.cpick[i] % 6 < 5) { S.cpick[i]++; SND.fx.select(); }
         if ((hit(sl, 'up') || hit(sl, 'down')) && !S.dish) { S.cpick[i] = (S.cpick[i] + 6) % ING.length; SND.fx.select(); }   // the other shelf
-        if (S.dish) { if (hit(sl, 'a')) { for (const q of S.ps) q.hold = S.dish; S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
+        if (S.dish) { if (hit(sl, 'a') || hit(sl, 'start')) { for (const q of S.ps) q.hold = S.dish; S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
         if (hit(sl, 'a')) { if (S.pan.length < 4) S.pan.push(ING[S.cpick[i]]); else S.pan[3] = ING[S.cpick[i]]; SND.fx.hop(); }   // a full pan swaps its last one
         if (hit(sl, 'b') && S.pan.length) {
           S.heat += 9; SND.fx.hover(); for (let k = 0; k < 2; k++) puff(150 + Math.random() * 20, 120, 1, 'rgba(255,255,255,0.63)');
@@ -853,7 +853,7 @@ function houseScene(from) {
       if (S.dish) foodArt(S.dish - 1, 160, 140, 6);
       else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 140 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
-      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each   START leave' : 'A take it   START leave', 226); }
+      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each' : 'A take it', 226); }
       else { text(HOUSEART.FOODS[ING[S.cpick[lastIn(S.ps)]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? 'Stick choose   A add   B stir   START leave' : 'Stick choose   A add to the pan   START leave', 14); }
     }
     if (S.mode === 'letter') {   // a big letter to read
@@ -865,7 +865,7 @@ function houseScene(from) {
       text('Dear heroes,', 58, 64, 10, '#ff8a8a', 'left');
       L.lines.forEach((s, r) => text(s, 60, 96 + r * 22, 10, '#fff6d8', 'left'));
       text('Love, ' + L.from, 262, 188, 10, '#ffd23f', 'right');
-      hint('START leave', 226);
+      hint('A close', 226);
     }
   };
   return S;

@@ -300,19 +300,38 @@ function blastScene(house) {
 const POND = {
   FISH: 6, TOP: 112, BED: 226, BANK: 70,
   catches: [
-    { name: 'Minnow', col: 0xA9C4D6, len: 7, speed: 1.2, pull: 0.6, bolts: 1 },
-    { name: 'Goldfish', col: 0xFF8A3D, len: 9, speed: 0.9, pull: 0.9, bolts: 2 },
-    { name: 'Big bass', col: 0x5E8C4A, len: 15, speed: 0.7, pull: 1.5, bolts: 3 },
-    { name: 'Golden fish', col: 0xFFD23F, len: 11, speed: 1.6, pull: 1.8, bolts: 10 },
-    { name: 'Old boot', col: 0x6F4630, len: 10, speed: 0, pull: 0.2, bolts: 0 },
+    { name: 'Minnow', col: 0xA9C4D6, col2: 0xA9C4D6, len: 7, speed: 1.2, pull: 0.6, bolts: 1 },
+    { name: 'Goldfish', col: 0xFF8A3D, col2: 0xFFC27A, len: 9, speed: 0.9, pull: 0.9, bolts: 2 },
+    { name: 'Big bass', col: 0x5E8C4A, col2: 0xC9D98A, len: 15, speed: 0.7, pull: 1.5, bolts: 3 },
+    { name: 'Golden fish', col: 0xFFD23F, col2: 0xFFF6A0, len: 11, speed: 1.6, pull: 2.0, bolts: 10 },
+    { name: 'Old boot', col: 0x6F4630, col2: 0x3A2A20, len: 10, speed: 0, pull: 0.2, bolts: 0 },
+    { name: 'Sardine', col: 0xBFC8D4, col2: 0xBFC8D4, len: 6, speed: 1.0, pull: 0.5, bolts: 1 },
+    { name: 'Perch', col: 0xD9C24A, col2: 0x3F5A2E, len: 10, speed: 1.0, pull: 1.1, bolts: 2 },
+    { name: 'Rainbow trout', col: 0x8FB8A8, col2: 0xFF7AA8, len: 13, speed: 1.3, pull: 1.6, bolts: 4 },
+    { name: 'Catfish', col: 0x6A5E50, col2: 0x3A3028, len: 16, speed: 0.6, pull: 2.0, bolts: 5 },
+    { name: 'Pike', col: 0x7A9A4A, col2: 0xE6E0A0, len: 18, speed: 1.5, pull: 2.4, bolts: 7 },
+    { name: 'Koi', col: 0xFFF6E6, col2: 0xFF5A2A, len: 14, speed: 0.8, pull: 1.7, bolts: 6 },
+    { name: 'Robo-fish', col: 0x9AA4B4, col2: 0x5AD1FF, len: 14, speed: 1.8, pull: 2.6, bolts: 9 },
+    { name: 'King carp', col: 0xC98A3A, col2: 0xFFD23F, len: 22, speed: 0.6, pull: 3.0, bolts: 12 },
+  ],
+  // the pond starts with plain little fish; the more the family catches, the bigger and harder they get
+  LEVEL_AT: [0, 6, 15, 30, 50],
+  POPS: [   // [kind, how many in a hundred]
+    [[0, 45], [5, 45], [4, 10]],
+    [[0, 20], [5, 10], [1, 30], [6, 30], [4, 10]],
+    [[1, 15], [6, 20], [2, 20], [7, 20], [8, 12], [3, 5], [4, 8]],
+    [[2, 15], [7, 15], [8, 15], [9, 20], [10, 20], [3, 7], [4, 8]],
+    [[7, 10], [9, 15], [10, 15], [8, 10], [11, 22], [12, 15], [3, 8], [4, 5]],
   ],
 };
+const pondLevel = n => { let l = 0; while (l + 1 < POND.LEVEL_AT.length && n >= POND.LEVEL_AT[l + 1]) l++; return l; };
 const rodTip = i => [46 + i * 14, 62 + i * 6];
 function fishScene(house) {
-  const PD = POND, S = { song: 'select', t: 0, caught: 0, last: -1 };
+  const PD = POND, S = { song: 'select', t: 0, caught: 0, last: -1, level: pondLevel(store.get('fished', 0)), levelT: 0 };
   const newFish = f => {
-    const r = Math.random();
-    f.kind = r < 0.35 ? 0 : r < 0.65 ? 1 : r < 0.85 ? 2 : r < 0.95 ? 4 : 3;
+    const pop = PD.POPS[S.level]; let r = Math.floor(Math.random() * 100), k = 0;
+    while (k < pop.length - 1 && r >= pop[k][1]) r -= pop[k++][1];
+    f.kind = pop[k][0];
     f.x = 110 + Math.random() * 190; f.y = f.kind === 4 ? PD.BED - 6 : PD.TOP + 18 + Math.random() * (PD.BED - PD.TOP - 30);
     f.vx = f.kind === 4 ? 0 : (Math.random() < 0.5 ? -1 : 1) * PD.catches[f.kind].speed * 0.5; f.scare = 0;
     return f;
@@ -350,7 +369,7 @@ function fishScene(house) {
           } else {
             const f = S.fish[R.fish], d = Math.hypot(f.x - R.x, f.y - R.y);
             if (d > 6) { f.x += (R.x - f.x) * 0.04; f.y += (R.y - f.y) * 0.04; f.vx = R.x > f.x ? Math.abs(f.vx) + 0.001 : -Math.abs(f.vx) - 0.001; }
-            else if (--R.t <= 0) { if (--R.nibble > 0) { R.t = 30 + Math.floor(Math.random() * 40); SND.fx.tick(); } else { R.state = 'bite'; R.t = 45; SND.fx.button(); } }
+            else if (--R.t <= 0) { if (--R.nibble > 0) { R.t = 30 + Math.floor(Math.random() * 40); SND.fx.tick(); } else { R.state = 'bite'; R.t = 50 - Math.floor(PD.catches[f.kind].pull * 6); SND.fx.button(); } }
           }
           break;
         }
@@ -374,13 +393,23 @@ function fishScene(house) {
             (f.kind === 4 ? SND.fx.clank : SND.fx.gear)();
             if (f.kind === 3) confetti(160, 40, 40);
             sparks(R.x, PD.TOP - 10, 8, AHX(c.col));
+            const fished = store.get('fished', 0) + (f.kind === 4 ? 0 : 1); store.set('fished', fished);
+            const lv = pondLevel(fished);
+            if (lv > S.level) {   // the pond levels up: the fish not on a line make way for bigger ones
+              S.level = lv; S.levelT = 180;
+              S.fish.forEach((o, k) => { if (o !== f && !taken(k)) { newFish(o); o.x = W - 10 - k * 6; } });
+              confetti(160, 40, 40);
+            }
             newFish(f); f.x = W - 20; f.scare = 60; R.fish = -1;
           }
           break;
         }
         case 'got': case 'snap': if (--R.t <= 0 || (R.t < 110 && hit(sl, 'a'))) R.state = 'idle'; break;
       }
+      // the bobber trails behind a hooked fish, so the line under it runs on a slant
+      R.bob = R.state === 'reel' ? R.bob + (R.x + (tx - R.x) * 0.3 - R.bob) * 0.05 : R.x;
     });
+    if (S.levelT > 0) S.levelT--;
     S.fish.forEach((f, k) => {
       if (f.scare > 0) f.scare--;
       if (taken(k) || f.kind === 4) return;
@@ -395,9 +424,21 @@ function fishScene(house) {
   function fish(kind, x, y, dir, t) {
     const c = PD.catches[kind];
     if (kind === 4) { aBox(x - 5, y - 8, 7, 9, c.col); aBox(x - 5, y - 1, 13, 5, c.col); aBox(x - 6, y + 3, 15, 2, 0x3A2A20); return; }
-    const L = c.len, w = Math.sin(t * 8) * 1.2;
-    aDot(x - dir * L * 0.75, y + w, L * 0.4, c.col); aDot(x, y, L * 0.55, c.col); aDot(x + dir * L * 0.25, y, L * 0.4, c.col);
-    aDot(x + dir * L * 0.35, y - L * 0.12, 1.4, 0x1B1426);
+    const L = c.len, w = Math.sin(t * 8) * 1.2, d = dir;
+    if (kind === 9) aDot(x - d * L * 0.45, y, L * 0.4, c.col);   // a long body
+    if (kind !== 0 && kind !== 5) { aDot(x - d * L * 0.1, y - L * 0.45, L * 0.22, c.col2); aDot(x - d * L * 0.1, y + L * 0.42, L * 0.16, c.col2); }   // fins on the bigger fish
+    aDot(x - d * L * 0.75, y + w, L * 0.4, kind === 10 || kind === 7 ? c.col2 : c.col); aDot(x, y, L * 0.55, c.col); aDot(x + d * L * 0.25, y, L * 0.4, c.col);
+    if (kind === 6) for (let k = -1; k <= 1; k++) aBox(x + d * k * L * 0.25 - 1, y - L * 0.4, 2, L * 0.7, c.col2);   // stripes
+    if (kind === 7) aBox(x - L * 0.5, y - 1, L, 2.5, c.col2);   // the rainbow along its side
+    if (kind === 10) { aDot(x - d * L * 0.15, y - L * 0.15, L * 0.25, c.col2); aDot(x + d * L * 0.3, y - L * 0.2, L * 0.15, c.col2); }
+    if (kind === 8) { aLine(x + d * L * 0.55, y + 1, x + d * L * 0.95, y + 4, 2, c.col2); aLine(x + d * L * 0.55, y + 2, x + d * L * 0.85, y + 7, 2, c.col2); }   // whiskers
+    if (kind === 9) for (let k = 0; k < 3; k++) aDot(x - d * k * L * 0.3, y - L * 0.1, 1.8, c.col2);
+    if (kind === 11) {   // a clockwork fish: rivets and a blinking antenna
+      for (let k = -1; k <= 1; k++) aDot(x + d * k * L * 0.25, y + L * 0.15, 1.2, 0x5A5E6A);
+      aBox(x - 0.5, y - L * 0.75, 1.5, L * 0.3, 0x5A5E6A); aDot(x, y - L * 0.78, 2, Math.sin(t * 6) > 0 ? c.col2 : 0x2A3A4A);
+    }
+    if (kind === 12) K.star(x + d * L * 0.15, y - L * 0.55, 5, AHX(c.col2));   // its crown
+    aDot(x + d * L * 0.35, y - L * 0.12, kind === 11 ? 2 : 1.4, kind === 11 ? c.col2 : 0x1B1426);
     if (kind === 3) { g.globalAlpha = 0.5 + 0.5 * Math.sin(t * 6); K.circ(x, y - L * 0.6, 2.5, '#ffffff'); g.globalAlpha = 1; }
   }
   const cloud = (x, y) => { aDot(x, y, 12, 0xFFFFFF); aDot(x + 12, y - 4, 14, 0xFFFFFF); aDot(x + 26, y, 11, 0xFFFFFF); };
@@ -415,18 +456,19 @@ function fishScene(house) {
       const R = S.rods[i], hx = 22 + i * 18; let [tx, ty] = rodTip(i);
       if (R.state === 'charge') { tx -= R.power * 30; ty -= R.power * 6; }
       drawHeroPose(h.m, hx, 98, R.state === 'got' ? 'cheer' : 'idle', t + i * 0.7);
-      aLine(hx + 6, 78, tx, ty, 2, 0x8A5A3C);
+      aLine(hx + 6, 78, tx, ty, 4, 0x4A2E1C); aLine(hx + 6, 78, tx, ty, 2, 0xB07A4C);   // the rod
       if (R.state === 'charge') { panel(hx - 14, 30 + i * 8, 30, 7); aBox(hx - 13, 31 + i * 8, 28 * R.power, 5, R.power > 0.8 ? 0xFF5A5A : 0xFFD23F); }
-      if (R.state === 'fly') aLine(tx, ty, R.x, R.y, 1, 0xFFF6D8, 0.9);
+      if (R.state === 'fly') aLine(tx, ty, R.x, R.y, 1.5, 0xFFF6D8);
       if (R.state === 'wait' || R.state === 'bite' || R.state === 'reel') {
         const dip = R.state === 'bite' ? 4 + Math.sin(t * 30) * 2 : (R.fish >= 0 && R.t < 6) ? 2 : Math.sin(t * 3) * 0.8, by = PD.TOP - 2 + dip;
-        aLine(tx, ty, R.x, by, 1, 0xFFF6D8, 0.9); aLine(R.x, by, R.x, R.y, 1, 0xFFF6D8, 0.6);
-        aDot(R.x, by, 3, 0xFFFFFF); aDot(R.x, by - 1.5, 2, 0xFF5A5A); aRing(R.x, R.y, 2.5, 0xC9C4E0);
+        const bx = R.state === 'reel' ? R.bob : R.x;
+        aLine(tx, ty, bx, by, 1.5, 0xFFF6D8); aLine(bx, by, R.x, R.y, 1.5, 0xFFF6D8, 0.7);
+        aDot(bx, by, 3, 0xFFFFFF); aDot(bx, by - 1.5, 2, 0xFF5A5A); aRing(R.x, R.y, 2.5, 0xC9C4E0);
         if (R.state === 'bite') { K.rr(R.x - 15, by - 40, 30, 26, 5, '#ff5a5a'); K.rr(R.x - 13, by - 38, 26, 22, 4, '#1b1426'); text('!', R.x, by - 21, 14, '#ffd23f', 'center', null); }
       }
-      if (R.state === 'reel') {
-        const bx = 96 + i * 120;
-        panel(bx, 4, 104, 16); text('LINE', bx + 4, 15, 7, '#d9d2e6', 'left', null);
+      if (R.state === 'reel') {   // how tight the line is: player one's top left, two's top right
+        const bx = i ? W - 108 : 4;
+        panel(bx, 4, 104, 16); text('P' + (i + 1), bx + 4, 15, 7, h.m.slot ? '#8fd3ff' : '#ffd23f', 'left', null);
         aBox(bx + 30, 8, 70, 8, 0x3A3650); aBox(bx + 30, 8, 70 * R.tension / 100, 8, R.tension > 75 ? 0xFF5A5A : R.tension > 45 ? 0xFFD23F : 0x49D17A);
       }
       if (R.state === 'got' && S.last >= 0) {
@@ -437,7 +479,8 @@ function fishScene(house) {
       if (R.state === 'snap') rimBanner('Snap! It got away', 14, 50, 32, '#ff5a5a', '#ff8a8a');
     });
     drawParticles(0);
-    panel(W - 74, 4, 70, 16); text('Caught ' + S.caught, W - 39, 15, 8, '#fff6d8', 'center', null);
+    panel(W / 2 - 62, 22, 124, 14); text('Caught ' + S.caught + '   Pond level ' + (S.level + 1), W / 2, 32, 8, '#fff6d8', 'center', null);
+    if (S.levelT > 0) rimBanner('Bigger fish in the pond!', 10, 150, 22);
     const st = S.rods[lastIn(house.ps)].state;   // the help follows whoever pressed last
     hint(st === 'charge' ? 'Let go of A to cast!' : st === 'wait' ? '^ v hook depth   B reel in   START leave' : st === 'bite' ? 'A bite! Press A!' : st === 'reel' ? 'Hold A to reel   let go when it goes red' : 'Hold A, let go to cast   START leave', H - 6);
   };

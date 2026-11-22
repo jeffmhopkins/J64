@@ -348,16 +348,41 @@ void ck_blast_update(ck_game *G) {
 
 // ---------------------------------------------------------------------------- fishing
 const ck_catch ck_catches[CATCH_COUNT] = {
-    { "Minnow", 0xA9C4D6, 7, 1.2f, 0.6f, 1 },
-    { "Goldfish", 0xFF8A3D, 9, 0.9f, 0.9f, 2 },
-    { "Big bass", 0x5E8C4A, 15, 0.7f, 1.5f, 3 },
-    { "Golden fish", 0xFFD23F, 11, 1.6f, 1.8f, 10 },
-    { "Old boot", 0x6F4630, 10, 0, 0.2f, 0 },
+    { "Minnow", 0xA9C4D6, 0xA9C4D6, 7, 1.2f, 0.6f, 1 },
+    { "Goldfish", 0xFF8A3D, 0xFFC27A, 9, 0.9f, 0.9f, 2 },
+    { "Big bass", 0x5E8C4A, 0xC9D98A, 15, 0.7f, 1.5f, 3 },
+    { "Golden fish", 0xFFD23F, 0xFFF6A0, 11, 1.6f, 2.0f, 10 },
+    { "Old boot", 0x6F4630, 0x3A2A20, 10, 0, 0.2f, 0 },
+    { "Sardine", 0xBFC8D4, 0xBFC8D4, 6, 1.0f, 0.5f, 1 },
+    { "Perch", 0xD9C24A, 0x3F5A2E, 10, 1.0f, 1.1f, 2 },
+    { "Rainbow trout", 0x8FB8A8, 0xFF7AA8, 13, 1.3f, 1.6f, 4 },
+    { "Catfish", 0x6A5E50, 0x3A3028, 16, 0.6f, 2.0f, 5 },
+    { "Pike", 0x7A9A4A, 0xE6E0A0, 18, 1.5f, 2.4f, 7 },
+    { "Koi", 0xFFF6E6, 0xFF5A2A, 14, 0.8f, 1.7f, 6 },
+    { "Robo-fish", 0x9AA4B4, 0x5AD1FF, 14, 1.8f, 2.6f, 9 },
+    { "King carp", 0xC98A3A, 0xFFD23F, 22, 0.6f, 3.0f, 12 },
+};
+const int ck_pond_level_at[CK_POND_LEVELS] = { 0, 6, 15, 30, 50 };
+int ck_pond_level(int fished) {
+    int l = 0;
+    while (l + 1 < CK_POND_LEVELS && fished >= ck_pond_level_at[l + 1]) l++;
+    return l;
+}
+// who lives in the pond at each level, and how many in a hundred
+typedef struct { uint8_t kind, w; } pond_pop;
+static const pond_pop pond_pops[CK_POND_LEVELS][8] = {
+    { { CATCH_MINNOW, 45 }, { CATCH_SARDINE, 45 }, { CATCH_BOOT, 10 } },
+    { { CATCH_MINNOW, 20 }, { CATCH_SARDINE, 10 }, { CATCH_GOLDFISH, 30 }, { CATCH_PERCH, 30 }, { CATCH_BOOT, 10 } },
+    { { CATCH_GOLDFISH, 15 }, { CATCH_PERCH, 20 }, { CATCH_BASS, 20 }, { CATCH_TROUT, 20 }, { CATCH_CATFISH, 12 }, { CATCH_GOLDEN, 5 }, { CATCH_BOOT, 8 } },
+    { { CATCH_BASS, 15 }, { CATCH_TROUT, 15 }, { CATCH_CATFISH, 15 }, { CATCH_PIKE, 20 }, { CATCH_KOI, 20 }, { CATCH_GOLDEN, 7 }, { CATCH_BOOT, 8 } },
+    { { CATCH_TROUT, 10 }, { CATCH_PIKE, 15 }, { CATCH_KOI, 15 }, { CATCH_CATFISH, 10 }, { CATCH_ROBO, 22 }, { CATCH_KING, 15 }, { CATCH_GOLDEN, 8 }, { CATCH_BOOT, 5 } },
 };
 void ck_rod_tip(int i, float *x, float *y) { *x = 46 + i * 14; *y = 62 + i * 6; }
 static void pond_fish(ck_game *G, ck_pfish *f) {
-    float r = ck_rand(G);
-    f->kind = r < 0.35f ? CATCH_MINNOW : r < 0.65f ? CATCH_GOLDFISH : r < 0.85f ? CATCH_BASS : r < 0.95f ? CATCH_BOOT : CATCH_GOLDEN;
+    const pond_pop *pop = pond_pops[G->house.pond.level];
+    int r = (int)(ck_rand(G) * 100), k = 0;
+    while (k < 7 && pop[k + 1].w && r >= pop[k].w) r -= pop[k++].w;
+    f->kind = pop[k].kind;
     f->x = 110 + ck_rand(G) * 190;
     f->y = f->kind == CATCH_BOOT ? CK_POND_BED - 6 : CK_POND_TOP + 18 + ck_rand(G) * (CK_POND_BED - CK_POND_TOP - 30);
     f->vx = f->kind == CATCH_BOOT ? 0 : (ck_rand(G) < 0.5f ? -1 : 1) * ck_catches[f->kind].speed * 0.5f;
@@ -369,6 +394,7 @@ void ck_fish_start(ck_game *G) {
     ck_pond *Pd = &H->pond;
     memset(Pd->rod, 0, sizeof Pd->rod);
     for (int i = 0; i < 2; i++) Pd->rod[i].fish = -1;
+    Pd->level = ck_pond_level(G->saves.closet.fished); Pd->levelT = 0;
     for (int k = 0; k < CK_POND_FISH; k++) pond_fish(G, &Pd->fish[k]);
     Pd->last = -1;
     ck_go(G, SC_FISH);
@@ -430,7 +456,7 @@ void ck_fish_update(ck_game *G) {
                     f->vx = R->x > f->x ? fabsf(f->vx) + 0.001f : -fabsf(f->vx) - 0.001f;
                 } else if (--R->t <= 0) {   // a nibble, then another, then a real bite
                     if (--R->nibble > 0) { R->t = 30 + (int)(ck_rand(G) * 40); ck_sfx(G, SFX_TICK); }
-                    else { R->state = ROD_BITE; R->t = 45; ck_sfx(G, SFX_BUTTON); }
+                    else { R->state = ROD_BITE; R->t = 50 - (int)(ck_catches[f->kind].pull * 6); ck_sfx(G, SFX_BUTTON); }   // big fish bite quick
                 }
             }
             break;
@@ -458,6 +484,13 @@ void ck_fish_update(ck_game *G) {
                 R->state = ROD_GOT; R->t = 150; Pd->last = f->kind;
                 Pd->caught++; Pd->got[f->kind]++;
                 G->prog.bolts += c->bolts;
+                if (f->kind != CATCH_BOOT && G->saves.closet.fished < 60000) G->saves.closet.fished++;
+                int lv = ck_pond_level(G->saves.closet.fished);
+                if (lv > Pd->level) {   // the pond levels up: the fish not on a line make way for bigger ones
+                    Pd->level = lv; Pd->levelT = 180;
+                    for (int k = 0; k < CK_POND_FISH; k++) if (!fish_taken(Pd, k) && k != (int)(f - Pd->fish)) { pond_fish(G, &Pd->fish[k]); Pd->fish[k].x = CK_W - 10 - k * 6; }
+                    ck_confetti(G, 160, 40, 40);
+                }
                 ck_save(G);
                 ck_sfx(G, f->kind == CATCH_BOOT ? SFX_CLANK : SFX_GEAR);
                 if (f->kind == CATCH_GOLDEN) ck_confetti(G, 160, 40, 40);
@@ -468,12 +501,20 @@ void ck_fish_update(ck_game *G) {
             }
             break;
         }
+        default: break;
+        }
+        // the bobber sits over the hook; with a fish on, it trails behind towards the rod, so the
+        // line under it runs on a slant down to the fish
+        if (R->state == ROD_REEL) R->bob += (R->x + (tx - R->x) * 0.3f - R->bob) * 0.05f;
+        else R->bob = R->x;
+        switch (R->state) {
         case ROD_GOT:
         case ROD_SNAP:
             if (--R->t <= 0 || (R->t < 110 && HIT(G, s, CK_A))) R->state = ROD_IDLE;
             break;
         }
     }
+    if (Pd->levelT > 0) Pd->levelT--;
     // the fish swim about
     for (int k = 0; k < CK_POND_FISH; k++) {
         ck_pfish *f = &Pd->fish[k];
