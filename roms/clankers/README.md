@@ -87,7 +87,8 @@ CRT scanlines on or off. A second controller plays the ostrich.
 
 Each world's map starts at the heroes' house: a four-bedroom family house with a garage and a
 garden all round, seen from above. You come in at the front gate and walk every way with the
-stick; the camera follows you, and indoors it keeps the room you are in on screen. A uses the thing
+stick; your hero turns to face the way you walk (sideways, toward you, or away with their back to
+you, outfits and all). The camera follows you, and indoors it keeps the room you are in on screen. A uses the thing
 you stand at, and A anywhere else hops. START leaves any game or screen. Walk back out of the front
 gate, or press START, to go back to the map.
 

@@ -713,6 +713,8 @@ function drawHeroPose(m, x, y, st, t, face = 1) {
   if (st === 'run') side(K.pose(m.hero, 'run', R ? t * 2.2 : t * 2));
   else if (st === 'jump') side(K.pose(m.hero, 'jump', t));
   else if (st === 'jet') side(K.pose(m.hero, R ? 'jet' : 'flap', t));
+  else if (st === 'walkFront' || st === 'walkBack') { const o = Object.assign(K.pose(m.hero, st, R ? t * 2.2 : t * 2), { acc }); R ? K.robot(x, y, s, hex, o) : K.ostrich(x, y, s, hex, o); }
+  else if (st === 'back') { if (R) K.robot(x, y, s, hex, { t, back: true, bob: Math.sin(t * 3) * 3, acc }); else K.ostrich(x, y, s, hex, { t, back: true, bob: Math.abs(Math.sin(t * 2.6)) * 8, acc }); }
   else if (st === 'cheer') { if (R) K.robot(x, y, s, hex, { t, armL: 150 + Math.sin(t * 9) * 20, armR: -150 - Math.sin(t * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o', acc }); else K.ostrich(x, y, s, hex, { t, bob: Math.abs(Math.sin(t * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8, acc }); }
   else { if (R) K.robot(x, y, s, hex, { t, bob: Math.sin(t * 3) * 3, acc }); else K.ostrich(x, y, s, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, acc }); }
 }
@@ -873,11 +875,15 @@ function houseScene(from) {
     for (const b of S.babies) actors.push({ y: b.y, draw: () => { const hop = b.wait > 0 ? 0 : Math.abs(Math.sin(S.t * 8 + b.x)) * 2; houseShadow(b.x, b.y, 6); K.baby(b.x, b.y - hop - b.z, 0.05, b.hex, { t: S.t + b.x, armL: 30 + Math.sin(S.t * 5 + b.x) * 20, armR: -150, mouth: 'smile', eyes: { happy: 0.5 } }); } });
     for (const p of S.ps) actors.push({ y: p.y, draw: () => {
       const t = S.t + p.m.slot * 0.7, y = p.y - p.z;
-      const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : p.z > 0 ? 'jump' : p.moving ? 'run' : 'idle';
+      // four ways: side on when walking more across than up or down, else toward us or away
+      const vert = Math.abs(p.ly) > Math.abs(p.lx), away = vert && p.ly < 0;
+      const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : p.z > 0 ? 'jump' : p.moving ? (vert ? (away ? 'walkBack' : 'walkFront') : 'run') : away ? 'back' : 'idle';
       houseShadow(p.x, p.y, p.m.hero === 'robot' ? 10 : 9);
-      drawHeroPose(p.m, p.x, y, st, st === 'run' ? p.anim / 11 : t, p.face);
+      const held = () => { if (p.hold && p.eatT <= 0) { foodArt(p.hold - 1, p.x + p.face * 9, y - 20); garnishArt(p.garnish, p.x + p.face * 9, y - 20, 1); } };
+      if (away) held();   // from behind, what you hold is in front of you
+      drawHeroPose(p.m, p.x, y, st, st === 'run' || st === 'walkFront' || st === 'walkBack' ? p.anim / 11 : t, p.face);
       if (p.eatT > 0) { const sc = 0.4 + 0.6 * p.eatT / 50; foodArt(p.food, p.x + 6, y - 24, sc); garnishArt(p.garnish, p.x + 6, y - 24, sc); }   // shrinking as it is eaten
-      else if (p.hold) { foodArt(p.hold - 1, p.x + p.face * 9, y - 20); garnishArt(p.garnish, p.x + p.face * 9, y - 20, 1); }
+      else if (!away) held();
     } });
     for (const f of S.thrown) actors.push({ y: f.y, draw: () => { houseShadow(f.x, f.y, 4); foodArt(f.kind, f.x, f.y - 4 - f.z); } });
     HT.draw(g, S.cx, S.cy, S.t, actors, houseBgPicture(), here, W, H);

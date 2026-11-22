@@ -61,11 +61,11 @@ function bakeAll() {
     g.fillStyle = col; g.fillText(s, x, y);
   };
 
-  // ---- heroes: one sheet per hero and colour, 32 frames of 64x56, feet at (32, 44)
+  // ---- heroes: one sheet per hero and colour, 42 frames of 64x56, feet at (32, 44)
   // Frame list (the N64 renderer uses the same numbers, see src/n64/draw.c):
   //  0-3 idle   4-11 run   12 jump   13-16 jet (robot) / flap (ostrich)   17-18 wobble
   //  19 crouch  20 slide   21-23 B action   24 shoot   25-26 cheer   27 dead   28 in a bubble
-  //  29-30 jetpack zone    31 spare
+  //  29-30 jetpack zone    31 spare   32-35 walk toward us   36-39 walk away   40-41 idle from behind
   function heroFrame(hero, hex, i) {
     const R = hero === 'robot', rs = 0.074, os = 0.071;
     const side = o => R ? K.robotSide(0, 0, rs, hex, Object.assign(o, { dir: 1 })) : K.ostrichSide(0, 0, os, hex, Object.assign(o, { dir: 1 }));
@@ -96,28 +96,34 @@ function bakeAll() {
       else { K.rr(-10, fy - 22, 7, 11, 2, '#9aa1b0'); K.flame(-6.5, fy - 10, 30, 14, t); K.ostrichSide(0, fy, 0.071, hex, Object.assign(K.pose('ostrich', 'jump', t), { dir: 1, rot: 0.2 })); }
       return;
     }
+    if (i < 40) {   // the house's walks up and down the screen: a quarter of a stride a frame
+      const k = (i - 32) % 4, t = k / 4 * P * 2 / (R ? 11 : 10);
+      return front(K.pose(hero, i < 36 ? 'walkFront' : 'walkBack', t));
+    }
+    if (i < 42) { const t = 0.3 + (i - 40) * (R ? 0.52 : 0.6); return front(R ? { t, back: true, bob: Math.sin(t * 3) * 3 } : { t, back: true, bob: Math.abs(Math.sin(t * 2.6)) * 8 }); }
     return front({ t: 0.3 });
   }
+  const HERO_FRAMES = 42, isBack = i => i >= 36 && i < 42;
   for (const hero of ['robot', 'ostrich'])
     for (let c = 0; c < COLS.length; c++)
-      strip(`hero_${hero}_${c}`, 64, 56, 32, 44, 32, (g, i) => heroFrame(hero, COLS[c], i), 'rgba16', 8);
+      strip(`hero_${hero}_${c}`, 64, 56, 32, 44, HERO_FRAMES, (g, i) => heroFrame(hero, COLS[c], i), 'rgba16', 8);
 
   // ---- accessories from the parts shop. The hero views call K.onWear(kind, where) as they draw:
   // 'head' (hats, face and neck pieces hang off the head's top middle), 'body' (the torso box) and
   // 'foot' (each foot). Where those land in every hero frame goes into sprites.h as ACC_AT; each
-  // item is drawn once per view (robot front, robot side, ostrich front, ostrich side) into a strip
+  // item is drawn once per view (robot front, side and back, then the ostrich's) into a strip
   // per slot, anchored at the same point, and the N64 places, turns and stretches it to match.
   // Items that cycle colour are drawn white (K.plain) so the N64 can tint them.
   const ACC_AT = [], REF = {};
   const pt = (m, x, y, s0) => { const q = m.transformPoint(new DOMPoint(x, y)); return { x: q.x, y: q.y, rot: Math.atan2(m.b, m.a), sx: Math.hypot(m.a, m.b) / s0, sy: Math.hypot(m.c, m.d) / s0 }; };
   for (const hero of ['robot', 'ostrich']) {
     const s0 = hero === 'robot' ? 0.074 : 0.071, rows = [];
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < HERO_FRAMES; i++) {
       const cv = document.createElement('canvas'); cv.width = 64; cv.height = 56;
       const g = cv.getContext('2d'); g.translate(32, 44); K.g = g;
       const base = g.getTransform().inverse(), at = { head: null, body: null, feet: [], arms: [], side: 0 };
       K.onWear = (kind, a) => {
-        const m = base.multiply(g.getTransform()), side = a.side ? 1 : 0, key = hero + side;
+        const m = base.multiply(g.getTransform()), side = isBack(i) ? 2 : a.side ? 1 : 0, key = hero + side;
         REF[key] = REF[key] || {};
         if (kind === 'head') { at.head = pt(m, a.cx, a.top, s0); at.side = side; REF[key].head = REF[key].head || a; }
         else if (kind === 'body') { at.body = pt(m, a.x + a.w / 2, a.y + a.h / 2, s0); REF[key].body = REF[key].body || a; }
@@ -134,13 +140,15 @@ function bakeAll() {
     }
     ACC_AT.push(rows);
   }
-  // one strip per slot: frame = view * (items in the slot) + item, view = hero * 2 + side
+  // one strip per slot: frame = view * (items in the slot) + item, view = hero * 3 + side (0 front, 1 side, 2 back)
   const SLOT_FRAME = { head: [32, 20, 16, 15], face: [28, 16, 14, 0], neck: [28, 24, 14, 0], body: [18, 16, 9, 8], feet: [12, 10, 6, 5] };
   for (const slot of K.ACC_SLOTS) {
     const items = K.ACC.filter(it => it.slot === slot), [fw, fh, ax, ay] = SLOT_FRAME[slot];
-    strip('acc_' + slot, fw, fh, ax, ay, 4 * items.length, (g, i) => {
-      const it = items[i % items.length], view = Math.floor(i / items.length), hero = view < 2 ? 'robot' : 'ostrich', R = REF[hero + (view % 2)];
+    strip('acc_' + slot, fw, fh, ax, ay, 6 * items.length, (g, i) => {
+      const it = items[i % items.length], view = Math.floor(i / items.length), hero = view < 3 ? 'robot' : 'ostrich', R = REF[hero + (view % 3)];
       if (!R) return;
+      K.back = view % 3 === 2;
+      if (K.back && slot === 'face') { K.back = false; return; }   // no face pieces from behind
       const s0 = hero === 'robot' ? 0.074 : 0.071;
       K.plain = !!it.rainbow;
       g.scale(s0, s0);
@@ -152,7 +160,7 @@ function bakeAll() {
         else if (slot === 'face') K.wearFace(it.id, a.eyes, a.side);
         else K.wearNeck(it.id, a.neck[0], a.neck[1], a.neck[2], a.side ? 1 : 0);
       }
-      K.plain = false;
+      K.plain = false; K.back = false;
     }, 'rgba16', items.length);
   }
   out.accAt = ACC_AT;
@@ -463,12 +471,12 @@ const lines = [
   '};', '',
   '// Where each hero frame (robot, ostrich) wears its accessories, from the feet anchor: the head\'s',
   '// top middle (hats, face and neck pieces), the middle of the body, and up to two feet (the far',
-  '// one marked), each with its turn in radians and stretch; side is 1 for a side view. Arms are the',
+  '// one marked), each with its turn in radians and stretch; side is 0 front, 1 side, 2 back. Arms are the',
   '// sleeve strokes of body items: shoulder, end, width (the far arm marked).',
   'typedef struct { float x, y, rot, sx, sy; } acc_pt;',
   'typedef struct { float x0, y0, x1, y1, w; unsigned char far; } acc_arm;',
   'typedef struct { acc_pt head, body, foot[2]; unsigned char side, has_body, nfeet, far[2]; unsigned char narms; acc_arm arm[2]; } acc_at;',
-  'static const acc_at ACC_AT[2][32] = {',
+  `static const acc_at ACC_AT[2][${accAt[0].length}] = {`,
   ...accAt.map(rows => '    {\n' + rows.map(a => { const P = (p) => `{ ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, ${p.rot.toFixed(3)}f, ${p.sx.toFixed(3)}f, ${p.sy.toFixed(3)}f }`, Z = { x: 0, y: -30, rot: 0, sx: 1, sy: 1 };
     const f = [a.feet[0] || Z, a.feet[1] || Z];
     return `        { ${P(a.head || Z)}, ${P(a.body || Z)}, { ${P(f[0])}, ${P(f[1])} }, ${a.side}, ${a.body ? 1 : 0}, ${a.feet.length}, { ${a.feet[0]?.far ? 1 : 0}, ${a.feet[1]?.far ? 1 : 0} }, ${a.arms.length}, { ${[0, 1].map(k => { const r = a.arms[k] || { x0: 0, y0: 0, x1: 0, y1: 0, w: 0, far: 0 }; return `{ ${r.x0.toFixed(2)}f, ${r.y0.toFixed(2)}f, ${r.x1.toFixed(2)}f, ${r.y1.toFixed(2)}f, ${r.w.toFixed(2)}f, ${r.far} }`; }).join(', ')} } },`; }).join('\n') + '\n    },'),

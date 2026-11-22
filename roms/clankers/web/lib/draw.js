@@ -103,15 +103,16 @@ const CK = (() => {
     g.closePath(); g.fill(); if (hole) circ(0, 0, r * 0.32, hole); g.restore();
   };
 
-  // ROBOT. Panel units, feet at local y = 171. p = pose.
+  // ROBOT. Panel units, feet at local y = 171. p = pose; p.back draws it from behind (walking
+  // away up the screen), legLenL and legLenR lift one foot at a time.
   K.robot = (x, feetY, s, hex, p = {}) => {
     const g = K.g, t = p.t ?? 0;
     const col = shade(hex, 1), dark = shade(hex, 0.22), torso = shade(hex, 0.88), plate = shade(hex, 0.55), lim = shade(hex, 0.78);
     g.save(); g.translate(x, feetY); g.rotate(p.rot ?? 0); g.translate(0, -171 * s); g.scale(s * (p.sx ?? 1), s * (p.sy ?? 1));
     const HY = -96, HW = 108, HH = 88, bob = p.bob ?? 0, tilt = p.tilt ?? 0;
     const legLen = p.legLen ?? 54;
-    const lf = limb(-34, 98 + bob, p.legL ?? 6, legLen - bob, 30, lim);
-    const rf = limb(34, 98 + bob, p.legR ?? -6, legLen - bob, 30, lim);
+    const lf = limb(-34, 98 + bob, p.legL ?? 6, (p.legLenL ?? legLen) - bob, 30, lim);
+    const rf = limb(34, 98 + bob, p.legR ?? -6, (p.legLenR ?? legLen) - bob, 30, lim);
     wearFoot(p, lf[0], lf[1] + 2, 34, false, false); wearFoot(p, rf[0], rf[1] + 2, 34, false, false);
     if (p.jet) { K.flame(lf[0], lf[1] + 16, 60, 26, t); K.flame(rf[0], rf[1] + 16, 60, 26, t + 0.3); }
     g.translate(0, bob);
@@ -121,14 +122,20 @@ const CK = (() => {
     let clawEnd = null;
     if (Math.abs(armR) <= 95 && !p.grab) arm(66, armR);
     rr(-72, -26, 144, 132, 40, torso);
-    rr(-26, 10, 52, 40, 12, plate);
-    wearBody(p, { x: -72, y: -26, w: 144, h: 132, r: 40 });
+    if (p.back) { rr(-34, -6, 68, 84, 14, plate); g.fillStyle = torso; for (const yy of [10, 28, 46]) g.fillRect(-22, yy, 44, 6); }   // the battery hatch
+    else rr(-26, 10, 52, 40, 12, plate);
+    wearBody(p, { x: -72, y: -26, w: 144, h: 132, r: 40, back: !!p.back });
     g.fillStyle = col; g.fillRect(tilt - 4, HY - HH - 30, 8, 30); circ(tilt, HY - HH - 36, 11, col);
     rr(tilt - HW, HY - HH, HW * 2, HH * 2, 40, col);
     const ex = HW * 0.43, ey = HY - HH * 0.17, eo = Object.assign({ open: K.blink(t, p.phase ?? 0.3), happy: 0.45 }, p.eyes || {});
-    eye(tilt - ex, ey, 52, 60, dark, col, Object.assign({}, eo, { angry: eo.angry ? 1 : 0 }));
-    eye(tilt + ex, ey, 52, 60, dark, col, Object.assign({}, eo, { angry: eo.angry ? -1 : 0 }));
-    K.mouth(p.mouth || 'smile', tilt, HY + HH * 0.52 - 16, 30, 9, dark);
+    if (p.back) {   // the back of the head: a speaker grille and two bolts
+      g.fillStyle = plate; for (const yy of [-24, -8, 8]) rr(tilt - 30, HY + yy, 60, 8, 4, plate);
+      for (const d of [-1, 1]) { circ(tilt + d * 76, HY - 40, 9, plate); circ(tilt + d * 76, HY - 40, 4, torso); }
+    } else {
+      eye(tilt - ex, ey, 52, 60, dark, col, Object.assign({}, eo, { angry: eo.angry ? 1 : 0 }));
+      eye(tilt + ex, ey, 52, 60, dark, col, Object.assign({}, eo, { angry: eo.angry ? -1 : 0 }));
+      K.mouth(p.mouth || 'smile', tilt, HY + HH * 0.52 - 16, 30, 9, dark);
+    }
     if (Math.abs(armL) > 95) arm(-66, armL);
     if (Math.abs(armR) > 95 && !p.grab) arm(66, armR);
     if (p.grab) {
@@ -143,13 +150,14 @@ const CK = (() => {
       circ(cx, cy, 14, lim);
       clawEnd = [cx, cy];
     }
-    wear(p, { cx: tilt, top: HY - HH, w: HW * 2 * 0.95, eyes: [[tilt - ex, ey, 26, 30], [tilt + ex, ey, 26, 30]], neck: [tilt, HY + HH + 4, 150] });
+    wear(p, { back: !!p.back, cx: tilt, top: HY - HH, w: HW * 2 * 0.95, eyes: [[tilt - ex, ey, 26, 30], [tilt + ex, ey, 26, 30]], neck: [tilt, HY + HH + 4, 150] });
     if (p.stars) K.stars(tilt, HY - HH - 30, 90, t);
     g.restore();
     return clawEnd;
   };
 
-  // ROBOT OSTRICH. ostrich-mock.py at true geometry, ox = 0, feet at local y = 429.
+  // ROBOT OSTRICH. ostrich-mock.py at true geometry, ox = 0, feet at local y = 429. p.back draws it
+  // from behind: the tail fans up over the body, a wing each side, the back of the head.
   K.ostrich = (x, feetY, s, hex, p = {}) => {
     const g = K.g, t = p.t ?? 0;
     const col = shade(hex, 1), head = shade(hex, 0.94), body = shade(hex, 0.86), neck = shade(hex, 0.76),
@@ -157,7 +165,7 @@ const CK = (() => {
     g.save(); g.translate(x, feetY); g.rotate(p.rot ?? 0); g.translate(0, -429 * s); g.scale(s, s);
     const ox = 0, bob = p.bob ?? 0;
     const flick = p.flick ?? 0;
-    for (const [deg, ln] of [[108, 76], [126, 88], [144, 72]]) limb(ox - 56, 250 + bob, deg + flick, ln, 16, col);
+    if (!p.back) for (const [deg, ln] of [[108, 76], [126, 88], [144, 72]]) limb(ox - 56, 250 + bob, deg + flick, ln, 16, col);
     const legs = [[-1, p.legL ?? -3, p.legLenL ?? 92], [1, p.legR ?? 3, p.legLenR ?? 92]];
     for (const [side, deg, ln] of legs) {
       const hx = ox + side * 30;
@@ -167,8 +175,11 @@ const CK = (() => {
     }
     g.translate(0, bob);
     rr(ox - 72, 222, 144, 112, 54, body);
-    wearBody(p, { x: ox - 72, y: 222, w: 144, h: 112, r: 54 });
-    if (p.flap) {
+    wearBody(p, { x: ox - 72, y: 222, w: 144, h: 112, r: 54, back: !!p.back });
+    if (p.back) {
+      for (const d of [-1, 1]) { rr(d > 0 ? ox + 2 : ox - 76, 244, 74, 66, 30, wing); for (const r of [20, 34, 48]) arc(ox + d * 4, 252, r, d > 0 ? P * 0.06 : P * 0.56, d > 0 ? P * 0.44 : P * 0.94, 3, col); }
+      for (const [deg, ln] of [[-34, 40], [0, 46], [34, 40]]) limb(ox, 316, deg + flick * 0.5, ln, 16, col);   // the tail, its plumes hanging toward us
+    } else if (p.flap) {
       g.save(); g.translate(ox + 10, 250); g.rotate(-p.flap * 1.1);
       rr(-8, -6, 74, 66, 30, wing);
       for (const r of [20, 34, 48]) arc(-6, 2, r, P * 0.06, P * 0.44, 3, col);
@@ -184,14 +195,18 @@ const CK = (() => {
     }
     const hx = ox + 7 + lean;
     for (const [deg, ln] of [[-18, 42], [0, 50], [18, 42]]) limb(hx, 62, deg + 180 + (p.crest ?? 0), ln, 9, col);
+    if (p.back) for (const [w, h, y] of [[42, 13, 132], [33, 12, 143]]) rr(hx - w / 2, y + 6, w, h, 5, beak);   // the beak's sides peek out below
     rr(hx - 64, 58, 128, 98, 44, head);
-    for (const [w, h, y] of [[42, 13, 132], [33, 12, 143], [23, 11, 153], [13, 10, 162]]) rr(hx - w / 2, y, w, h, 5, beak);
-    if (p.beakOpen) rr(hx - 14, 150, 28, 10 * p.beakOpen, 4, dark);
-    g.fillStyle = shade(hex, 0.28); g.fillRect(hx - 16, 147, 32, 2);
-    const eo = Object.assign({ open: K.blink(t, p.phase ?? 1.7), happy: 0.4 }, p.eyes || {});
-    eye(hx - 31, 100, 45, 53, dark, head, Object.assign({}, eo, { angry: eo.angry ? 1 : 0 }));
-    eye(hx + 31, 100, 45, 53, dark, head, Object.assign({}, eo, { angry: eo.angry ? -1 : 0 }));
-    wear(p, { cx: hx, top: 58, w: 128, eyes: [[hx - 31, 100, 22, 26], [hx + 31, 100, 22, 26]], neck: [hx - 2, 160, 90] });
+    if (p.back) { g.fillStyle = neck; for (const yy of [92, 112]) rr(hx - 30, yy, 60, 8, 4, neck); }
+    else {
+      for (const [w, h, y] of [[42, 13, 132], [33, 12, 143], [23, 11, 153], [13, 10, 162]]) rr(hx - w / 2, y, w, h, 5, beak);
+      if (p.beakOpen) rr(hx - 14, 150, 28, 10 * p.beakOpen, 4, dark);
+      g.fillStyle = shade(hex, 0.28); g.fillRect(hx - 16, 147, 32, 2);
+      const eo = Object.assign({ open: K.blink(t, p.phase ?? 1.7), happy: 0.4 }, p.eyes || {});
+      eye(hx - 31, 100, 45, 53, dark, head, Object.assign({}, eo, { angry: eo.angry ? 1 : 0 }));
+      eye(hx + 31, 100, 45, 53, dark, head, Object.assign({}, eo, { angry: eo.angry ? -1 : 0 }));
+    }
+    wear(p, { back: !!p.back, cx: hx, top: 58, w: 128, eyes: [[hx - 31, 100, 22, 26], [hx + 31, 100, 22, 26]], neck: [hx - 2, 160, 90] });
     if (p.stars) K.stars(hx, 30, 80, t);
     g.restore();
   };
@@ -487,7 +502,7 @@ const CK = (() => {
       g.save(); g.beginPath(); g.moveTo(-24, 6); g.lineTo(0, -62); g.lineTo(24, 6); g.closePath(); g.clip(); g.fillStyle = '#ffd23f'; for (const y of [-40, -16]) { g.beginPath(); g.moveTo(-40, y); g.lineTo(40, y - 14); g.lineTo(40, y - 4); g.lineTo(-40, y + 10); g.fill(); } g.restore();
       circ(0, -64, 10, '#5ad1ff'); circ(-3, -67, 3.5, '#ffffff');
     } else if (id === 'flower') {
-      const fx = side ? -26 : 30, fy = -2;
+      const fx = side ? -26 : K.back ? -30 : 30, fy = -2;
       limb(fx, fy, 160, 14, 5, '#3f9e57');
       for (let i = 0; i < 6; i++) { const a = i / 6 * P * 2 + t * 0.4; circ(fx + Math.cos(a) * 12, fy - 16 + Math.sin(a) * 12, 9, '#ff7a59'); }
       circ(fx, fy - 16, 8, '#ffd23f');
@@ -497,8 +512,11 @@ const CK = (() => {
       rr(-46, -4, 92, 14, 6, '#2d6fb5'); circ(0, -38, 11, '#ffd23f');
     } else if (id === 'baseball') {
       g.fillStyle = '#e0564f'; g.beginPath(); g.ellipse(0, 4, 42, 34, 0, P, 0); g.fill();
-      if (side) rr(20, -4, 50, 10, 5, '#a8323b'); else { g.fillStyle = '#a8323b'; g.beginPath(); g.ellipse(0, 4, 40, 9, 0, 0, P); g.fill(); }
-      circ(0, -30, 5, '#a8323b'); g.fillStyle = '#ffffff'; g.font = 'bold 26px sans-serif'; g.textAlign = 'center'; g.fillText('C', side ? -6 : 0, -4);
+      if (K.back) { rr(-14, -4, 28, 9, 4, '#a8323b'); circ(0, -30, 5, '#a8323b'); }   // the strap at the back
+      else {
+        if (side) rr(20, -4, 50, 10, 5, '#a8323b'); else { g.fillStyle = '#a8323b'; g.beginPath(); g.ellipse(0, 4, 40, 9, 0, 0, P); g.fill(); }
+        circ(0, -30, 5, '#a8323b'); g.fillStyle = '#ffffff'; g.font = 'bold 26px sans-serif'; g.textAlign = 'center'; g.fillText('C', side ? -6 : 0, -4);
+      }
     } else if (id === 'chef') {
       rr(-30, -16, 60, 22, 4, '#f5f1e8');
       for (const [x, y, r] of [[-22, -34, 18], [0, -44, 22], [22, -34, 18]]) circ(x, y, r, '#ffffff');
@@ -515,7 +533,7 @@ const CK = (() => {
       g.fillStyle = '#5d3a1c'; g.fillRect(-31, -10, 62, 7);
     } else if (id === 'pirate') {
       g.fillStyle = '#1f1b26'; g.beginPath(); g.moveTo(-54, 4); g.quadraticCurveTo(0, -70, 54, 4); g.quadraticCurveTo(0, -12, -54, 4); g.fill();
-      circ(0, -22, 9, '#f5f1e8'); circ(-3, -24, 2.2, '#1f1b26'); circ(3, -24, 2.2, '#1f1b26');
+      if (!K.back) { circ(0, -22, 9, '#f5f1e8'); circ(-3, -24, 2.2, '#1f1b26'); circ(3, -24, 2.2, '#1f1b26'); }
       g.strokeStyle = '#ffd23f'; g.lineWidth = 3; g.beginPath(); g.moveTo(-50, 1); g.quadraticCurveTo(0, -14, 50, 1); g.stroke();
     } else if (id === 'tophat') {
       rr(-46, -4, 92, 10, 5, '#1f1b26');
@@ -537,12 +555,12 @@ const CK = (() => {
     } else if (id === 'mirror') {
       rr(-50, 6, 100, 10, 5, '#e8e8f0');
       const mx = side ? 22 : -20;
-      circ(mx, 4, 17, '#8a93a3'); circ(mx, 4, 13, '#dfe6f0'); circ(mx - 4, 0, 4, '#ffffff');
+      if (!K.back) { circ(mx, 4, 17, '#8a93a3'); circ(mx, 4, 13, '#dfe6f0'); circ(mx - 4, 0, 4, '#ffffff'); }
     } else if (id === 'policecap') {
       g.fillStyle = '#2b3f7a'; g.beginPath(); g.ellipse(0, -8, 50, 26, 0, P, 0); g.fill(); g.fillRect(-36, -10, 72, 8);
       rr(-40, -6, 80, 12, 4, '#1b2550');
-      if (side) rr(22, 2, 40, 8, 4, '#14141e'); else { g.fillStyle = '#14141e'; g.beginPath(); g.ellipse(0, 6, 40, 9, 0, 0, P); g.fill(); }
-      K.star(side ? 4 : 0, -18, 9, '#ffd23f');
+      if (K.back) {} else if (side) rr(22, 2, 40, 8, 4, '#14141e'); else { g.fillStyle = '#14141e'; g.beginPath(); g.ellipse(0, 6, 40, 9, 0, 0, P); g.fill(); }
+      if (!K.back) K.star(side ? 4 : 0, -18, 9, '#ffd23f');
     } else if (id === 'mohawk') {
       for (let i = -2; i <= 2; i++) poly([[i * 12 - 9, 8], [i * 12 + (side ? -10 : i * 3), -46 + Math.abs(i) * 9], [i * 12 + 9, 8]], i % 2 ? '#c23bd0' : '#ff4fa3');
       for (let i = -2; i <= 2; i++) circ(i * 12 + (side ? -10 : i * 3), -44 + Math.abs(i) * 9, 4, '#ffd23f');
@@ -550,7 +568,7 @@ const CK = (() => {
       g.fillStyle = '#b02020'; g.beginPath(); g.ellipse(side ? -6 : 0, 4, side ? 70 : 60, 11, 0, 0, P * 2); g.fill();
       g.fillStyle = '#d8322c'; g.beginPath(); g.ellipse(0, 2, 42, 40, 0, P, 0); g.fill();
       g.fillStyle = '#ff6a5a'; g.fillRect(-4, -36, 8, 36);
-      if (!side) { rr(-13, -30, 26, 22, 5, '#ffd23f'); g.fillStyle = '#b02020'; g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.fillText('1', 0, -13); }
+      if (K.back) {} else if (!side) { rr(-13, -30, 26, 22, 5, '#ffd23f'); g.fillStyle = '#b02020'; g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.fillText('1', 0, -13); }
       else rr(20, -26, 12, 20, 4, '#ffd23f');
     } else if (id === 'spacehelm') {
       // a glass bowl: just the rim and a shine, so the face still shows (the N64 has no half-clear)
@@ -567,11 +585,14 @@ const CK = (() => {
       circ(0, -12, 6, '#ff5aa8'); circ(-18, -6, 3.5, '#5ad1ff'); circ(18, -6, 3.5, '#5ad1ff'); circ(-1.5, -14, 2, '#ffffff');
     } else if (id === 'ninjaband') {
       rr(-52, 8, 104, 15, 5, '#d8322c');
+      if (K.back) { poly([[-4, 14], [-22, 52], [-12, 56], [2, 18]], '#b02020'); poly([[4, 14], [22, 50], [12, 54], [-2, 18]], '#d8322c'); circ(0, 15, 8, '#b02020'); }   // the knot and its tails
+      else {
       if (!side) rr(-14, 9, 28, 13, 3, '#9aa1b0');
       else rr(14, 9, 22, 13, 3, '#9aa1b0');
       const bx = side ? -50 : 44;
       poly([[bx, 10], [bx + (side ? -28 : 26), 26], [bx + (side ? -22 : 20), 34], [bx, 20]], '#b02020');
       poly([[bx, 14], [bx + (side ? -32 : 30), 40], [bx + (side ? -24 : 22), 46], [bx, 22]], '#d8322c');
+      }
     } else if (id === 'clownwig') {
       const cols = ['#ff5a5a', '#5ad1ff', '#ffd23f', '#49d17a'];
       [[-48, 16, 18], [-58, 36, 15], [-34, -4, 16], [48, 16, 18], [58, 36, 15], [34, -4, 16], [-12, -14, 15], [12, -14, 15]].forEach(([x, y, r], i) => {
@@ -581,7 +602,7 @@ const CK = (() => {
     } else if (id === 'knighthelm') {
       g.fillStyle = '#b8c0cc'; g.beginPath(); g.ellipse(0, 8, 50, 46, 0, P, 0); g.fill();
       rr(-52, 0, 104, 12, 4, '#8a93a3');
-      for (const rx of [-36, 0, 36]) circ(side ? rx * 0.8 : rx, 6, 3, '#dfe6f0');
+      if (!K.back) for (const rx of [-36, 0, 36]) circ(side ? rx * 0.8 : rx, 6, 3, '#dfe6f0');
       g.fillStyle = '#dfe6f0'; g.fillRect(-4, -36, 8, 36);
       for (let i = 0; i < 4; i++) circ((side ? -14 : 0) - i * (side ? 7 : 0), -42 - i * 8 + (side ? i * 6 : 0), 10 - i, i % 2 ? '#ff7a6a' : '#e0564f');
     }
@@ -641,7 +662,13 @@ const CK = (() => {
   K.wearNeck = (id, x, y, w, dir = 0) => {
     const g = K.g, k = w / 100;
     g.save(); g.translate(x, y); g.scale(k * (dir ? 0.7 : 1), k);
-    if (id === 'bowtie') {
+    if (K.back) {   // from behind: only what goes round the neck shows
+      if (id === 'scarf') { rr(-46, -10, 92, 22, 11, '#49d17a'); g.fillStyle = '#ffffff'; for (const sx of [-26, 0, 26]) g.fillRect(sx - 4, -10, 8, 22); }
+      else if (id === 'pearls' || id === 'chain') for (let i = 0; i <= 8; i++) circ(-36 + i * 9, -4 + Math.abs(i - 4) * -1.2, id === 'pearls' ? 5.5 : 4, id === 'pearls' ? '#f8f5ff' : i % 2 ? '#d49a10' : '#ffd23f');
+      else if (id === 'bandana') { circ(0, -2, 9, '#c0403a'); poly([[-2, 0], [-14, 22], [-4, 24]], '#e0564f'); poly([[2, 0], [14, 22], [4, 24]], '#e0564f'); }
+      else if (id === 'medal') { poly([[-26, -8], [26, -8], [24, -2], [-24, -2]], '#3a8de0'); }
+      else if (id === 'stetho') { g.strokeStyle = '#3a3346'; g.lineWidth = 7; g.lineCap = 'round'; g.beginPath(); g.moveTo(-36, -8); g.quadraticCurveTo(0, 4, 36, -8); g.stroke(); }
+    } else if (id === 'bowtie') {
       poly([[0, 0], [-30, -16], [-30, 16]], '#e0564f'); poly([[0, 0], [30, -16], [30, 16]], '#e0564f');
       circ(0, 0, 8, '#a8323b');
     } else if (id === 'scarf') {
@@ -681,16 +708,20 @@ const CK = (() => {
       g.fillStyle = '#ffffff'; for (let k = 1; k < 5; k++) g.fillRect(x, y + h * k / 5 - h * 0.05, w, h * 0.09);
     } else if (id === 'overalls') {
       g.fillStyle = '#3a6fc0'; g.fillRect(x, y + h * 0.42, w, h);
+      if (K.back) { for (const d of [-1, 1]) { g.save(); g.translate(cx, y + h * 0.3); g.rotate(d * 0.6); g.fillRect(-w * 0.05, -h * 0.4, w * 0.1, h * 0.6); g.restore(); } }   // the straps cross at the back
+      else {
       g.fillRect(cx - w * 0.22, y + h * 0.22, w * 0.44, h * 0.3);
       for (const d of side ? [1] : [-1, 1]) { g.save(); g.translate(cx + d * w * 0.2, y + h * 0.24); g.rotate(d * 0.25); g.fillRect(-w * 0.05, -h * 0.3, w * 0.1, h * 0.32); g.restore(); circ(cx + d * w * 0.17, y + h * 0.27, w * 0.04, '#ffd23f'); }
       g.fillStyle = '#2b55a0'; g.fillRect(cx - w * 0.12, y + h * 0.5, w * 0.24, h * 0.16);
+      }
     } else if (id === 'jersey') {
       g.fillStyle = '#49d17a'; g.fillRect(x, y, w, h);
       g.fillStyle = '#ffffff'; g.fillRect(x, y + h * 0.82, w, h * 0.06);
       g.font = `bold ${Math.round(h * 0.5)}px sans-serif`; g.textAlign = 'center'; g.fillText('7', side ? cx + w * 0.1 : cx, y + h * 0.66);
     } else if (id === 'tux') {
       g.fillStyle = '#2b2833'; g.fillRect(x, y, w, h);
-      if (side) { poly([[x + w * 0.62, y], [x + w, y], [x + w, y + h], [x + w * 0.86, y + h]], '#f5f1e8'); circ(x + w * 0.82, y + h * 0.45, w * 0.04, '#2b2833'); }
+      if (K.back) { g.fillStyle = '#1b1426'; g.fillRect(cx - w * 0.01, y + h * 0.55, w * 0.02, h * 0.45); }   // the split of the tails
+      else if (side) { poly([[x + w * 0.62, y], [x + w, y], [x + w, y + h], [x + w * 0.86, y + h]], '#f5f1e8'); circ(x + w * 0.82, y + h * 0.45, w * 0.04, '#2b2833'); }
       else {
         poly([[cx - w * 0.2, y], [cx + w * 0.2, y], [cx, y + h * 0.62]], '#f5f1e8');
         poly([[cx - w * 0.12, y], [cx - w * 0.02, y + h * 0.18], [cx - w * 0.2, y + h * 0.14]], '#1b1426'); poly([[cx + w * 0.12, y], [cx + w * 0.02, y + h * 0.18], [cx + w * 0.2, y + h * 0.14]], '#1b1426');
@@ -700,8 +731,11 @@ const CK = (() => {
       g.fillStyle = '#3a6fc0'; g.fillRect(x, y, w, h);
       g.fillStyle = '#e0564f'; g.fillRect(x, y + h * 0.78, w, h * 0.12);
       const ex = side ? cx + w * 0.15 : cx, ey = y + h * 0.38, er = Math.min(w, h) * 0.2;
+      if (K.back) { poly([[x + w * 0.12, y], [x + w * 0.88, y], [x + w, y + h], [x, y + h]], '#e0564f'); g.fillStyle = '#b8323b'; for (const u of [0.35, 0.65]) g.fillRect(x + w * u, y + h * 0.2, w * 0.02, h * 0.8); }   // the cape
+      else {
       circ(ex, ey, er, '#ffd23f');
       poly([[ex + er * 0.2, ey - er * 0.8], [ex - er * 0.5, ey + er * 0.1], [ex, ey + er * 0.1], [ex - er * 0.3, ey + er * 0.8], [ex + er * 0.5, ey - er * 0.15], [ex, ey - er * 0.15]], '#e0564f');
+      }
     } else if (id === 'disco') {
       const n = 6;
       for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { g.fillStyle = rb(t * 2, i + j * 2, 55 + ((i + j) % 2) * 12); g.fillRect(x + i * w / n, y + j * h / n, w / n + 0.5, h / n + 0.5); }
@@ -713,7 +747,8 @@ const CK = (() => {
       if (stripe) { g.fillStyle = stripe; for (let k = 1; k < 8; k++) g.fillRect(x + w * k / 8, y, Math.max(1, w * 0.02), h); }
       if (id === 'plaidsuit') { g.fillStyle = '#2a5a36'; for (let k = 0; k < 4; k++) g.fillRect(x, y + h * (0.12 + k * 0.25), w, h * 0.06); g.fillStyle = '#ffd23f'; for (let k = 0; k < 4; k++) g.fillRect(x + w * (0.1 + k * 0.25), y, Math.max(1, w * 0.02), h); }
       if (id === 'goldsuit' || id === 'velvetsuit') { g.fillStyle = id === 'goldsuit' ? '#fff6a0' : '#a050b0'; g.fillRect(x + w * 0.08, y, w * 0.08, h); }
-      if (side) { poly([[x + w * 0.62, y], [x + w, y], [x + w, y + h], [x + w * 0.86, y + h]], shirt); if (tie) rr(x + w * 0.86, y, w * 0.08, h * 0.55, 2, tie); circ(x + w * 0.74, y + h * 0.5, w * 0.04, '#1b1426'); }
+      if (K.back) { g.fillStyle = K.shade(parseInt(jacket.slice(1), 16), 0.8); g.fillRect(cx - w * 0.01, y + h * 0.6, w * 0.02, h * 0.4); }   // the back vent
+      else if (side) { poly([[x + w * 0.62, y], [x + w, y], [x + w, y + h], [x + w * 0.86, y + h]], shirt); if (tie) rr(x + w * 0.86, y, w * 0.08, h * 0.55, 2, tie); circ(x + w * 0.74, y + h * 0.5, w * 0.04, '#1b1426'); }
       else {
         poly([[cx - w * 0.22, y], [cx + w * 0.22, y], [cx, y + h * 0.62]], shirt);
         if (tie) { poly([[cx - w * 0.05, y], [cx + w * 0.05, y], [cx + w * 0.08, y + h * 0.4], [cx, y + h * 0.5], [cx - w * 0.08, y + h * 0.4]], tie); }
@@ -722,12 +757,13 @@ const CK = (() => {
       }
     } else if (id === 'chefcoat') {
       g.fillStyle = '#f5f5f0'; g.fillRect(x, y, w, h);
-      g.fillStyle = '#d9d2e6'; g.fillRect(side ? x + w * 0.6 : cx - w * 0.01, y, w * 0.02, h);
-      for (const k of [0.32, 0.52, 0.72]) for (const d of side ? [0.72] : [-0.16, 0.16]) circ(side ? x + w * d : cx + w * d, y + h * k, w * 0.035, '#5d566a');
-      if (!side) poly([[cx - w * 0.18, y], [cx + w * 0.18, y], [cx, y + h * 0.2]], '#e0564f');
+      if (!K.back) g.fillStyle = '#d9d2e6', g.fillRect(side ? x + w * 0.6 : cx - w * 0.01, y, w * 0.02, h);
+      if (!K.back) for (const k of [0.32, 0.52, 0.72]) for (const d of side ? [0.72] : [-0.16, 0.16]) circ(side ? x + w * d : cx + w * d, y + h * k, w * 0.035, '#5d566a');
+      if (!side && !K.back) poly([[cx - w * 0.18, y], [cx + w * 0.18, y], [cx, y + h * 0.2]], '#e0564f');
     } else if (id === 'labcoat') {
       g.fillStyle = '#f2f4f8'; g.fillRect(x, y, w, h);
-      if (side) { rr(x + w * 0.3, y + h * 0.55, w * 0.3, h * 0.2, 2, '#dfe3ea'); g.fillStyle = '#3a8de0'; g.fillRect(x + w * 0.36, y + h * 0.48, w * 0.04, h * 0.12); }
+      if (K.back) { g.fillStyle = '#dfe3ea'; g.fillRect(cx - w * 0.01, y + h * 0.55, w * 0.02, h * 0.45); }
+      else if (side) { rr(x + w * 0.3, y + h * 0.55, w * 0.3, h * 0.2, 2, '#dfe3ea'); g.fillStyle = '#3a8de0'; g.fillRect(x + w * 0.36, y + h * 0.48, w * 0.04, h * 0.12); }
       else {
         g.fillStyle = '#7cb4e8'; g.fillRect(cx - w * 0.12, y, w * 0.24, h);
         poly([[cx - w * 0.12, y], [cx - w * 0.26, y], [cx - w * 0.12, y + h * 0.35]], '#dfe3ea'); poly([[cx + w * 0.12, y], [cx + w * 0.26, y], [cx + w * 0.12, y + h * 0.35]], '#dfe3ea');
@@ -735,9 +771,11 @@ const CK = (() => {
       }
     } else if (id === 'police') {
       g.fillStyle = '#2b4a9a'; g.fillRect(x, y, w, h);
-      g.fillStyle = '#1b1426'; g.fillRect(x, y + h * 0.78, w, h * 0.1); rr(side ? x + w * 0.6 : cx - w * 0.08, y + h * 0.77, w * 0.16, h * 0.12, 2, '#ffd23f');
-      K.star(side ? x + w * 0.62 : cx - w * 0.22, y + h * 0.3, Math.min(w, h) * 0.1, '#ffd23f');
-      if (!side) { g.fillStyle = '#1f3a7a'; g.fillRect(cx + w * 0.1, y + h * 0.2, w * 0.24, h * 0.12); for (const k of [0.25, 0.45, 0.65]) circ(cx, y + h * k, w * 0.025, '#ffd23f'); }
+      g.fillStyle = '#1b1426'; g.fillRect(x, y + h * 0.78, w, h * 0.1);
+      if (K.back) { g.fillStyle = '#ffd23f'; g.font = `bold ${Math.round(h * 0.16)}px sans-serif`; g.textAlign = 'center'; g.fillText('POLICE', cx, y + h * 0.4); }
+      else { rr(side ? x + w * 0.6 : cx - w * 0.08, y + h * 0.77, w * 0.16, h * 0.12, 2, '#ffd23f');
+      K.star(side ? x + w * 0.62 : cx - w * 0.22, y + h * 0.3, Math.min(w, h) * 0.1, '#ffd23f'); }
+      if (!side && !K.back) { g.fillStyle = '#1f3a7a'; g.fillRect(cx + w * 0.1, y + h * 0.2, w * 0.24, h * 0.12); for (const k of [0.25, 0.45, 0.65]) circ(cx, y + h * k, w * 0.025, '#ffd23f'); }
     } else if (id === 'leather') {
       g.fillStyle = '#1f1b26'; g.fillRect(x, y, w, h);
       const sx = side ? x + w * 0.66 : cx - w * 0.13, sw = side ? w * 0.34 : w * 0.26;
@@ -747,31 +785,37 @@ const CK = (() => {
     } else if (id === 'firecoat') {
       g.fillStyle = '#d4a64a'; g.fillRect(x, y, w, h);
       for (const k of [0.5, 0.78]) { g.fillStyle = '#ffd23f'; g.fillRect(x, y + h * k, w, h * 0.12); g.fillStyle = '#e8eef4'; g.fillRect(x, y + h * (k + 0.03), w, h * 0.06); }
-      if (!side) { g.fillStyle = '#3a3346'; for (const k of [0.15, 0.32]) g.fillRect(cx - w * 0.08, y + h * k, w * 0.16, h * 0.05); }
+      if (!side && !K.back) { g.fillStyle = '#3a3346'; for (const k of [0.15, 0.32]) g.fillRect(cx - w * 0.08, y + h * k, w * 0.16, h * 0.05); }
     } else if (id === 'spacesuit') {
       g.fillStyle = '#eef1f6'; g.fillRect(x, y, w, h);
       g.fillStyle = '#9aa1b0'; g.fillRect(x, y + h * 0.8, w, h * 0.08);
       const px = side ? x + w * 0.5 : cx - w * 0.2;
+      if (K.back) rr(cx - w * 0.3, y + h * 0.1, w * 0.6, h * 0.6, 6, '#c9ced8'), rr(cx - w * 0.22, y + h * 0.18, w * 0.44, h * 0.08, 2, '#9aa1b0');   // the air pack
+      else {
       rr(px, y + h * 0.25, w * 0.4, h * 0.3, 3, '#5d566a');
       circ(px + w * 0.1, y + h * 0.35, w * 0.045, '#e0564f'); circ(px + w * 0.22, y + h * 0.35, w * 0.045, '#5ad1ff'); rr(px + w * 0.06, y + h * 0.44, w * 0.28, h * 0.06, 1, '#ffd23f');
       if (!side) { rr(x + w * 0.1, y + h * 0.12, w * 0.16, h * 0.1, 1, '#3a6fc0'); g.fillStyle = '#ffffff'; g.fillRect(x + w * 0.1, y + h * 0.16, w * 0.16, h * 0.02); }
+      }
     } else if (id === 'vest') {
       g.fillStyle = '#6a7a8c'; g.fillRect(x, y, w, h);
+      if (K.back) { g.fillStyle = '#ff8a1a'; g.fillRect(x, y, w, h); g.fillStyle = '#e8eef4'; for (const k of [0.42, 0.68]) g.fillRect(x, y + h * k, w, h * 0.07); }
+      else {
       if (side) { g.fillStyle = '#ff8a1a'; g.fillRect(x, y, w * 0.8, h); }
       else { g.fillStyle = '#ff8a1a'; g.fillRect(x, y, w * 0.38, h); g.fillRect(x + w * 0.62, y, w * 0.38, h); }
       g.fillStyle = '#e8eef4'; for (const k of [0.42, 0.68]) { g.fillRect(x, y + h * k, side ? w * 0.8 : w * 0.38, h * 0.07); if (!side) g.fillRect(x + w * 0.62, y + h * k, w * 0.38, h * 0.07); }
+      }
     } else if (id === 'pirateshirt') {
       g.fillStyle = '#f5f1e8'; g.fillRect(x, y, w, h);
       g.fillStyle = '#2b4a9a'; for (let k = 0; k < 5; k++) g.fillRect(x, y + h * (0.06 + k * 0.2), w, h * 0.09);
-      g.fillStyle = '#5d3a1c'; g.fillRect(x, y + h * 0.74, w, h * 0.12); rr(side ? x + w * 0.6 : cx - w * 0.1, y + h * 0.72, w * 0.2, h * 0.16, 2, '#ffd23f'); rr(side ? x + w * 0.64 : cx - w * 0.06, y + h * 0.75, w * 0.12, h * 0.1, 1, '#5d3a1c');
+      g.fillStyle = '#5d3a1c'; g.fillRect(x, y + h * 0.74, w, h * 0.12); if (!K.back) rr(side ? x + w * 0.6 : cx - w * 0.1, y + h * 0.72, w * 0.2, h * 0.16, 2, '#ffd23f'); rr(side ? x + w * 0.64 : cx - w * 0.06, y + h * 0.75, w * 0.12, h * 0.1, 1, '#5d3a1c');
     } else if (id === 'ninjasuit') {
       g.fillStyle = '#24202e'; g.fillRect(x, y, w, h);
       poly([[x + w * (side ? 0.5 : 0.25), y], [x + w * (side ? 0.68 : 0.42), y], [x + w * (side ? 1 : 0.78), y + h * 0.7], [x + w * (side ? 0.82 : 0.6), y + h * 0.7]], '#14121a');
       g.fillStyle = '#d8322c'; g.fillRect(x, y + h * 0.66, w, h * 0.12);
-      if (!side) poly([[cx + w * 0.1, y + h * 0.72], [cx + w * 0.2, y + h], [cx + w * 0.28, y + h]], '#b02020');
+      if (!side) poly([[cx + (K.back ? -1 : 1) * w * 0.1, y + h * 0.72], [cx + (K.back ? -1 : 1) * w * 0.2, y + h], [cx + (K.back ? -1 : 1) * w * 0.28, y + h]], '#b02020');
     } else if (id === 'clownsuit') {
       g.fillStyle = '#ffd23f'; g.fillRect(x, y, w, h);
-      if (!side) { g.fillStyle = '#ff8fc7'; g.fillRect(cx, y, w / 2, h); }
+      if (!side) { g.fillStyle = '#ff8fc7'; g.fillRect(K.back ? x : cx, y, w / 2, h); }
       [[0.25, 0.35, '#e0564f'], [0.7, 0.3, '#3a8de0'], [0.4, 0.7, '#49d17a'], [0.78, 0.72, '#c28bff'], [0.15, 0.82, '#3a8de0']].forEach(([u, v, c]) => circ(x + w * u, y + h * v, Math.min(w, h) * 0.08, c));
       for (let k = 0; k < 6; k++) circ(x + w * (k + 0.5) / 6, y + h * 0.02, w * 0.1, '#ffffff');
     } else if (id === 'armor') {
@@ -779,16 +823,16 @@ const CK = (() => {
       g.fillStyle = '#8a93a3'; for (let k = 1; k < 5; k++) g.fillRect(x, y + h * k / 5, w, Math.max(1, h * 0.025));
       g.fillStyle = '#dfe6f0'; g.fillRect(x + w * 0.1, y, w * 0.08, h);
       const ex = side ? x + w * 0.6 : cx;
-      g.fillStyle = '#e0564f'; g.fillRect(ex - w * 0.05, y + h * 0.15, w * 0.1, h * 0.42); g.fillRect(ex - w * 0.16, y + h * 0.26, w * 0.32, h * 0.09);
+      if (!K.back) { g.fillStyle = '#e0564f'; g.fillRect(ex - w * 0.05, y + h * 0.15, w * 0.1, h * 0.42); g.fillRect(ex - w * 0.16, y + h * 0.26, w * 0.32, h * 0.09); }
     } else if (id === 'robe') {
       g.fillStyle = '#5b3f86'; g.fillRect(x, y, w, h);
-      g.fillStyle = '#ffd23f'; g.fillRect(side ? x + w * 0.82 : cx - w * 0.05, y, w * 0.1, h);
+      if (!K.back) g.fillStyle = '#ffd23f', g.fillRect(side ? x + w * 0.82 : cx - w * 0.05, y, w * 0.1, h);
       [[0.2, 0.25, 0.09], [0.32, 0.65, 0.07], [0.75, 0.4, 0.08], [0.68, 0.82, 0.06]].forEach(([u, v, r]) => K.star(x + w * u, y + h * v, Math.min(w, h) * r, '#ffd23f'));
     } else if (id === 'cowvest') {
       g.fillStyle = '#c0392b'; g.fillRect(x, y, w, h);
       g.fillStyle = '#8a2a20'; for (let k = 1; k < 5; k++) { g.fillRect(x, y + h * k / 5, w, Math.max(1, h * 0.03)); g.fillRect(x + w * k / 5, y, Math.max(1, w * 0.03), h); }
-      g.fillStyle = '#8a5a30'; if (side) g.fillRect(x, y, w * 0.7, h); else { g.fillRect(x, y, w * 0.34, h); g.fillRect(x + w * 0.66, y, w * 0.34, h); }
-      K.star(side ? x + w * 0.4 : x + w * 0.18, y + h * 0.32, Math.min(w, h) * 0.1, '#ffd23f');
+      g.fillStyle = '#8a5a30'; if (K.back) g.fillRect(x, y, w, h * 0.6); else if (side) g.fillRect(x, y, w * 0.7, h); else { g.fillRect(x, y, w * 0.34, h); g.fillRect(x + w * 0.66, y, w * 0.34, h); }
+      if (!K.back) K.star(side ? x + w * 0.4 : x + w * 0.18, y + h * 0.32, Math.min(w, h) * 0.1, '#ffd23f');
     } else if (DRESSES[id]) {
       // a fitted top and a skirt from the waist down, with the dress's trim
       const [top, skirt, trim] = DRESSES[id];
@@ -802,7 +846,7 @@ const CK = (() => {
       if (id === 'ballgown') { g.fillStyle = trim; for (let i = 1; i < 5; i++) g.fillRect(x + w * i / 5, y + h * 0.55, Math.max(1, w * 0.025), h * 0.45); for (const [u, v] of [[0.25, 0.3], [0.7, 0.2], [0.4, 0.75], [0.8, 0.7]]) K.star(x + w * u, y + h * v, Math.min(w, h) * 0.05, '#ffffff'); }
       if (id === 'sparkledress' && !K.plain) { g.globalAlpha = 0.5 + 0.5 * Math.sin(t * 9); K.star(x + w * 0.7, y + h * 0.3, Math.min(w, h) * 0.08, '#ffffff'); g.globalAlpha = 1; }
       g.fillStyle = id === 'sparkledress' ? (K.plain ? '#ffffff' : '#fff6a0') : trim; g.fillRect(x, y + h * 0.46, w, h * 0.07);
-      if (id === 'partydress' || id === 'polkadress') rr(side ? x + w * 0.6 : cx - w * 0.12, y + h * 0.42, w * 0.24, h * 0.14, 3, id === 'partydress' ? '#e0408f' : '#1b1426');
+      if ((id === 'partydress' || id === 'polkadress') && !K.back) rr(side ? x + w * 0.6 : cx - w * 0.12, y + h * 0.42, w * 0.24, h * 0.14, 3, id === 'partydress' ? '#e0408f' : '#1b1426');
     }
     g.restore();
   };
@@ -841,11 +885,13 @@ const CK = (() => {
   function wear(p, a) {
     if (K.onWear) K.onWear('head', a);   // the N64 sprite baker asks where each frame's parts are
     const acc = p.acc; if (!acc) return;
+    K.back = !!a.back;   // from behind: no face pieces, and hats, neckwear and outfits show their backs
     if (acc.neck) K.wearNeck(acc.neck, a.neck[0], a.neck[1], a.neck[2], a.side ? 1 : 0);
-    if (acc.face) K.wearFace(acc.face, a.eyes, a.side);
+    if (acc.face && !a.back) K.wearFace(acc.face, a.eyes, a.side);
     if (acc.head) K.wearHead(acc.head, a.cx, a.top, a.w, p.t ?? 0, a.side);
+    K.back = false;
   }
-  function wearBody(p, b) { if (K.onWear) K.onWear('body', b); if (p.acc && p.acc.body) K.wearBody(p.acc.body, b, p.t ?? 0, b.side); }
+  function wearBody(p, b) { if (K.onWear) K.onWear('body', b); if (p.acc && p.acc.body) { K.back = !!b.back; K.wearBody(p.acc.body, b, p.t ?? 0, b.side); K.back = false; } }
   // sleeves: outfits with arms cover the robot's upper arms too (the ostrich has wings, not arms)
   K.SLEEVE = { sweater: '#e0564f', jersey: '#49d17a', tux: '#2b2833', super: '#3a6fc0', disco: 'rainbow',
     chefcoat: '#f5f5f0', labcoat: '#f2f4f8', police: '#2b4a9a', leather: '#1f1b26', firecoat: '#d4a64a', spacesuit: '#eef1f6', vest: '#6a7a8c',
@@ -868,7 +914,8 @@ const CK = (() => {
   }
   function wearFoot(p, x, y, s, side, far) { if (K.onWear) K.onWear('foot', { x, y, s, side, far }); if (p.acc && p.acc.feet) K.wearFoot(p.acc.feet, x, y, s, p.t ?? 0, side, far); }
 
-  // Poses in one place so the mocks and the game agree. kind: idle|run|jump|special|wobble
+  // Poses in one place so the mocks and the game agree. kind: idle|run|jump|special|wobble|walkFront|walkBack
+  // (walkFront and walkBack go to K.robot / K.ostrich, the rest of the moving ones to the side views)
   K.pose = (hero, kind, t) => {
     const sw = Math.sin(t * 9);
     if (hero === 'robot') {
@@ -882,7 +929,18 @@ const CK = (() => {
       if (kind === 'jump') return { t, legF: -70, kneeF: 95, legB: -20, kneeB: 70, legLen: 58, armF: -155, armB: 70, mouth: 'o', eyes: { lookY: -0.5, happy: 0.2 } };
       if (kind === 'jet') return { t, legF: -10, legB: 10, legLen: 44, armF: 40, armB: 60, jet: true, eyes: { lookY: -0.3 } };
       if (kind === 'wobble') return { t, rot: Math.sin(t * 12) * 0.12, stars: true, mouth: 'wavy', eyes: { open: 0.35, happy: 0, look: 0 } };
+      if (kind === 'walkFront' || kind === 'walkBack') {
+        // toward or away from the camera: one foot lifts at a time, the arms swing the other way
+        const a = Math.sin(t * 11);
+        return { t, back: kind === 'walkBack', legLenL: 54 - Math.max(0, a) * 14, legLenR: 54 - Math.max(0, -a) * 14, legL: 4, legR: -4,
+          armL: 22 + a * 22, armR: -22 + a * 22, bob: Math.abs(a) * 4 };
+      }
       return { t };
+    }
+    if (kind === 'walkFront' || kind === 'walkBack') {
+      const a = Math.sin(t * 10);
+      return { t, back: kind === 'walkBack', legLenL: 92 - Math.max(0, a) * 22, legLenR: 92 - Math.max(0, -a) * 22, legL: -3, legR: 3,
+        bob: Math.abs(a) * 8, flick: a * 8 };
     }
     if (kind === 'run') {
       const f = t * 10, a = Math.sin(f), c = Math.cos(f);

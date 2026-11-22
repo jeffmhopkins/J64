@@ -204,8 +204,9 @@ static void sleeve(int a, const acc_arm *m, float x, float y, float sc, bool fli
 // everything a player wears, over hero frame fr drawn at (x, y) with scale sc
 static void hero_acc_a(const uint8_t *wear, int hero, int fr, float x, float y, float sc, bool flip, float t, int alpha) {
     if (!wear) return;
-    const acc_at *A = &ACC_AT[hero == HERO_ROBOT ? 0 : 1][fr & 31];
-    int view = (hero == HERO_ROBOT ? 0 : 2) + A->side;
+    if (fr < 0 || fr >= (int)(sizeof ACC_AT[0] / sizeof ACC_AT[0][0])) fr = 0;
+    const acc_at *A = &ACC_AT[hero == HERO_ROBOT ? 0 : 1][fr];
+    int view = (hero == HERO_ROBOT ? 0 : 3) + A->side;   // 0 front, 1 side, 2 back
     int w[SLOT_COUNT];
     bool any = false;
     for (int k = 0; k < SLOT_COUNT; k++) { w[k] = (int)wear[k] - 1; if (w[k] >= 0 && w[k] < ACC_COUNT && ck_acc[w[k]].slot == k) any = true; else w[k] = -1; }
@@ -1358,8 +1359,9 @@ static void draw_cut(const ck_game *G) {
 // floors and walls are a baked picture in 160 x 120 tiles (hbg_*), the furniture a sprite per look
 // (hart_*, from web/lib/furn34.js), sorted in with the heroes and babies by where their feet are.
 
-// A hero in one of the house's poses: idle and cheer face the front, the rest are side frames.
-enum { HP_IDLE, HP_RUN, HP_JUMP, HP_JET, HP_CHEER };
+// A hero in one of the house's poses: idle and cheer face the front, walking toward us or away
+// (and standing with the back to us) use frames 32-41, the rest are side frames.
+enum { HP_IDLE, HP_RUN, HP_JUMP, HP_JET, HP_CHEER, HP_WALK_FRONT, HP_WALK_BACK, HP_BACK };
 // A food from ck_foods at (x, y), sc times its size.
 static void food_art(int kind, float x, float y, float sc) {
     if (kind < 0 || kind >= FOOD_COUNT) return;
@@ -1390,6 +1392,9 @@ static void house_hero(const ck_game *G, int slot, float x, float y, int pose, f
     case HP_JUMP: fr = 12; break;
     case HP_JET: fr = R ? 13 + (int)(t * 20) % 2 : 13 + (int)(t * 13 / (2 * PI) * 4) % 4; break;
     case HP_CHEER: fr = 25 + (int)(t * 6) % 2; break;
+    case HP_WALK_FRONT: fr = 32 + (int)(t * (R ? 7 : 8)) % 4; break;
+    case HP_WALK_BACK: fr = 36 + (int)(t * (R ? 7 : 8)) % 4; break;
+    case HP_BACK: fr = 40 + (int)(t / 1.2f) % 2; break;
     default: fr = (int)(t / (R ? 0.52f : 0.3f)) % 4; break;
     }
     bool flip = side && face < 0;
@@ -1485,12 +1490,16 @@ static void draw_house(const ck_game *G) {
         } else if (list[k].kind == D_HERO) {
             const ck_hhero *p = &Hs->ps[i];
             float x = p->x - cam, y = p->y - camy - p->jz, tt = t + p->slot * 0.7f;
-            int pose = p->eat > 0 || Hs->mode == HM_SLEEP ? HP_CHEER : p->jz > 0 ? HP_JUMP : p->moving ? HP_RUN : HP_IDLE;
+            // four ways: side on when walking more across than up or down, else toward us or away
+            bool vert = fabsf(p->ly) > fabsf(p->lx), away = vert && p->ly < 0;
+            int pose = p->eat > 0 || Hs->mode == HM_SLEEP ? HP_CHEER : p->jz > 0 ? HP_JUMP
+                     : p->moving ? (vert ? (away ? HP_WALK_BACK : HP_WALK_FRONT) : HP_RUN) : away ? HP_BACK : HP_IDLE;
             float r = G->prog.hero[p->slot] == HERO_ROBOT ? 10 : 9;
             oval(x, p->y - camy, r, r * 0.35f, 0x140C1E, 0.22f);
+            if (away && p->hold && p->eat <= 0) { food_art(p->hold - 1, x + p->face * 9, y - 20, 1); garnish_art(p->garnish, x + p->face * 9, y - 20, 1); }   // from behind, what you hold is in front of you
             house_hero(G, p->slot, x, y, pose, tt, p->face);
             if (p->eat > 0) { float sc = 0.4f + 0.6f * p->eat / 50.0f; food_art(p->col, x + 6, y - 24, sc); if (p->col >= FOOD_DISH0) garnish_art(p->garnish, x + 6, y - 24, sc); }   // shrinking as it is eaten
-            else if (p->hold) { food_art(p->hold - 1, x + p->face * 9, y - 20, 1); garnish_art(p->garnish, x + p->face * 9, y - 20, 1); }
+            else if (p->hold && !away) { food_art(p->hold - 1, x + p->face * 9, y - 20, 1); garnish_art(p->garnish, x + p->face * 9, y - 20, 1); }
         } else {
             const ck_thrown *f = &Hs->thrown[i];
             oval(f->x - cam, f->y - camy, 4, 1.4f, 0x140C1E, 0.22f);
