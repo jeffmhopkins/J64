@@ -829,7 +829,7 @@ static void test_shop(void) {
     G->shopCur[0] = SHOP_GUN;
     press(G, CK_A, 0);
     EXPECT_EQ_INT(ck_shop_owns(G, SHOP_GUN), 1);
-    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 1);
     // B leaves to the map; a new game empties the closet
     press(G, CK_B, 0);
     EXPECT_EQ_INT(G->scene, SC_MAP);
@@ -843,7 +843,7 @@ static void test_shop(void) {
     EXPECT_EQ_INT(ck_shop_owns(G, SHOP_RAINBOW), 0);
 }
 
-// The bubble gun: C switches to it once bought, and then B fires bubbles instead of kicking.
+// The bubble gun: once bought, the trigger (Z or L) fires bubbles; B stays the kick or grab.
 static void test_bubble_gun(void) {
     ck_game *G = load_game();
     if (!G) return;
@@ -851,18 +851,22 @@ static void test_bubble_gun(void) {
     G->scene = SC_LEVEL;
     ck_level_start(G, ck_world_node(&G->world, "l1"), false, false);
     steps(G, 60, 0);
-    press(G, CK_C, 0);
-    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);   // not bought yet
-    G->saves.closet.gear |= CK_GEAR_GUN;
-    press(G, CK_C, 0);
-    EXPECT_EQ_INT(ck_gun_on(G, 0), 1);
     int shots = 0;
-    ck_game_step(G, CK_B, 0);
+    press(G, CK_L, 0);
+    for (int k = 0; k < G->lv.nents; k++) if (G->lv.ents[k].type == E_SHOT && !G->lv.ents[k].dead) shots++;
+    EXPECT_EQ_INT(shots, 0);   // not bought yet
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
+    G->saves.closet.gear |= CK_GEAR_GUN;
+    EXPECT_EQ_INT(ck_gun_on(G, 0), 1);
+    steps(G, 30, 0);
+    ck_game_step(G, CK_B, 0);   // B still kicks, no bubble
+    for (int k = 0; k < G->lv.nents; k++) if (G->lv.ents[k].type == E_SHOT && !G->lv.ents[k].dead) shots++;
+    EXPECT_EQ_INT(shots, 0);
+    steps(G, 30, 0);
+    ck_game_step(G, CK_L, 0);
     for (int k = 0; k < G->lv.nents; k++) if (G->lv.ents[k].type == E_SHOT && !G->lv.ents[k].dead) shots++;
     EXPECT_EQ_INT(shots, 1);
     steps(G, 30, 0);
-    press(G, CK_C, 0);
-    EXPECT_EQ_INT(ck_gun_on(G, 0), 0);
     // the super jetpack: holding A in the air sinks almost level
     G->saves.closet.gear |= CK_GEAR_JET;
     steps(G, 30, 0);

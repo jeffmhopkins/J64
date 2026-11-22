@@ -233,7 +233,6 @@ const ACC_IDS = new Set(K.ACC.map(a => a.id)), accOf = id => K.ACC.find(a => a.i
 const FREE_PAINTS = [0, 1], PAINT_COST = 30, RAINBOW_COST = 150, GUN_COST = 100, JET_COST = 300;
 // rbw: the rainbow paint is owned; rainbow[slot]: that player wears it (their colour keeps cycling)
 const freshCloset = () => ({ own: [], wear: [{}, {}], paints: [...FREE_PAINTS], gun: false, jet: false, rbw: false, rainbow: [false, false] });
-let gunOn = [false, false];   // per player: B fires the bubble gun instead of the kick or grab (C switches)
 let closet = store.get('closet', freshCloset());
 function cleanCloset(c) {   // a damaged or old save never breaks the game
   const out = freshCloset();
@@ -489,7 +488,7 @@ function finishNode(id, res) {
 // Keep playing, change heroes, or start a whole new game (asks once more before wiping anything).
 function newGame() {
   for (let n = 1; n <= LAST_WORLD; n++) store.set('w' + n, fresh());
-  closet = freshCloset(); saveCloset(); gunOn = [false, false];
+  closet = freshCloset(); saveCloset();
   setWorld(1);
 }
 function mapMenu() {
@@ -513,7 +512,7 @@ function mapMenu() {
     const it = items[M.pick];
     if (it === 'Keep playing') { SND.fx.select(); close(); }
     else if (it === 'Change heroes') { SND.fx.confirm(); go(selectScene); }
-    else if (it === 'Player 2 leaves') { party[1].joined = false; saveParty(); gunOn[1] = false; SND.fx.select(); close(); }
+    else if (it === 'Player 2 leaves') { party[1].joined = false; saveParty(); SND.fx.select(); close(); }
     else { SND.fx.nope(); M.ask = true; M.pick = 0; }
   };
   M.draw = function () {
@@ -556,18 +555,18 @@ function shopScene(back) {
       if (it.slot) { closet.own.push(it.id); wear[it.slot] = it.id; }
       else if (it.kind === 'paint') { closet.paints.push(it.col); m.col = it.col; closet.rainbow[slot] = false; saveParty(); }
       else if (it.kind === 'rainbow') { closet.rbw = true; closet.rainbow[slot] = true; m.col = 7; saveParty(); }
-      else if (it.kind === 'gun') { closet.gun = true; gunOn = [false, false]; }
+      else if (it.kind === 'gun') { closet.gun = true; }
       else if (it.kind === 'jet') closet.jet = true;
       saveCloset();
       SND.fx.buy(); sparks(cell(S.cur[slot]).x + TW / 2, cell(S.cur[slot]).y + TH / 2, 14, '#ffd23f');
-      S.msg = { text: it.kind === 'gun' ? 'Bubble gun! C switches' : it.kind === 'jet' ? 'Hold A to glide far!' : it.name + '!', t: it.kind === 'gun' || it.kind === 'jet' ? 150 : 90 };
+      S.msg = { text: it.kind === 'gun' ? 'Bubble gun! Z shoots' : it.kind === 'jet' ? 'Hold A to glide far!' : it.name + '!', t: it.kind === 'gun' || it.kind === 'jet' ? 150 : 90 };
       return;
     }
     if (it.slot) { if (wear[it.slot] === it.id) { delete wear[it.slot]; SND.fx.select(); } else { wear[it.slot] = it.id; SND.fx.confirm(); } saveCloset(); }
     else if (it.kind === 'hero') { m.hero = it.hero; saveParty(); SND.fx.confirm(); }
     else if (it.kind === 'paint') { m.col = it.col; closet.rainbow[slot] = false; saveParty(); saveCloset(); SND.fx.confirm(); }
     else if (it.kind === 'rainbow') { m.col = 7; closet.rainbow[slot] = true; saveParty(); saveCloset(); SND.fx.confirm(); }
-    else { S.msg = { text: it.kind === 'gun' ? 'In a level, C switches to it' : 'Hold A in the air to glide', t: 120 }; SND.fx.select(); }
+    else { S.msg = { text: it.kind === 'gun' ? 'In a level, Z shoots bubbles' : 'Hold A in the air to glide', t: 120 }; SND.fx.select(); }
   }
   // one item drawn small inside its tile, on a grey stand-in head, body or pair of feet
   function icon(it, x, y, t, slot) {
@@ -628,7 +627,7 @@ function shopScene(back) {
       if (hero === 'robot') K.robot(x, y, 0.11, hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
       else K.ostrich(x, y, 0.1, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: 0.6 }, acc: tryOn });
       const own = owns(it);
-      const how = !own ? 'A buy  ' + it.cost : it.slot ? (worn[it.slot] === it.id ? 'A take off' : 'A wear') : it.kind === 'gun' ? 'C switches in a level' : it.kind === 'jet' ? 'Hold A to glide' : 'A use';
+      const how = !own ? 'A buy  ' + it.cost : it.slot ? (worn[it.slot] === it.id ? 'A take off' : 'A wear') : it.kind === 'gun' ? 'Z shoots in a level' : it.kind === 'jet' ? 'Hold A to glide' : 'A use';
       const tx = x + 24;   // beside the hero, so the words never cover what it is trying on
       text(it.name, tx, 200, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'left');
       text(how, tx, 212, 7, own || (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'left');
@@ -1272,7 +1271,7 @@ function loadSlot(n) {
   const def = [{ hero: 'robot', col: 0, joined: true }, { hero: 'ostrich', col: 1, joined: false }], pa = store.get('party', def);
   for (let i = 0; i < 2; i++) Object.assign(party[i], def[i], pa[i] || {});
   party[0].joined = true;
-  closet = cleanCloset(store.get('closet', freshCloset())); gunOn = [false, false];
+  closet = cleanCloset(store.get('closet', freshCloset()));
   const s = store.get('mural', ''); mural = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === mural.length) for (let i = 0; i < mural.length; i++) mural[i] = Math.min(10, s.charCodeAt(i) - 48);
   setWorld(store.get('world', 1));
 }
@@ -1889,7 +1888,6 @@ function levelScene(id, retry, defIn, snap) {
       p.vy = Math.min(p.vy + grav, grav < GRAV ? 3.6 : 4.8);   // the Moon's low gravity floats you down slower
       if (p.vy >= 0) p.spring = false;
       if (p.actT <= 0) p.shoot = false;
-      if (hit(i, 'c') && closet.gun) { gunOn[p.slot] = !gunOn[p.slot]; SND.fx.select(); }   // C: kick or grab <-> bubble gun
       const near = !p.carry && hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && !p.low && lv.ents.find(e => e.type === 'enemy' && e.state === 'shell' && !e.dead && overlap(e, { x: p.x - 10, y: p.y - 4, w: p.w + 20, h: p.h + 8 }));
       if (p.carry && hit(i, 'b')) {
         const e = p.carry; p.carry = null; e.x = p.face > 0 ? p.x + p.w + 1 : p.x - e.w - 1; e.y = Math.min(e.y, p.y + p.h - e.h);
@@ -1897,7 +1895,7 @@ function levelScene(id, retry, defIn, snap) {
         kickCrate(e, p.face, p.slot); e.vy = held(i, 'up') ? -6.5 : -2; if (held(i, 'up')) e.spd = 1.6;
         p.actT = 12; p.shoot = true;
       } else if (near) { p.carry = near; near.state = 'carried'; near.vx = 0; SND.fx.grab(); p.actT = 8; p.shoot = true; }
-      else if (hit(i, 'b') && p.actT <= 0 && p.wob <= 0 && (has(p, 'bubble') || (closet.gun && gunOn[p.slot]))) {
+      else if (p.actT <= 0 && p.wob <= 0 && ((hit(i, 'b') && has(p, 'bubble')) || (hit(i, 'l') && closet.gun))) {   // the bought bubble gun is on the trigger
         if (lv.ents.filter(e => e.type === 'shot' && e.owner === p.slot).length < 2) {
           lv.ents.push({ type: 'shot', owner: p.slot, x: p.face > 0 ? p.x + p.w : p.x - 10, y: p.y + p.h * 0.3, w: 10, h: 10, vx: p.face * 2.4 + p.vx * 0.4, life: 110, t: 0 });
           p.actT = 12; p.shoot = true; SND.fx.blow();
@@ -2331,7 +2329,7 @@ function levelScene(id, retry, defIn, snap) {
   function hud() {
     panel(4, 4, 62, 15); K.nut(13, 11.5, 4, S.t, '#ffd23f'); text('×' + lv.bolts, 20, 16, 9, lv.bolts ? '#fff6d8' : '#ff9a8a', 'left', null);
     livesHud(W - 52, 4, S.t);
-    players.forEach((p, k) => { const kinds = [...p.stack, p.rainbowT > 0 && 'rainbow', p.magnetT > 0 && 'magnet', closet.gun && gunOn[p.slot] && 'gun'].filter(Boolean); if (!kinds.length) return;
+    players.forEach((p, k) => { const kinds = [...p.stack, p.rainbowT > 0 && 'rainbow', p.magnetT > 0 && 'magnet', closet.gun && 'gun'].filter(Boolean); if (!kinds.length) return;
       const x0 = W - 56 - (k + 1) * (kinds.length * 12 + 8); panel(x0, 4, kinds.length * 12 + 4, 15); kinds.forEach((kd, j) => powerIcon(kd, x0 + 8 + j * 12, 11.5, S.t)); });
     if (!shower && S.clearT < 0) {
       const left = def.time ? Math.max(0, def.time * 60 - S.timeF) : 0, warn = def.time && left < 600;

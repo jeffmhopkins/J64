@@ -728,7 +728,7 @@ static void draw_shop(const ck_game *G) {
             blit_o(SPR_BOLT, 0, tx + txt_w(F_SMALL, buy) + 5, 210, (bopt){ .sx = 3 / 4.2f, .sy = 3 / 4.2f });
         } else {
             const char *how = a < ACC_COUNT ? (shop_worn(G, s, a) ? "A take off" : "A wear")
-                            : a == SHOP_GUN ? "C switches in a level" : a == SHOP_JET ? "Hold A to glide" : "A use";
+                            : a == SHOP_GUN ? "Z shoots in a level" : a == SHOP_JET ? "Hold A to glide" : "A use";
             txt(F_SMALL, ST_PLAIN, tx, 213, ALIGN_LEFT, "%s", how);
         }
         j++;

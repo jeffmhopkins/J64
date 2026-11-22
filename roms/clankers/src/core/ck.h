@@ -30,8 +30,8 @@
 enum {
     CK_LEFT = 1 << 0, CK_RIGHT = 1 << 1, CK_UP = 1 << 2, CK_DOWN = 1 << 3,
     CK_A = 1 << 4, CK_B = 1 << 5, CK_START = 1 << 6,
-    CK_C = 1 << 7,   // C-up, C-down or C-right: switch between the action and the bubble gun
-    CK_L = 1 << 8, CK_R = 1 << 9,   // the shoulder buttons (the paint studio's colours)
+    CK_C = 1 << 7,   // C-up, C-down or C-right
+    CK_L = 1 << 8, CK_R = 1 << 9,   // L or Z: the bubble gun; L and R: the paint studio's colours
 };
 typedef struct { uint16_t held[2], prev[2]; } ck_input;
 
@@ -618,7 +618,6 @@ typedef struct ck_game {
     bool menuAsk;
     // the parts shop: a cursor per player, and a short message
     int shopCur[2];
-    bool gunOn[2];                   // per player: B fires the bubble gun instead of the kick or grab
     char shopMsg[32];
     int shopMsgT;
 
@@ -660,7 +659,7 @@ void ck_game_new_game(ck_game *G);
 int ck_wearing(const ck_game *G, int s, int slot);
 bool ck_shop_owns(const ck_game *G, int item);     // any shop item, SHOP_* included
 bool ck_rainbow_skin(const ck_game *G, int slot);   // that player wears the rainbow paint
-bool ck_gun_on(const ck_game *G, int slot);        // that player's B fires the bubble gun
+bool ck_gun_on(const ck_game *G, int slot);        // that player has the bubble gun: Z or L fires it
 void ck_map_baby_pos(const ck_game *G, int i, float *x, float *y);
 enum { MENU_KEEP, MENU_HEROES, MENU_DROP, MENU_NEW };
 int ck_menu_items(const ck_game *G, int *out);    // the map menu's rows (up to 4), MENU_*

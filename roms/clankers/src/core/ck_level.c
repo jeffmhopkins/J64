@@ -169,7 +169,7 @@ static void build(ck_game *G, int node) {
 }
 
 bool ck_gun_on(const ck_game *G, int slot) {
-    return slot >= 0 && slot < 2 && G->gunOn[slot] && (G->saves.closet.gear & CK_GEAR_GUN);
+    return slot >= 0 && slot < 2 && (G->saves.closet.gear & CK_GEAR_GUN);
 }
 bool ck_has(const ck_player *p, int power) {
     for (int k = 0; k < p->nstack; k++) if (p->stack[k] == power) return true;
@@ -743,11 +743,6 @@ static void update_players(ck_game *G, int *outcome) {
                 if (e->type == E_ENEMY && e->state == ES_SHELL && !e->dead && overlap_r(R(&e->body), reach)) { nearCrate = e; break; }
             }
         }
-        // C switches between the kick or grab and the bubble gun, once the gun is bought
-        if (HIT(G, i, CK_C) && (G->saves.closet.gear & CK_GEAR_GUN) && p->slot >= 0 && p->slot < 2) {
-            G->gunOn[p->slot] = !G->gunOn[p->slot];
-            ck_sfx(G, SFX_SELECT);
-        }
         if (p->carry && HIT(G, i, CK_B)) {
             ck_ent *e = p->carry;
             p->carry = NULL;
@@ -762,7 +757,8 @@ static void update_players(ck_game *G, int *outcome) {
             p->carry = nearCrate; nearCrate->state = ES_CARRIED; nearCrate->vx = 0;
             ck_sfx(G, SFX_GRAB);
             p->actT = 8; p->shoot = true;
-        } else if (HIT(G, i, CK_B) && p->actT <= 0 && p->wob <= 0 && (ck_has(p, PW_BUBBLE) || ck_gun_on(G, p->slot))) {
+        } else if (p->actT <= 0 && p->wob <= 0 && ((HIT(G, i, CK_B) && ck_has(p, PW_BUBBLE)) || (HIT(G, i, CK_L) && ck_gun_on(G, p->slot)))) {
+            // the bubble gun, once bought, is always on the trigger (Z or L); B stays the kick or grab
             int mine = 0;
             for (int k = 0; k < lv->nents; k++) if (lv->ents[k].type == E_SHOT && !lv->ents[k].dead && lv->ents[k].owner == p->slot) mine++;
             if (mine < 2) {

@@ -58,8 +58,8 @@ progress, and a save from before Worlds 2 to 4 carries on as World 1.
 | --- | --- | --- |
 | Stick or D-pad | Run, and crouch or slide (down) | Walk the roads |
 | A | Jump (hold to jump higher), again in the air for a double jump; hold to glide (jetpack or flapping) | Enter a level, the parts shop or the house; on the exit, go to the next world |
-| B or C-left | Action: grab, throw, shoot (bubbles when the bubble gun is on) | |
-| C-up, C-down or C-right | With the bubble gun bought: switch between the gun and grab or kick | |
+| B or C-left | Action: grab, throw, kick (bubbles with the Bubble Blaster power-up) | |
+| Z or L | With the bubble gun bought: shoot bubbles | |
 | Start | Pause | Menu: keep playing, change heroes, let player 2 leave, or start a new game |
 | L (or Z), R | | In the paint room: the previous or next colour |
 
@@ -121,7 +121,7 @@ The bottom row has the rest:
 | Robot, Robot ostrich | free | Swap your hero |
 | Paint pots | 30 each (the first two are free) | Paint your hero; the select screen offers only paints you own |
 | Rainbow paint | 150 | Your hero's whole body keeps cycling through the colours |
-| Bubble gun | 100 | C switches B between the gun and grab or kick |
+| Bubble gun | 100 | Z or L shoots bubbles; B stays grab or kick |
 | Super jetpack | 300 | Glides almost level, so you can glide much further |
 
 What you own is shared by both players and saved with the game; a new game from the map menu

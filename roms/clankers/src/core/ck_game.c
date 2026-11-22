@@ -382,7 +382,6 @@ void ck_game_new_game(ck_game *G) {
     memset(G->saves.w, 0, sizeof G->saves.w);
     memset(&G->saves.closet, 0, sizeof G->saves.closet);
     sanitize_closet(&G->saves.closet);
-    G->gunOn[0] = G->gunOn[1] = false;
     if (G->worldNum != 1) load_world(G, 1);
     G->saves.world = 1;
     ck_prog_fresh(&G->prog);
@@ -525,7 +524,7 @@ static void menu_update(ck_game *G) {
     switch (items[G->menuPick]) {
     case MENU_KEEP: ck_sfx(G, SFX_SELECT); back_to_map(G); break;
     case MENU_HEROES: ck_sfx(G, SFX_CONFIRM); go(G, SC_SELECT); break;
-    case MENU_DROP: G->prog.joined[1] = 0; G->gunOn[1] = false; ck_sfx(G, SFX_SELECT); ck_save(G); back_to_map(G); break;
+    case MENU_DROP: G->prog.joined[1] = 0; ck_sfx(G, SFX_SELECT); ck_save(G); back_to_map(G); break;
     default: ck_sfx(G, SFX_NOPE); G->menuAsk = true; G->menuPick = 0; break;
     }
 }
@@ -555,12 +554,12 @@ static void shop_act(ck_game *G, int s) {
         G->prog.bolts = (uint16_t)(G->prog.bolts - cost);
         G->map.bolts = G->prog.bolts;
         if (a < ACC_COUNT) { c->own[a >> 3] |= (uint8_t)(1u << (a & 7)); c->wear[s][ck_acc[a].slot] = (uint8_t)(a + 1); }
-        else if (a == SHOP_GUN) { c->gear |= CK_GEAR_GUN; G->gunOn[0] = G->gunOn[1] = false; }
+        else if (a == SHOP_GUN) c->gear |= CK_GEAR_GUN;
         else if (a == SHOP_JET) c->gear |= CK_GEAR_JET;
         else if (a == SHOP_RAINBOW) { c->gear |= CK_GEAR_RAINBOW; c->rainbow |= (uint8_t)(1u << s); G->prog.col[s] = CK_RAINBOW_COL; }
         else { c->paints |= (uint8_t)(1u << (a - SHOP_PAINT0)); G->prog.col[s] = (uint8_t)(a - SHOP_PAINT0); c->rainbow &= (uint8_t)~(1u << s); }
         ck_sfx(G, SFX_BUY);
-        if (a == SHOP_GUN) snprintf(G->shopMsg, sizeof G->shopMsg, "Bubble gun! C switches");
+        if (a == SHOP_GUN) snprintf(G->shopMsg, sizeof G->shopMsg, "Bubble gun! Z shoots");
         else if (a == SHOP_JET) snprintf(G->shopMsg, sizeof G->shopMsg, "Hold A to glide far!");
         else snprintf(G->shopMsg, sizeof G->shopMsg, "%s!", name);
         G->shopMsgT = a >= SHOP_GUN ? 150 : 90;
@@ -571,7 +570,7 @@ static void shop_act(ck_game *G, int s) {
         G->prog.hero[s] = a == SHOP_ROBOT ? HERO_ROBOT : HERO_OSTRICH;
         ck_sfx(G, SFX_CONFIRM);
     } else if (a == SHOP_GUN || a == SHOP_JET) {
-        snprintf(G->shopMsg, sizeof G->shopMsg, a == SHOP_GUN ? "In a level, C switches to it" : "Hold A in the air to glide");
+        snprintf(G->shopMsg, sizeof G->shopMsg, a == SHOP_GUN ? "In a level, Z shoots bubbles" : "Hold A in the air to glide");
         G->shopMsgT = 120;
         ck_sfx(G, SFX_SELECT);
     } else if (a == SHOP_RAINBOW) {
