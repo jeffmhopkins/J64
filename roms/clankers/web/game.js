@@ -690,13 +690,21 @@ function shopScene(back) {
 }
 
 // ----------------------------------------------------------------------------- THE HOUSE
-// The shop node on every map is the heroes' house: a yard, then rooms in a row along one floor.
-// Walk with the stick, A jumps, Down at a room's thing uses it (the shop counter, the fridge, the
-// paint studio door, the piano, the fish tank, the bed, the go-kart). Walk off the yard's left
-// edge, or press START, to go back to the map. Every baby bot you have rescued lives here.
+// The home node on every map is the heroes' house: a four-bedroom house with a garage and a
+// garden all round, seen from above (web/lib/housetop.js has the plan). The stick walks every
+// way; A at a thing uses it (the fridge, the stove, the piano, the fish tank, the go-kart, the
+// big bed and the rest), A anywhere else hops. Walk out of the front gate, or press START, to go
+// back to the map. Every baby bot you have rescued lives here.
 // The N64 has the same house (src/core/ck_house.c); these numbers match it.
-const HL = HOUSEART.LAYOUT;
-const HOUSE_SPEED = 1.7, HOUSE_JUMP = -4.4, HOUSE_GRAV = 0.26;
+const HL = HOUSEART.LAYOUT, HT = HOUSETOP;
+const HOUSE_SPEED = 1.7, HOUSE_HOP = 3, HOUSE_GRAV = 0.26;
+// the garden, floors and walls never change: drawn once into a picture of the whole house
+let houseBg = null;
+function houseBgPicture() {
+  if (!houseBg) { houseBg = document.createElement('canvas'); houseBg.width = HT.WORLD.W; houseBg.height = HT.WORLD.H; HT.drawStatic(houseBg.getContext('2d')); K.g = g; }
+  return houseBg;
+}
+const houseShadow = (x, y, r) => { g.fillStyle = 'rgba(20,12,30,0.22)'; g.beginPath(); g.ellipse(x, y, r, r * 0.35, 0, 0, P * 2); g.fill(); };
 // One hero as the little games draw it: idle (front), run, jump, jet, cheer (front). Matches the
 // N64 hero sheet frames (0-3, 4-11, 12, 13-16, 25-26).
 function drawHeroPose(m, x, y, st, t, face = 1) {
@@ -724,22 +732,23 @@ function houseBabies() {
 // a little rng the N64 copies exactly, so the babies start in the same places
 const hrng = s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x80000000;
 function houseScene(from) {
-  const S = { song: 'select', t: 0, cam: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, fpick: [0, 2], cpick: [0, 2], pan: [], heat: 0, dish: 0, dishName: '', thrown: [] };
+  const S = { song: 'select', t: 0, cx: 0, cy: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, fpick: [0, 2], cpick: [0, 2], pan: [], heat: 0, dish: 0, dishName: '', thrown: [] };
   const team = activeParty(), q = hrng(7);
-  const spawnX = 200;
-  S.ps = team.map((m, i) => ({ m, x: spawnX - 10 + i * 20, y: HL.FLOOR, vx: 0, vy: 0, face: 1, ground: true, anim: 0, eatT: 0, hold: 0, food: 0 }));
+  S.ps = team.map((m, i) => ({ m, x: HT.START[i][0], y: HT.START[i][1], z: 0, vz: 0, lx: 0, ly: 1, face: 1, moving: false, anim: 0, eatT: 0, hold: 0, food: 0 }));
   S.babies = houseBabies().map((hex, i) => {
-    const r = i % (HL.rooms.length), [x0, x1] = HL.rooms[r];
-    return { hex, x: x0 + 30 + q() * (x1 - x0 - 60), x0: x0 + 14, x1: x1 - 14, vx: (q() < 0.5 ? -1 : 1) * (0.3 + q() * 0.3), hopT: 0, vy: 0, y: 0, wait: Math.floor(q() * 120) };
+    const [a, b, c, d] = HT.AREAS[i % HT.AREAS.length], x = a + q() * (c - a), y = b + q() * (d - b);
+    return { hex, area: i % HT.AREAS.length, x, y, tx: x, ty: y, z: 0, vz: 0, wait: Math.floor(q() * 90) };
   });
-  const here = k => HL.spots[k][1] !== 'back' || worldNum > 1;   // the signpost is there from World 2 on
-  const near = p => HL.spots.findIndex(([x], k) => here(k) && Math.abs(p.x - x) < 22);
+  const here = th => th.kind !== 'back' || worldNum > 1;   // the signpost is there from World 2 on
+  const near = p => { const th = p.z > 0 ? null : HT.near(p.x, p.y, here); return th ? th.spot : -1; };
+  const view = () => { const n = S.ps.length; [S.cx, S.cy] = HT.camera(S.ps.reduce((a, p) => a + p.x, 0) / n, S.ps.reduce((a, p) => a + p.y, 0) / n, W, H); };
+  view();
   const leave = () => { SND.fx.select(); saveProg(); go(mapScene); };
   function useSpot(k, p, i) {
     const kind = HL.spots[k][1];
     if (kind === 'back') { SND.fx.confirm(); saveProg(); enterWorld(worldNum - 1, 'exit'); }
     else if (kind === 'mail') { SND.fx.open(); S.letter = S.letter % HOUSEART.LETTERS.length + 1; S.mode = 'letter'; }
-    else if (kind === 'tree') { p.hold = 1; p.garnish = null; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
+    else if (kind === 'tree') { p.hold = 1; p.garnish = null; SND.fx.sprout(); sparks(p.x - S.cx, p.y - S.cy - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
     else if (kind === 'snack') { SND.fx.open(); S.mode = 'fridge'; }
     else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.heat = 0; S.dish = 0; }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
@@ -804,72 +813,90 @@ function houseScene(from) {
     if (S.mode === 'sleep') { S.sleepT += 1 / 60; if (S.sleepT > 2.6) { S.mode = 'walk'; S.msg = { text: 'Saved in slot ' + saveSlot + '!', t: 120 }; } return; }
     if (anyHit('start')) { leave(); return; }
     for (const [i, p] of S.ps.entries()) {
-      const sl = p.m.slot, want = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
-      if (p.eatT > 0) { p.eatT--; p.vx = 0; }
+      const sl = p.m.slot, dx = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0), dy = (held(sl, 'down') ? 1 : 0) - (held(sl, 'up') ? 1 : 0);
+      p.moving = false;
+      if (p.eatT > 0) p.eatT--;
       else {
-        p.vx += (want * HOUSE_SPEED - p.vx) * 0.3; if (want) p.face = want;
-        // holding food: A eats it, B throws it the way you face
-        const k = p.ground && !p.hold ? near(p) : -1;
+        // walk every way, sliding along walls and furniture; two heroes stay near each other
+        const n = Math.hypot(dx, dy);
+        if (n) {
+          const vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED, o = S.ps[1 - i];
+          const ok = (x, y) => !HT.solid(x, y) && (!o || (Math.abs(x - o.x) < HT.LEASH[0] && Math.abs(y - o.y) < HT.LEASH[1]));
+          if (ok(p.x + vx, p.y)) { p.x += vx; p.moving = true; }
+          if (ok(p.x, p.y + vy)) { p.y += vy; p.moving = true; }
+          if (dx) p.face = dx;
+          p.lx = dx / n; p.ly = dy / n;
+          if (p.moving) p.anim += HOUSE_SPEED;
+        }
+        // holding food: A eats it, B throws it the way you last walked
+        const k = !p.hold ? near(p) : -1;
         if (p.hold && hit(sl, 'a')) {
-          p.food = p.hold - 1; p.hold = 0; p.eatT = 50; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 22, 8, '#ffd23f');
+          p.food = p.hold - 1; p.hold = 0; p.eatT = 50; SND.fx.sprout(); sparks(p.x - S.cx, p.y - S.cy - 22, 8, '#ffd23f');
           const full = (prog.lives ?? 3) >= 3; prog.lives = 3; saveProg();
           S.msg = { text: full ? 'Yum, ' + HOUSEART.FOODS[p.food].name + '!' : 'Yum! Batteries full!', t: 100 };
         } else if (p.hold && hit(sl, 'b')) {
-          if (S.thrown.length < 6) S.thrown.push({ x: p.x + p.face * 8, y: p.y - 22, vx: p.face * 3.2 + p.vx * 0.5, vy: -2.6, kind: p.hold - 1, life: 150 });
+          if (S.thrown.length < 6) S.thrown.push({ x: p.x + p.lx * 8, y: p.y + p.ly * 4, z: 22, vx: p.lx * 3.2, vy: p.ly * 3.2, vz: 2.6, kind: p.hold - 1, life: 150 });
           p.hold = 0; SND.fx.blow();
         }
-        // A (or down) at a room's thing uses it; A anywhere else jumps
+        // A at a thing uses it; A anywhere else hops
         else if (k >= 0 && hit(sl, 'a')) { useSpot(k, p, i); if (scene !== S || S.mode !== 'walk') return; }
-        else if (hit(sl, 'a') && p.ground) { p.vy = HOUSE_JUMP; p.ground = false; SND.fx.jump(); }
+        else if (hit(sl, 'a') && p.z === 0) { p.vz = HOUSE_HOP; SND.fx.jump(); }
       }
-      p.vy += HOUSE_GRAV; p.x += p.vx; p.y += p.vy;
-      if (p.y >= HL.FLOOR) { p.y = HL.FLOOR; p.vy = 0; p.ground = true; }
-      p.x = clamp(p.x, -4, HL.W - 10); p.anim += Math.abs(p.vx);
-      if (p.x < 0) { leave(); return; }
+      if (p.z > 0 || p.vz > 0) { p.vz -= HOUSE_GRAV; p.z += p.vz; if (p.z <= 0) { p.z = 0; p.vz = 0; } }
+      if (p.y > HT.GATE.y && Math.abs(p.x - HT.GATE.x) < HT.GATE.hw) { leave(); return; }   // out of the front gate
     }
-    // the camera follows the middle of the party; two players stay on screen together
-    const mid = S.ps.reduce((a, p) => a + p.x, 0) / S.ps.length;
-    S.cam = clamp(mid - W / 2, 0, HL.W - W);
-    if (S.ps.length > 1) for (const p of S.ps) p.x = clamp(p.x, S.cam > 0 ? S.cam + 8 : -4, S.cam + W - 8);
-    for (const f of S.thrown) {   // thrown food bounces; a baby catches it and munches it
-      f.vy += 0.2; f.x += f.vx; f.y += f.vy;
-      if (f.y >= HL.FLOOR - 4) { f.y = HL.FLOOR - 4; f.vy *= -0.45; f.vx *= 0.75; if (Math.abs(f.vy) < 0.6) f.vy = 0; }
-      if (f.x < 4 || f.x > HL.W - 4) f.vx = -f.vx;
-      if (--f.life <= 0) { f.gone = true; puff(f.x - S.cam, f.y, 4, 'rgba(255,255,255,0.8)'); continue; }
-      const b = S.babies.find(b => Math.abs(b.x - f.x) < 10 && f.y > HL.FLOOR - 20);
-      if (b) { b.vy = -2.2; b.y = -0.1; f.gone = true; SND.fx.hop(); sparks(f.x - S.cam, f.y, 5, '#ff8fc7'); }
+    view();
+    for (const f of S.thrown) {   // thrown food bounces off the floor and the walls; a baby catches it and munches it
+      f.vz -= 0.2; f.z += f.vz;
+      if (f.z <= 0) { f.z = 0; f.vz *= -0.45; f.vx *= 0.75; f.vy *= 0.75; if (Math.abs(f.vz) < 0.6) f.vz = 0; }
+      if (HT.solid(f.x + f.vx, f.y)) f.vx = -f.vx; else f.x += f.vx;
+      if (HT.solid(f.x, f.y + f.vy)) f.vy = -f.vy; else f.y += f.vy;
+      if (--f.life <= 0) { f.gone = true; puff(f.x - S.cx, f.y - S.cy - f.z, 4, 'rgba(255,255,255,0.8)'); continue; }
+      const b = S.babies.find(b => Math.abs(b.x - f.x) < 10 && Math.abs(b.y - f.y) < 8 && f.z < 20);
+      if (b) { b.vz = 2.2; b.z = 0.1; f.gone = true; SND.fx.hop(); sparks(f.x - S.cx, f.y - S.cy - f.z, 5, '#ff8fc7'); }
     }
     S.thrown = S.thrown.filter(f => !f.gone);
-    for (const b of S.babies) {
+    for (const b of S.babies) {   // each baby toddles to a spot in its area, waits, picks another
+      if (b.z > 0 || b.vz > 0) { b.vz -= 0.12; b.z += b.vz; if (b.z <= 0) { b.z = 0; b.vz = 0; } }
       if (b.wait > 0) { b.wait--; continue; }
-      b.x += b.vx;
-      if (b.x < b.x0 || b.x > b.x1) { b.vx = -b.vx; b.x = clamp(b.x, b.x0, b.x1); }
-      if (b.y === 0 && Math.random() < 0.006) b.vy = -1.8;
-      if (b.y < 0 || b.vy < 0) { b.vy += 0.12; b.y += b.vy; if (b.y >= 0) { b.y = 0; b.vy = 0; } }
-      if (Math.random() < 0.003) b.wait = 60 + Math.floor(Math.random() * 90);
+      const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
+      if (d < 1) { const [x0, y0, x1, y1] = HT.AREAS[b.area]; b.wait = 40 + Math.floor(Math.random() * 120); b.tx = x0 + Math.random() * (x1 - x0); b.ty = y0 + Math.random() * (y1 - y0); continue; }
+      const nx = b.x + dx / d * 0.5, ny = b.y + dy / d * 0.5;
+      if (HT.solid(nx, ny)) { b.tx = b.x; b.ty = b.y; continue; }
+      b.x = nx; b.y = ny;
+      if (b.z === 0 && Math.random() < 0.004) b.vz = 1.6;
     }
   };
   S.draw = function () {
-    K.g = g; drawHouse(S.cam, S.t);
-    for (const b of S.babies) { const x = b.x - S.cam; if (x < -20 || x > W + 20) continue; K.baby(x, HL.FLOOR + b.y, 0.05, b.hex, { t: S.t + b.x, armL: 30 + Math.sin(S.t * 5 + b.x) * 20, armR: -150, mouth: 'smile', eyes: { happy: 0.5 } }); }
-    for (const p of S.ps) {
-      const x = p.x - S.cam, t = S.t + p.m.slot * 0.7;
-      const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : !p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle';
-      drawHeroPose(p.m, x, p.y, st, st === 'run' ? p.anim / 11 : t, p.face);
-      if (p.eatT > 0) { const sc = 0.4 + 0.6 * p.eatT / 50; foodArt(p.food, x + 6, p.y - 24, sc); garnishArt(p.garnish, x + 6, p.y - 24, sc); }   // shrinking as it is eaten
-      else if (p.hold) { foodArt(p.hold - 1, x + p.face * 9, p.y - 20); garnishArt(p.garnish, x + p.face * 9, p.y - 20, 1); }
-    }
-    for (const f of S.thrown) foodArt(f.kind, f.x - S.cam, f.y);
-    // what Down does where you stand
+    // the babies, the heroes and thrown food go in among the furniture, sorted by their feet
+    const actors = [];
+    for (const b of S.babies) actors.push({ y: b.y, draw: () => { const hop = b.wait > 0 ? 0 : Math.abs(Math.sin(S.t * 8 + b.x)) * 2; houseShadow(b.x, b.y, 6); K.baby(b.x, b.y - hop - b.z, 0.05, b.hex, { t: S.t + b.x, armL: 30 + Math.sin(S.t * 5 + b.x) * 20, armR: -150, mouth: 'smile', eyes: { happy: 0.5 } }); } });
+    for (const p of S.ps) actors.push({ y: p.y, draw: () => {
+      const t = S.t + p.m.slot * 0.7, y = p.y - p.z;
+      const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : p.z > 0 ? 'jump' : p.moving ? 'run' : 'idle';
+      houseShadow(p.x, p.y, p.m.hero === 'robot' ? 10 : 9);
+      drawHeroPose(p.m, p.x, y, st, st === 'run' ? p.anim / 11 : t, p.face);
+      if (p.eatT > 0) { const sc = 0.4 + 0.6 * p.eatT / 50; foodArt(p.food, p.x + 6, y - 24, sc); garnishArt(p.garnish, p.x + 6, y - 24, sc); }   // shrinking as it is eaten
+      else if (p.hold) { foodArt(p.hold - 1, p.x + p.face * 9, y - 20); garnishArt(p.garnish, p.x + p.face * 9, y - 20, 1); }
+    } });
+    for (const f of S.thrown) actors.push({ y: f.y, draw: () => { houseShadow(f.x, f.y, 4); foodArt(f.kind, f.x, f.y - 4 - f.z); } });
+    HT.draw(g, S.cx, S.cy, S.t, actors, houseBgPicture(), here, W, H);
+    K.g = g;
+    // what A does where you stand, over your head
     const shown = new Set();
-    for (const p of S.ps) { const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k); const [x, kind, label] = HL.spots[k], s = 'A  ' + (kind === 'back' ? 'Back to World ' + (worldNum - 1) : label), w = textW(s, 8) + 14; panel(x - S.cam - w / 2, 120, w, 15); text(s, x - S.cam, 131, 8, '#fff6d8', 'center', null); }
+    for (const p of S.ps) {
+      const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k);
+      const [, kind, label] = HL.spots[k], s = 'A  ' + (kind === 'back' ? 'Back to World ' + (worldNum - 1) : label), w = textW(s, 8) + 14;
+      const x = clamp(p.x - S.cx, w / 2 + 4, W - w / 2 - 4), y = Math.max(22, p.y - S.cy - 64);
+      panel(x - w / 2, y, w, 15); text(s, x, y + 11, 8, '#fff6d8', 'center', null);
+    }
     drawParticles(0);
-    if (S.cam < 40) text('← Map', 18 - S.cam, 186, 8, '#fff6d8', 'left');
     livesHud(4, 4, S.t);
     if (S.msg) rimBanner(S.msg.text, 10, 26, 20);
     if (S.mode === 'sleep') {
       g.fillStyle = 'rgba(12,8,30,' + Math.min(0.75, S.sleepT * 0.6) + ')'; g.fillRect(0, 0, W, H);
-      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', HL.spots[4][0] - S.cam + 10 + u * 20, 150 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
+      const bed = HT.things.find(th => th.kind === 'bed');
+      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', bed.x - S.cx + 10 + u * 20, bed.y - S.cy - 70 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
     }
     if (S.mode === 'slots') drawSlotPicker('SLEEP AND SAVE', 'Which save slot?', S.pick);
     if (S.mode === 'fridge') {   // the fridge door open: three shelves of food, a cursor each
@@ -924,38 +951,6 @@ function houseScene(from) {
   };
   return S;
 }
-// The rooms: walls with stripes, a floor, a ceiling, door pillars between rooms, a name plate,
-// then the furniture. The N64 draws the same boxes and the baked furniture.
-function drawHouse(cam, t) {
-  const L = HL;
-  for (const [i, [x0, x1, name, wall, stripe, floor]] of L.rooms.entries()) {
-    const a = x0 - cam, b = x1 - cam; if (b < 0 || a > W) continue;
-    if (i === 0) {   // the yard: sky, clouds, grass, a fence
-      g.fillStyle = hexStr(wall); g.fillRect(a, 0, b - a, L.FLOOR); g.fillStyle = hexStr(stripe); g.fillRect(a, 120, b - a, 80);
-      for (const [cx, cy] of [[60, 40], [200, 26]]) { K.circ(cx - cam, cy, 12, '#ffffff'); K.circ(cx + 12 - cam, cy - 4, 14, '#ffffff'); K.circ(cx + 26 - cam, cy, 11, '#ffffff'); }
-      for (let x = 10; x < x1 - 20; x += 16) { K.rr(x - cam, 170, 8, 30, 2, '#fff6d8'); } K.rr(a, 178, b - a - 20, 5, 1, '#fff6d8');
-      g.fillStyle = hexStr(floor); g.fillRect(a, L.FLOOR, b - a, H - L.FLOOR); g.fillStyle = '#4fa856'; for (let x = 0; x < x1; x += 10) g.fillRect(x - cam, L.FLOOR, 5, 3);
-      continue;
-    }
-    g.fillStyle = hexStr(wall); g.fillRect(a, L.CEIL, b - a, L.FLOOR - L.CEIL);
-    g.fillStyle = hexStr(stripe); for (let x = x0 + 12; x < x1; x += 24) g.fillRect(x - cam, L.CEIL, 10, L.FLOOR - L.CEIL);
-    g.fillStyle = '#6f4630'; g.fillRect(a, L.FLOOR - 8, b - a, 8);   // skirting board
-    g.fillStyle = hexStr(floor); g.fillRect(a, L.FLOOR, b - a, H - L.FLOOR);
-    g.fillStyle = 'rgba(0,0,0,0.12)'; for (let x = x0; x < x1; x += 20) g.fillRect(x - cam, L.FLOOR, 1, H - L.FLOOR);
-    g.fillStyle = '#5a3f2e'; g.fillRect(a, 0, b - a, L.CEIL);   // the ceiling
-    // the room's name plate
-    const mid = (a + b) / 2, w = textW(name, 8) + 16; K.rr(mid - w / 2, 28, w, 15, 3, '#6f4630'); K.rr(mid - w / 2 + 2, 30, w - 4, 11, 2, '#c98a4b'); text(name, mid, 39, 8, '#fff6d8', 'center', '#3a2618');
-  }
-  // the roof over the front of the house, and the pillars of the doorways between rooms
-  for (let i = 1; i < L.rooms.length; i++) { const x = L.rooms[i][0] - cam - L.PILLAR / 2; if (x < -10 || x > W) continue; K.rr(x, L.CEIL, L.PILLAR, L.DOOR_TOP - L.CEIL, 1, '#6f4630'); K.rr(x - 2, L.DOOR_TOP - 4, L.PILLAR + 4, 6, 2, '#5a3f2e'); }
-  K.rr(L.W - 8 - cam, L.CEIL, 8, L.FLOOR - L.CEIL, 0, '#6f4630');
-  for (const [x, name] of L.decor) if (x - cam > -60 && x - cam < W + 60) HOUSEART.furn(g, name, x - cam, L.FLOOR);
-  for (const [x, kind] of L.spots) if ((kind !== 'back' || worldNum > 1) && x - cam > -60 && x - cam < W + 60) {
-    HOUSEART.furn(g, HOUSEART.SPOT_FURN[kind], x - cam, L.FLOOR);
-    if (kind === 'aqua') for (let k = 0; k < 3; k++) { const u = t * (0.3 + k * 0.1) + k * 2, fx = x - cam + Math.sin(u) * 30, fy = L.FLOOR - 70 + k * 12; g.save(); g.translate(fx, fy); g.scale(Math.cos(u) > 0 ? 0.7 : -0.7, 0.7); HOUSEART.fish(g, k, t); g.restore(); }
-  }
-}
-
 // ---- the drum kit in the music room: every button hits its own piece, for both players.
 function drumScene(house) {
   const S = { song: null, t: 0, lit: new Array(9).fill(0), notes: [] }, DR = HOUSEART.DRUMS;

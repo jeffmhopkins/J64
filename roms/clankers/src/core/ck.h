@@ -423,30 +423,37 @@ typedef struct {
 } ck_map;
 
 // ---------------------------------------------------------------------------- the house
-// The shop node on every map is the heroes' house: the yard, then rooms in a row along one floor
-// (web/lib/houseart.js has the same layout). Down at a room's thing uses it; some open a little
-// game of their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO). Rescued baby bots wander about.
-#define CK_HOUSE_W 1900
-#define CK_HOUSE_FLOOR 200
-#define CK_HOUSE_CEIL 20
-#define CK_HOUSE_PILLAR 8
-#define CK_HOUSE_DOOR_TOP 120
+// The home node on every map is the heroes' house: a four-bedroom house with a garage and a
+// garden all round, seen from above (three-quarter view). The plan is web/lib/housetop.js, written
+// into ck_house_map.c by tools/bake_sprites.mjs. A at a thing uses it; some open a little game of
+// their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO and the arcade). Rescued baby bots wander about.
 #define CK_HOUSE_ROOMS 8
 #define CK_HOUSE_SPOTS 16
-#define CK_HOUSE_DECOR 5
 #define CK_HOUSE_BABIES 16
 enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE,
        SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT, SPOT_JETRUN };
-// furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
-enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
-       FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN,
-       FURN_PINBALL, FURN_ARCADE, FURN_POND, FURN_PADDLE, FURN_JETRUN, FURN_COUNT };
+// the rooms of the old side-on house: the music room's colours still dress the piano and drums
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
-typedef struct { int x, kind, furn; const char *label; } ck_spot;
-typedef struct { int x, furn; } ck_decor;
+typedef struct { int kind; const char *label; } ck_spot;   // what A does there
 extern const ck_room ck_rooms[CK_HOUSE_ROOMS];
 extern const ck_spot ck_spots[CK_HOUSE_SPOTS];
-extern const ck_decor ck_decors[CK_HOUSE_DECOR];
+// The plan (ck_house_map.c). A room: its back wall is the top 64 px (CK_TD_FACE), the floor below.
+#define CK_TD_FACE 64
+typedef struct { int x, y, w, h; const char *name; } ck_troom;
+typedef struct { int x0, y0, x1, y1; } ck_trect;
+// a thing: x and y are the middle of its front edge on the floor; it fills fw either side and fd
+// back from there. art is its look (ck_tarts, and a baked sprite each); spot is SPOT_* or -1.
+typedef struct { short x, y, fw, fd, art, spot, flat; } ck_thing;
+typedef struct { float scale; int fw, fd; unsigned char tank, shade; } ck_tart;
+extern const int ck_td_world[2], ck_td_start[2][2], ck_td_gate[3], ck_td_leash[2];
+extern const ck_troom ck_trooms[];
+extern const ck_trect ck_twalk[], ck_tareas[];
+extern const ck_thing ck_things[];
+extern const ck_tart ck_tarts[];
+extern const int ck_ntrooms, ck_ntwalk, ck_nthings, ck_ntarts, ck_ntareas;
+bool ck_house_solid(float x, float y);         // a wall, furniture or outside the house's ground
+int ck_house_room_at(float x, float y);       // the room (ck_trooms) a point is in, or -1
+void ck_house_camera(float mx, float my, float *cx, float *cy);   // the view for the party's middle
 // the paint studio's wall: 80 x 48 cells of 4 px from y 16; 0 is bare, else palette index + 1
 #define CK_MURAL_W 80
 #define CK_MURAL_H 48
@@ -726,9 +733,11 @@ typedef struct {
     int face;
     bool ground, land, jet, brush;
     int eat, bubT, col;        // house: snack time; aqua: next bubble; paint: palette choice
+    float lx, ly;              // house: the way you last walked (food is thrown that way)
+    bool moving;               // house: walking this frame
     float bx, by;              // paint: where the brush was last frame
     float a, s, sky, best;     // cars: distance along the road, speed, how far the skyline has turned, finish time
-    float jz, jvz, lean;       // cars: height off the road and climb speed after a ramp, how hard it leans into a turn
+    float jz, jvz, lean;       // cars: height off the road and climb speed after a ramp, how hard it leans into a turn; house: a hop
     int boost;                 // cars: frames of boost pad speed left
     uint32_t pads;             // cars: the boost pads and ramps you have used, one bit each
     int laps, key, rep, bounce;
@@ -741,7 +750,7 @@ typedef struct {
     bool stick;                // paint: holding a sticker instead of the brush
     int kind;                  // paint: which sticker
 } ck_hhero;
-typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
+typedef struct { uint32_t hex; float x, y, tx, ty, z, vz; int area, wait; } ck_hbaby;   // walks to (tx, ty) in its area; z: a hop
 typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who, home; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`; home: its section
 typedef struct { float x, y; int life; } ck_flake;
 typedef struct { float x, y, vx, vy; int face, rest, held, spin; } ck_shrimp;   // held: in hero held - 1's hand; spin: frames tumbling after a throw
@@ -783,7 +792,7 @@ extern const int ck_cook_ingr[CK_COOK_INGR];
 void ck_cook_dish(const int *pan, int n, int *dish, uint64_t *extra, char *name, int size);
 typedef struct { const char *name; int n; ck_fshape s[6]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];
-typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
+typedef struct { float x, y, z, vx, vy, vz; int kind, life; } ck_thrown;   // z: height off the floor
 #define CK_THROWN 6
 #define CK_LETTERS 6
 typedef struct { const char *from; const char *lines[3]; } ck_letter;
@@ -797,7 +806,7 @@ typedef struct {
     int last;                  // the player (0 or 1) who last pressed something: the labels follow them
     ck_hbaby babies[CK_HOUSE_BABIES];
     int nbabies;
-    float cam;
+    float cam, camy;           // the house's view: its top-left corner in the world
     int mode, pick;
     float sleepT;
     char msg[56];
@@ -974,6 +983,7 @@ void ck_game_slots(ck_game *G, const ck_saves *slots);
 ck_slot_info ck_slot_summary(const ck_game *G, int k);
 // Which spot (an index into ck_spots) a hero in the house stands at, or -1.
 int ck_house_near(const ck_game *G, const ck_hhero *p);
+int ck_house_thing_at(const ck_game *G, float x, float y);   // the thing (ck_things) with a spot by (x, y), or -1
 // The yard's signpost (SPOT_BACK) is only there from World 2 on: it goes back a world.
 bool ck_spot_here(const ck_game *G, int k);
 // One 60 Hz tick. Clears and refills G->sfx.
