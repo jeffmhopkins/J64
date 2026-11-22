@@ -13,10 +13,10 @@
 
 static ck_game G;
 static bool scanlines;
-// The picture the console sends. 240p is the classic N64 picture. Many modern TVs decode
-// composite poorly from 240p (rainbow fringes, crawling dots) but handle 480i well, so R on the
-// pause screen switches to a 480i signal that shows the same 320x240 picture in both fields.
-static bool interlaced;
+// The picture the console sends. Many modern TVs decode composite poorly from 240p (rainbow
+// fringes, crawling dots) but handle 480i well, so the game sends a 480i signal that shows the
+// same 320x240 picture in both fields. R on the pause screen switches to classic 240p.
+static bool interlaced = true;
 static resolution_t video_res(void) {
     return (resolution_t){ .width = 320, .height = 240, .interlaced = interlaced ? INTERLACE_HALF : INTERLACE_OFF };
 }
