@@ -640,3 +640,113 @@ void ck_bolt_update(ck_game *G) {
         bolt_serve(B, !s);   // serve to whoever just lost the point
     }
 }
+
+// ---------------------------------------------------------------------------- Jet Run
+const char *const ck_run_stage_names[CK_RUN_THEMES] = { "JUNK PIPES", "SUNSET FACTORY", "NEON NIGHT", "STORM CLOUDS", "STAR LANES" };
+float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c) { return c->gy + c->amp * sinf(J->t * 1.6f + c->ph); }
+// how hard it is now: every stage a little quicker, tighter and closer together, up to a limit
+static float run_level(const ck_jetrun *J) { return ck_minf(J->stage, 8); }
+static void run_spawn(ck_game *G, ck_jetrun *J) {
+    ck_runcol *c = NULL;
+    for (int i = 0; i < CK_RUN_COLS; i++) if (J->col[i].x < J->scroll - 60) { c = &J->col[i]; break; }
+    if (!c) return;
+    float lv = run_level(J), r = ck_rand(G);
+    c->x = J->nextX; c->passed = false;
+    c->gap = ck_maxf(84 - lv * 3, 60);
+    c->kind = J->stage >= 1 && r < 0.18f ? RUNCOL_PILLAR : J->stage >= 2 && r < 0.32f ? RUNCOL_HANG : RUNCOL_PIPES;
+    // never further from the last gap than a hero can fly before getting here
+    float space = ck_maxf(150 - lv * 6, 110), reach = (space - CK_RUN_W - CK_RUN_HW) / ck_maxf(J->speed, 1.6f) * 1.4f;
+    c->gy = ck_clampf(50 + ck_rand(G) * (CK_RUN_FLOOR - 100), J->lastGy - reach, J->lastGy + reach);
+    c->amp = J->stage >= 1 && ck_rand(G) < 0.25f + lv * 0.05f ? 12 + ck_rand(G) * (8 + lv * 2) : 0;   // gaps that sway up and down
+    if (c->amp) c->gy = ck_clampf(c->gy, 40 + c->amp, CK_RUN_FLOOR - 40 - c->amp);
+    c->ph = ck_rand(G) * 6.28f;
+    J->lastGy = c->kind == RUNCOL_PILLAR ? c->gy - 40 : c->kind == RUNCOL_HANG ? c->gy + 40 : c->gy;
+    J->nextX += space;
+    // a row of bolts through the gap and one on the way to the next
+    for (int k = 0, n = 0; k < CK_RUN_BOLTS && n < 3; k++) {
+        if (J->bolt[k].on && J->bolt[k].x > J->scroll - 20) continue;
+        J->bolt[k] = (ck_runbolt){ c->x + CK_RUN_W / 2 + (n - 1) * 16, c->kind == RUNCOL_PILLAR ? c->gy - 30 : c->kind == RUNCOL_HANG ? c->gy + 30 : c->gy, true };
+        if (c->amp) J->bolt[k].on = n == 1;   // a swaying gap: just the middle one, at its resting spot
+        n++;
+    }
+}
+static void run_reset(ck_jetrun *J) {
+    int best = J->best;
+    memset(J, 0, sizeof *J);
+    J->best = best;
+    J->state = RUN_READY;
+    J->lives = CK_RUN_LIVES;
+    J->nextX = 360; J->lastGy = 110;
+    for (int i = 0; i < CK_RUN_COLS; i++) J->col[i].x = -1000;
+    for (int i = 0; i < 2; i++) { J->ps[i].y = 80 + i * 50; J->ps[i].on = true; }
+}
+void ck_run_start(ck_game *G) { ck_house_game_heroes(G); run_reset(&G->house.run); ck_go(G, SC_JETRUN); }
+static void run_over(ck_game *G, ck_jetrun *J) {
+    J->state = RUN_OVER; J->stateT = 0;
+    if (J->score > J->best) J->best = J->score;
+    ck_sfx(G, SFX_OUCH);
+}
+void ck_run_update(ck_game *G) {
+    ck_house *H = &G->house;
+    ck_jetrun *J = &H->run;
+    ck_step_parts(G);
+    if (ANYHIT(G, CK_START)) { ck_house_back(G); return; }
+    J->t += 1.0f / 60;
+    J->stateT++;
+    if (J->shake > 0) J->shake--;
+    if (J->state == RUN_OVER) {
+        if (J->stateT > 60 && ANYHIT(G, CK_A)) { run_reset(J); ck_sfx(G, SFX_CONFIRM); }
+        return;
+    }
+    if (J->state == RUN_READY) {
+        for (int i = 0; i < H->np; i++) J->ps[i].y = 80 + i * 50 + sinf(J->t * 3 + i) * 4;
+        if (ANYHIT(G, CK_A) || ANYHIT(G, CK_UP)) { J->state = RUN_PLAY; J->stateT = 0; J->stageT = 150; ck_sfx(G, SFX_CONFIRM); }
+        return;
+    }
+    // the stage: the scenery changes, it all gets quicker, and a lost life comes back every other stage
+    int stage = (int)(J->scroll / CK_RUN_STAGE_LEN);
+    if (stage != J->stage) {
+        J->stage = stage; J->stageT = 150;
+        if (stage % 2 == 0 && J->lives < CK_RUN_LIVES) J->lives++;
+        ck_sfx(G, SFX_FLAG); ck_confetti(G, J->scroll + 160, 30, 24);
+    }
+    if (J->stageT > 0) J->stageT--;
+    J->speed = ck_minf(1.6f + run_level(J) * 0.2f, 3.2f) * (G->prog.little ? 0.85f : 1);
+    J->scroll += J->speed;
+    while (J->nextX < J->scroll + CK_W + 40) { float was = J->nextX; run_spawn(G, J); if (J->nextX == was) break; }
+    for (int i = 0; i < H->np; i++) {
+        __typeof__(J->ps[0]) *p = &J->ps[i];
+        int s = H->gs[i].slot;
+        bool up = HELD(G, s, CK_UP) || HELD(G, s, CK_A), dn = HELD(G, s, CK_DOWN);
+        p->vy += (((dn ? 1 : 0) - (up ? 1 : 0)) * 2.1f - p->vy) * 0.2f;
+        p->y = ck_clampf(p->y + p->vy, 14, CK_RUN_FLOOR - CK_RUN_HH);
+        if (p->inv > 0) p->inv--;
+        float hx = J->scroll + CK_RUN_X - CK_RUN_HW / 2;
+        for (int k = 0; k < CK_RUN_COLS && p->inv <= 0; k++) {
+            const ck_runcol *c = &J->col[k];
+            if (hx + CK_RUN_HW < c->x + 3 || hx > c->x + CK_RUN_W - 3) continue;
+            float gy = ck_run_gap_y(J, c), top = p->y + 2, bot = p->y + CK_RUN_HH - 2;
+            bool hit = c->kind == RUNCOL_PILLAR ? bot > gy : c->kind == RUNCOL_HANG ? top < gy : top < gy - c->gap / 2 || bot > gy + c->gap / 2;
+            if (!hit) continue;
+            p->inv = 90; p->vy = c->kind == RUNCOL_HANG || (c->kind == RUNCOL_PIPES && top < gy - c->gap / 2) ? 2.5f : -2.5f;
+            J->shake = 12;
+            ck_sfx(G, SFX_CLANK);
+            ck_puff(G, hx + 6, p->y + 10, 8, 0xFFF8E6, 230);
+            if (--J->lives <= 0) { run_over(G, J); return; }
+        }
+        for (int k = 0; k < CK_RUN_BOLTS; k++) {
+            ck_runbolt *b = &J->bolt[k];
+            if (!b->on || fabsf(b->x - (hx + CK_RUN_HW / 2)) > 10 || fabsf(b->y - (p->y + CK_RUN_HH / 2)) > 13) continue;
+            b->on = false; J->bolts++; J->score += 5;
+            ck_sfx(G, SFX_BOLT);
+            ck_sparks(G, b->x, b->y, 3, 0xFFD23F);
+        }
+        if (((int)(J->t * 60) + i) % 3 == 0) ck_puff(G, hx - 2, p->y + CK_RUN_HH - 2, 1, 0xFFC878, 230);
+    }
+    for (int k = 0; k < CK_RUN_COLS; k++) {   // a gate passed
+        ck_runcol *c = &J->col[k];
+        if (c->passed || c->x + CK_RUN_W > J->scroll + CK_RUN_X - CK_RUN_HW / 2) continue;
+        c->passed = true; J->gates++; J->score += 10;
+        ck_sfx(G, SFX_TICK);
+    }
+}

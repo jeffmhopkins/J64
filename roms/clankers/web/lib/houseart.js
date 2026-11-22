@@ -9,7 +9,7 @@ const HOUSEART = (() => {
   const K = CK, P = Math.PI;
   const hx = h => '#' + h.toString(16).padStart(6, '0');
   const LAYOUT = {
-    W: 1800, FLOOR: 200, CEIL: 20, PILLAR: 8, DOOR_TOP: 120,
+    W: 1900, FLOOR: 200, CEIL: 20, PILLAR: 8, DOOR_TOP: 120,
     // x0, x1, name, wall, stripe, floor
     rooms: [
       [0, 400, 'The yard', 0x8FD3FF, 0xBDE8FF, 0x5DBB63],
@@ -19,7 +19,7 @@ const HOUSEART = (() => {
       [940, 1120, 'Music room', 0xC9B8F0, 0xB8A3E9, 0x7A4E3A],
       [1120, 1300, 'Aquarium', 0x9FD8F0, 0x88CBE6, 0x5D7C99],
       [1300, 1520, 'Garage', 0xB5BAC4, 0xA4AAB6, 0x6E7280],
-      [1520, 1800, 'Arcade', 0x3A2E5C, 0x46386E, 0x2B2240],
+      [1520, 1900, 'Arcade', 0x3A2E5C, 0x46386E, 0x2B2240],
     ],
     // x, kind, what A does there, in SPOT_* order (the bedroom is first so saving is quick)
     spots: [
@@ -38,6 +38,7 @@ const HOUSEART = (() => {
       [1660, 'blast', 'Play Bug Blaster'],
       [345, 'pond', 'Go fishing'],
       [1745, 'bolt', 'Play Bolt Ball'],
+      [1830, 'jetrun', 'Play Jet Run'],
     ],
     // decorations that are only looked at: x, furniture frame
     decor: [[728, 'table'], [920, 'plant'], [1285, 'plant'], [555, 'lamp'], [1490, 'tools']],
@@ -142,6 +143,15 @@ const HOUSEART = (() => {
     K.rr(-23, -50, 46, 9, 2, '#1f6e4a'); K.rr(-12, -55, 2, 6, 1, '#9aa1b0'); K.circ(-11, -55, 3, '#ffd23f'); K.rr(9, -55, 2, 6, 1, '#9aa1b0'); K.circ(10, -55, 3, '#5ad1ff');
     K.rr(-8, -26, 16, 12, 2, '#1f6e4a'); K.rr(-2, -22, 4, 4, 1, '#ffd23f');
   };
+  // the arcade's fourth cabinet: Jet Run, a hero with a jetpack between pipes on its screen
+  F.jetrun = g => {
+    K.rr(-20, -94, 40, 94, 4, '#e0564f'); K.rr(-20, -94, 40, 13, 3, '#1b1426'); K.rr(-15, -90, 30, 5, 2, '#ffd23f'); K.rr(-12, -89, 24, 3, 1, '#ff8a3d');
+    K.rr(-15, -78, 30, 26, 2, '#7fc8ff'); K.rr(-15, -58, 30, 6, 1, '#8a5233');
+    K.rr(4, -78, 6, 9, 1, '#7d9a8a'); K.rr(3, -71, 8, 3, 1, '#8fb09c'); K.rr(4, -63, 6, 5, 1, '#7d9a8a'); K.rr(3, -63, 8, 3, 1, '#8fb09c');
+    K.circ(-6, -66, 3, '#5ad1ff'); K.rr(-10, -67, 3, 4, 1, '#9aa1b0'); K.circ(-11, -62, 1.6, '#ff8a3d');
+    K.rr(-23, -50, 46, 9, 2, '#a83a34'); K.rr(-12, -55, 2, 6, 1, '#9aa1b0'); K.circ(-11, -55, 3, '#ffd23f'); K.circ(6, -46, 2.5, '#5ad1ff'); K.circ(13, -46, 2.5, '#49d17a');
+    K.rr(-8, -26, 16, 12, 2, '#a83a34'); K.rr(-2, -22, 4, 4, 1, '#ffd23f');
+  };
   // the yard's pond: water lying on the grass, a lily pad, reeds, and a rod by the side
   F.pond = g => {
     g.fillStyle = '#3f9d4e'; g.beginPath(); g.ellipse(0, -5, 46, 9, 0, 0, Math.PI * 2); g.fill();
@@ -153,8 +163,8 @@ const HOUSEART = (() => {
     g.strokeStyle = '#fff6d8'; g.lineWidth = 1; g.beginPath(); g.moveTo(30, -56); g.lineTo(22, -8); g.stroke();
     K.circ(22, -8, 2, '#ff5a5a');
   };
-  const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools', 'sign', 'pinball', 'arcade', 'pond', 'paddle'];
-  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign', stove: 'stove', pinball: 'pinball', blast: 'arcade', pond: 'pond', bolt: 'paddle' };
+  const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools', 'sign', 'pinball', 'arcade', 'pond', 'paddle', 'jetrun'];
+  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign', stove: 'stove', pinball: 'pinball', blast: 'arcade', pond: 'pond', bolt: 'paddle', jetrun: 'jetrun' };
   function furn(g, name, x, y) { g.save(); g.translate(x, y); F[name](g); g.restore(); }
 
   // ---- the little creatures (drawn around (0, 0), facing right)

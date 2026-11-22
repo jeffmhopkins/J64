@@ -49,7 +49,7 @@ static bool keyval(const char *s, size_t n, char *key, size_t kn, char *val, siz
 static const char *const SONG_NAMES[SONG_COUNT] = {
     "", "title", "select", "map", "level", "level2", "level3", "boss", "bonus", "rainbow",
     "jet", "rescue", "clear", "lullaby", "storm", "map2", "map3", "map4", "factory", "mountain",
-    "moon", "travel", "parade", "pinball", "blaster", "race", "victory", "race2", "race3", "race4", "boltball",
+    "moon", "travel", "parade", "pinball", "blaster", "race", "victory", "race2", "race3", "race4", "boltball", "jetrun",
 };
 
 static const char *const BOSS_NAMES[CK_BOSS_COUNT] = { "crane", "stamper", "boulder", "hauler" };

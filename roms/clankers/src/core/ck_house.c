@@ -16,7 +16,7 @@ const ck_room ck_rooms[CK_HOUSE_ROOMS] = {
     { 940, 1120, "Music room", 0xC9B8F0, 0xB8A3E9, 0x7A4E3A },
     { 1120, 1300, "Aquarium", 0x9FD8F0, 0x88CBE6, 0x5D7C99 },
     { 1300, 1520, "Garage", 0xB5BAC4, 0xA4AAB6, 0x6E7280 },
-    { 1520, 1800, "Arcade", 0x3A2E5C, 0x46386E, 0x2B2240 },
+    { 1520, 1900, "Arcade", 0x3A2E5C, 0x46386E, 0x2B2240 },
 };
 // indexed by SPOT_*; the bedroom is first so saving is quick
 const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
@@ -35,6 +35,7 @@ const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
     { 1660, SPOT_BLAST, FURN_ARCADE, "Play Bug Blaster" },
     { 345, SPOT_POND, FURN_POND, "Go fishing" },
     { 1745, SPOT_BOLT, FURN_PADDLE, "Play Bolt Ball" },
+    { 1830, SPOT_JETRUN, FURN_JETRUN, "Play Jet Run" },
 };
 const ck_decor ck_decors[CK_HOUSE_DECOR] = {
     { 728, FURN_TABLE }, { 920, FURN_PLANT }, { 1285, FURN_PLANT }, { 555, FURN_LAMP }, { 1490, FURN_TOOLS },
@@ -291,6 +292,7 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
     case SPOT_BLAST: ck_sfx(G, SFX_OPEN); ck_blast_start(G); break;
     case SPOT_POND: ck_sfx(G, SFX_OPEN); ck_fish_start(G); break;
     case SPOT_BOLT: ck_sfx(G, SFX_OPEN); ck_bolt_start(G); break;
+    case SPOT_JETRUN: ck_sfx(G, SFX_OPEN); ck_run_start(G); break;
     case SPOT_BED: ck_sfx(G, SFX_SELECT); H->mode = HM_SLOTS; H->pick = G->slot; break;
     }
 }
@@ -1146,5 +1148,6 @@ void ck_house_step(ck_game *G) {
     case SC_BLAST: ck_blast_update(G); break;
     case SC_FISH: ck_fish_update(G); break;
     case SC_BOLT: ck_bolt_update(G); break;
+    case SC_JETRUN: ck_run_update(G); break;
     }
 }

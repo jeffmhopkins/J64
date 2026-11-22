@@ -73,7 +73,7 @@ void draw_init(void) {
 // Free the big pictures and hero sheets the next scene does not need.
 static void free_for(const ck_game *G) {
     int sc = G->scene;
-    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH || sc == SC_BOLT) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
+    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH || sc == SC_BOLT || sc == SC_JETRUN) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
     group = group * 16 + G->worldNum * 4 + (G->scene == SC_CUT ? G->cut % 4 : 0);   // a new world or film needs its own pictures
     waited = false;
     if (group != big_group) {
@@ -2218,6 +2218,194 @@ static void draw_bolt(const ck_game *G) {
     hint(H - 6, "Stick up and down   START leave");
 }
 
+// ---- Jet Run: five sceneries, each with its own sky, far and near layers, ground and pipes;
+// web/arcade.js runScene draws the same
+static float run_hash(int k) { uint32_t x = (uint32_t)k * 2654435761u; x ^= x >> 15; x *= 2246822519u; x ^= x >> 13; return (x & 1023) / 1023.0f; }
+static uint32_t mixc(uint32_t a, uint32_t b, float t) {
+    int r = ((a >> 16) & 255) + (((int)((b >> 16) & 255) - (int)((a >> 16) & 255)) * t);
+    int g = ((a >> 8) & 255) + (((int)((b >> 8) & 255) - (int)((a >> 8) & 255)) * t);
+    int bl = (a & 255) + (((int)(b & 255) - (int)(a & 255)) * t);
+    return (uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)bl;
+}
+static void run_sky(uint32_t top, uint32_t bot) { for (int k = 0; k < 12; k++) rect(0, k * 18, W, 18, mixc(top, bot, k / 11.0f), 1); }
+// x of thing k in a layer that repeats every span px, scrolled at par times the run
+static float run_lx(int k, float step, float sc, float par, float span) { return fmodf(fmodf(k * step - sc * par, span) + span, span) - 60; }
+typedef struct { uint32_t body, light, dark, lip, accent; } run_pal;
+static const run_pal run_pals[CK_RUN_THEMES] = {
+    { 0x7D9A8A, 0xA5C4B2, 0x5F7A6C, 0x8FB09C, 0xC0703A },
+    { 0xB0663A, 0xE0925A, 0x7A4026, 0xC9784A, 0xFFD23F },
+    { 0x2A2A48, 0x5AD1FF, 0x18182E, 0x3A3A60, 0xFF5AC8 },
+    { 0x6A7A8E, 0x9AAABE, 0x4A5868, 0x7A8AA0, 0xFFD23F },
+    { 0xD8DCE6, 0xFFFFFF, 0x9AA0B0, 0xE6E9F0, 0xFF5A5A },
+};
+static void run_bg(int th, float sc, float t) {
+    switch (th) {
+    case 0:   // junk pipes: the zone's own blue sky, clouds and hills
+        blit(SPR_JET_SKY, 0, 0, 0);
+        for (int k = 0; k < 5; k++) blit(SPR_CLOUD, 0, run_lx(k, 110, sc, 0.15f, 550), 26 + (k % 3) * 24);
+        { float ho = fmodf(fmodf(sc * 0.4f, 640) + 640, 640); blit(SPR_JET_HILLS, 0, -ho, CK_RUN_FLOOR - 46); if (ho > 320) blit(SPR_JET_HILLS, 0, 640 - ho, CK_RUN_FLOOR - 46); }
+        for (int k = 0; k < 8; k++) { float x = run_lx(k, 70, sc, 0.7f, 560); rect(x, CK_RUN_FLOOR - 10 - run_hash(k) * 8, 14, 12 + run_hash(k) * 8, 0x6F5A48, 1); rect(x + 3, CK_RUN_FLOOR - 6 - run_hash(k) * 8, 6, 3, 0x9A8A70, 1); }   // junk heaps
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x8A5233, 1); rect(0, CK_RUN_FLOOR, W, 3, 0xC98B55, 1);
+        for (int k = 0; k < 12; k++) rect(run_lx(k, 32, sc, 1, 384), CK_RUN_FLOOR + 8 + (k % 3) * 5, 6, 2, 0x6F4026, 1);
+        break;
+    case 1:   // sunset factory: an orange sky, a low sun, two rows of smoking factories
+        run_sky(0x5A3A8A, 0xFFA060);
+        shape(SPR_DOT, 232, 150, 44, 0xFFC27A, 0.35f);
+        shape(SPR_DOT, 232, 150, 30, 0xFFE08A, 1);
+        for (int k = 0; k < 7; k++) {
+            float x = run_lx(k, 90, sc, 0.18f, 630), h = 40 + run_hash(k) * 50, w = 50 + run_hash(k + 9) * 30;
+            rect(x, CK_RUN_FLOOR - h, w, h, 0x7A3A5A, 1);
+            rect(x + w * 0.6f, CK_RUN_FLOOR - h - 26, 8, 26, 0x7A3A5A, 1);
+        }
+        for (int k = 0; k < 6; k++) {
+            float x = run_lx(k, 120, sc, 0.45f, 720), h = 30 + run_hash(k + 30) * 40, w = 60 + run_hash(k + 40) * 30;
+            rect(x, CK_RUN_FLOOR - h, w, h, 0x4A2440, 1);
+            for (int j = 0; j < 3; j++) rect(x + 8 + j * 16, CK_RUN_FLOOR - h + 8, 8, 6, (j + k) % 3 ? 0xFFB050 : 0x6A3050, 1);   // lit windows
+            float cx = x + w - 14, cy = CK_RUN_FLOOR - h - 34;
+            rect(cx, cy, 10, 34, 0x3A1A34, 1); rect(cx - 1, cy, 12, 3, 0xC0503A, 1);
+            for (int j = 0; j < 4; j++) {   // smoke puffs rising off the stack
+                float u = fmodf(t * 0.5f + j * 0.25f + run_hash(k) , 1);
+                shape(SPR_DOT, cx + 5 - u * 18, cy - 4 - u * 40, 4 + u * 7, 0xC8A0B0, 0.55f * (1 - u));
+            }
+        }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x3A2030, 1); rect(0, CK_RUN_FLOOR, W, 2, 0xFF9A5A, 1);
+        for (int k = 0; k < 14; k++) rect(run_lx(k, 28, sc, 1, 392), CK_RUN_FLOOR + 6, 14, 4, 0x5A3048, 1);   // rail sleepers
+        rect(0, CK_RUN_FLOOR + 5, W, 2, 0x9A6A6A, 1); rect(0, CK_RUN_FLOOR + 11, W, 2, 0x9A6A6A, 1);
+        break;
+    case 2:   // neon night: stars, a moon, a city with lit windows and glowing signs
+        run_sky(0x08081E, 0x3A1A5A);
+        for (int k = 0; k < 40; k++) shape(SPR_DOT, run_lx(k, 37, sc, 0.03f, 400), 6 + run_hash(k) * 110, 0.6f + run_hash(k + 3) * 0.8f, 0xFFFFFF, 0.4f + 0.6f * fabsf(sinf(t * 2 + k)));
+        shape(SPR_DOT, 60, 44, 16, 0xFFF6D8, 0.2f); shape(SPR_DOT, 60, 44, 12, 0xF0E8D0, 1); shape(SPR_DOT, 56, 41, 2.5f, 0xD8D0B8, 1); shape(SPR_DOT, 64, 48, 1.8f, 0xD8D0B8, 1);
+        for (int k = 0; k < 9; k++) {
+            float x = run_lx(k, 64, sc, 0.2f, 576), h = 60 + run_hash(k + 50) * 70;
+            rect(x, CK_RUN_FLOOR - h, 46, h, 0x1C1C40, 1);
+            for (int wy = 0; wy < h - 10; wy += 10) for (int wx = 0; wx < 4; wx++) if (run_hash(k * 97 + wy + wx * 13) > 0.55f) rect(x + 5 + wx * 10, CK_RUN_FLOOR - h + 6 + wy, 4, 4, 0xFFE066, 0.7f);
+        }
+        for (int k = 0; k < 7; k++) {
+            float x = run_lx(k, 100, sc, 0.5f, 700), h = 40 + run_hash(k + 70) * 50;
+            rect(x, CK_RUN_FLOOR - h, 70, h, 0x101028, 1);
+            uint32_t neon = k % 2 ? 0xFF5AC8 : 0x5AD1FF;
+            float gl = 0.6f + 0.4f * sinf(t * 4 + k * 1.7f);
+            rect(x + 8, CK_RUN_FLOOR - h + 10, 54, 3, neon, gl);   // a sign
+            rect(x + 8, CK_RUN_FLOOR - h + 18, 30, 3, neon, gl * 0.8f);
+            rect(x, CK_RUN_FLOOR - h, 70, 2, neon, 0.5f);
+        }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x14142A, 1); rect(0, CK_RUN_FLOOR, W, 2, 0x5AD1FF, 1);
+        for (int k = 0; k < 10; k++) rect(run_lx(k, 40, sc, 1, 400), CK_RUN_FLOOR + 12, 20, 2, 0xFFE066, 0.8f);   // road markings
+        break;
+    case 3: {   // storm clouds: grey sky, rolling clouds, rain and lightning
+        float cyc = fmodf(t, 4.3f);
+        run_sky(0x2E3440, 0x6A7488);
+        if (cyc < 0.25f) {   // lightning
+            rect(0, 0, W, H, 0xFFFFFF, 0.5f * (1 - cyc / 0.25f));
+            float lx = 40 + run_hash((int)(t / 4.3f)) * 240, ly = 0;
+            for (int s = 0; s < 6; s++) { float nx = lx + (run_hash((int)(t / 4.3f) * 7 + s) - 0.5f) * 30, ny = ly + 22; line(lx, ly, nx, ny, 2.5f, 0xFFF6A0, 1); lx = nx; ly = ny; }
+        }
+        for (int k = 0; k < 8; k++) { float x = run_lx(k, 80, sc, 0.12f, 640); shape(SPR_DOT, x, 40 + run_hash(k) * 30, 30 + run_hash(k + 5) * 12, 0x4A5262, 1); }
+        for (int k = 0; k < 7; k++) { float x = run_lx(k, 100, sc, 0.3f, 700); shape(SPR_DOT, x, 8 + run_hash(k + 20) * 14, 34, 0x2A303C, 1); shape(SPR_DOT, x + 30, 2, 28, 0x2A303C, 1); }
+        for (int k = 0; k < 9; k++) { float x = run_lx(k, 72, sc, 0.55f, 648); shape(SPR_DOT, x, CK_RUN_FLOOR + 4, 26 + run_hash(k + 40) * 10, 0x3A4250, 1); }   // dark hills
+        for (int k = 0; k < 50; k++) {   // rain
+            float rx = fmodf(k * 53 - t * 90 - sc * 0.8f + 4000, 340) - 10, ry = fmodf(k * 31 + t * 260, 240);
+            line(rx, ry, rx - 3, ry + 9, 1.5f, 0xB8C8E0, 0.7f);
+        }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x2A3038, 1); rect(0, CK_RUN_FLOOR, W, 2, 0x8A9AB0, 1);
+        for (int k = 0; k < 6; k++) rect(run_lx(k, 70, sc, 1, 420), CK_RUN_FLOOR + 8 + (k % 2) * 6, 26, 2, 0x8A9AB0, 0.5f);   // puddles
+        break; }
+    default:   // star lanes: deep space, three layers of stars, a ringed planet, a moon to fly over
+        rect(0, 0, W, H, 0x05030F, 1);
+        { float mx = 70 - fmodf(sc * 0.01f, 400); shape(SPR_DOT, mx, 150, 9, 0x8FA0C0, 1); shape(SPR_DOT, mx - 2, 148, 3, 0xB8C8E0, 1); }   // a little far moon
+        for (int L = 0; L < 3; L++) for (int k = 0; k < 24; k++) shape(SPR_DOT, run_lx(k + L * 40, 23 + L * 7, sc, 0.04f + L * 0.12f, 400), run_hash(k * 3 + L * 100) * 200, 0.5f + L * 0.4f, L == 2 ? 0xFFFFFF : 0xB8C0E0, 0.5f + L * 0.25f);
+        { float px = 250 - fmodf(sc * 0.02f, 400); shape(SPR_DOT, px, 62, 26, 0xC98A4B, 1); shape(SPR_DOT, px - 7, 55, 9, 0xE0A86A, 1); rect(px - 42, 61, 84, 3, 0xF0D8B0, 0.8f); }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x8F8AA8, 1); rect(0, CK_RUN_FLOOR, W, 2, 0xC0BCD4, 1);
+        for (int k = 0; k < 8; k++) { float x = run_lx(k, 52, sc, 1, 416); shape(SPR_DOT, x, CK_RUN_FLOOR + 10 + (k % 2) * 6, 5 + (k % 3) * 2, 0x6E6A80, 1); }
+        break;
+    }
+}
+// one pipe from y0 to y1 with its lip at lipY
+static void run_pipe(float x, float y0, float y1, float lipY, const run_pal *P, int th, float t) {
+    if (y1 <= y0) return;
+    rect(x + 2, y0, CK_RUN_W - 4, y1 - y0, P->body, 1);
+    rect(x + 5, y0, 3, y1 - y0, P->light, th == 2 ? 0.8f : 1);
+    rect(x + CK_RUN_W - 8, y0, 4, y1 - y0, P->dark, 1);
+    rect(x - 2, lipY, CK_RUN_W + 4, 10, P->lip, 1);
+    rect(x - 2, lipY, CK_RUN_W + 4, 2, P->light, 0.7f);
+    rect(x + 6, lipY + 4, 8, 3, P->accent, th == 4 ? (sinf(t * 5 + x) > 0 ? 1 : 0.3f) : 1);
+    shape(SPR_DOT, x + 2, lipY + 5, 1.3f, P->dark, 1); shape(SPR_DOT, x + CK_RUN_W - 2, lipY + 5, 1.3f, P->dark, 1);
+}
+static void draw_jetrun(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    const ck_jetrun *J = &Hs->run;
+    int th = J->stage % CK_RUN_THEMES;
+    const run_pal *P = &run_pals[th];
+    float sc = J->scroll + (J->shake > 0 ? sinf(J->shake * 2.3f) * 3 : 0), t = J->t;
+    char s[40];
+    run_bg(th, sc, t);
+    for (int k = 0; k < CK_RUN_COLS; k++) {
+        const ck_runcol *c = &J->col[k];
+        float x = c->x - sc;
+        if (x < -40 || x > W + 10) continue;
+        float gy = ck_run_gap_y(J, c);
+        if (c->kind == RUNCOL_PILLAR) {   // a stack of junk blocks from the ground
+            for (float y = gy; y < CK_RUN_FLOOR; y += 14) {
+                int j = (int)((y - gy) / 14);
+                rect(x + (j % 2), y, CK_RUN_W - (j % 2) * 2, 13, j % 2 ? P->lip : P->dark, 1);
+                rect(x + 6, y + 4, CK_RUN_W - 12, 4, j % 2 ? P->light : P->body, 1);
+            }
+            rect(x - 2, gy - 3, CK_RUN_W + 4, 4, P->accent, 1);
+        } else {
+            float top = c->kind == RUNCOL_HANG ? gy : gy - c->gap / 2;
+            run_pipe(x, 0, top, top - 10, P, th, t);
+            if (c->kind == RUNCOL_PIPES) run_pipe(x, gy + c->gap / 2, CK_RUN_FLOOR, gy + c->gap / 2, P, th, t);
+            if (c->amp) { shape(SPR_DOT, x + CK_RUN_W / 2, top - 5, 2, 0x5AD1FF, 0.6f + 0.4f * sinf(t * 8)); }   // a swaying gap's motor light
+        }
+    }
+    for (int k = 0; k < CK_RUN_BOLTS; k++) {
+        const ck_runbolt *b = &J->bolt[k];
+        if (!b->on) continue;
+        float x = b->x - sc;
+        if (x < -10 || x > W + 10) continue;
+        blit_o(SPR_BOLT, 0, x, b->y, (bopt){ .sx = fabsf(cosf(t * 5 + k)) * 0.8f + 0.2f, .sy = 1 });
+    }
+    if (J->speed > 2.2f && J->state == RUN_PLAY)   // speed lines
+        for (int k = 0; k < 10; k++) { float lx = fmodf(k * 97 - J->scroll * 3 + 4000, 360) - 20; rect(lx, 20 + run_hash(k) * 180, 24 + (k % 3) * 10, 1.5f, 0xFFFFFF, 0.25f); }
+    particles(G, sc);
+    for (int i = 0; i < Hs->np; i++) {
+        const __typeof__(J->ps[0]) *p = &J->ps[i];
+        if (J->state == RUN_OVER) continue;
+        if (p->inv > 0 && (p->inv / 4) % 2 == 0) continue;
+        int slot = Hs->gs[i].slot, hero = G->prog.hero[slot], skin = skin_col(G, slot);
+        int jf = 29 + (int)(t * 14) % 2;
+        float fx = CK_RUN_X, fy = p->y + CK_RUN_HH + 4;
+        blit_o(hero_sprite(hero, skin), jf, fx, fy, skin_o((bopt){ 0 }, skin, t + i));
+        hero_acc(wear_of(G, slot), hero, jf, fx, fy, 1, false, t);
+    }
+    // the stage's name swoops in, with a flash as the scenery changes
+    if (J->stageT > 120 && J->state == RUN_PLAY && J->stage > 0) rect(0, 0, W, H, 0xFFFFFF, (J->stageT - 120) / 30.0f * 0.7f);
+    if (J->stageT > 0 && J->state == RUN_PLAY) {
+        float k = J->stageT > 130 ? (150 - J->stageT) / 20.0f : J->stageT < 20 ? J->stageT / 20.0f : 1;
+        snprintf(s, sizeof s, "STAGE %d", J->stage + 1);
+        dark_panel(W / 2 - 80, 78 - (1 - k) * 30, 160, 42);
+        txt(F_SMALL, ST_CREAM, W / 2, 94 - (1 - k) * 30, ALIGN_CENTER, "%s", s);
+        txt(F_MED, ST_YELLOW, W / 2, 112 - (1 - k) * 30, ALIGN_CENTER, "%s", ck_run_stage_names[th]);
+    }
+    dark_panel(4, 4, 62, 15);
+    blit_o(SPR_BOLT, 0, 13, 11.5f, (bopt){ .sx = 4 / 4.2f, .sy = 4 / 4.2f });
+    txt(F_MED, ST_PLAIN, 20, 16, ALIGN_LEFT, "x%d", J->bolts);
+    txt(F_SMALL, ST_YELLOW, W / 2, 12, ALIGN_CENTER, "SCORE %d", J->score);
+    txt(F_SMALL, ST_GREEN, W / 2, 22, ALIGN_CENTER, "BEST %d", J->best);
+    for (int k = 0; k < CK_RUN_LIVES; k++) {   // the team's lives: little batteries
+        float x = W - 18 - k * 16;
+        rect(x, 6, 12, 8, 0x1B1426, 1); rect(x + 12, 8, 2, 4, 0x1B1426, 1);
+        if (k < J->lives) rect(x + 1.5f, 7.5f, 9, 5, 0x49D17A, 1);
+    }
+    if (J->state == RUN_READY) {
+        banner(F_BIG, ST_YELLOW, 0xFFD23F, 70, 170, 34, 93, "JET RUN");
+        hint(124, "Up or A fly up   Down go down");
+        hint(142, "Press A to take off");
+        hint(H - 6, "START leave");
+    } else if (J->state == RUN_OVER) game_over(J->score, J->best);
+}
+
 static void pond_fish(int kind, float x, float y, int dir, float t) {
     const ck_catch *c = &ck_catches[kind];
     if (kind == CATCH_BOOT) {
@@ -2424,6 +2612,7 @@ void draw_frame(const ck_game *G, bool scanlines, bool interlaced) {
     case SC_BLAST: draw_blast(G); break;
     case SC_FISH: draw_fish(G); break;
     case SC_BOLT: draw_bolt(G); break;
+    case SC_JETRUN: draw_jetrun(G); break;
     }
     if (scanlines) {
         // a hint of a CRT: darken every other line

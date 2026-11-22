@@ -1553,6 +1553,80 @@ static void test_house(void) {
     EXPECT_EQ_INT(cpuHits > 0, 1);
     EXPECT_EQ_INT(out, 0);
     press(G, CK_START, 0);
+    // Jet Run: fly through the gaps, lose a life on a bump, collect bolts, stages change
+    walk_to(G, ck_spots[SPOT_JETRUN].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_JETRUN);
+    EXPECT_EQ_INT(G->song, SONG_JETRUN);
+    ck_jetrun *Jr = &G->house.run;
+    EXPECT_EQ_INT(Jr->state, RUN_READY);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(Jr->state, RUN_PLAY);
+    float jy0 = Jr->ps[0].y;
+    hold(G, 20, CK_UP, 0);
+    EXPECT_EQ_INT(Jr->ps[0].y < jy0 - 20, 1);
+    hold(G, 30, 0, 0);
+    EXPECT_EQ_INT(fabsf(Jr->ps[0].vy) < 0.2f, 1);   // letting go hovers
+    // a pipe right at player 1 with its gap far below: a bump
+    ck_runcol *rc = &Jr->col[0];
+    *rc = (ck_runcol){ Jr->scroll + CK_RUN_X - CK_RUN_W / 2, CK_RUN_FLOOR - 40, 60, 0, 0, RUNCOL_PIPES, true };
+    Jr->ps[0].y = 30; Jr->ps[1].y = 30; Jr->ps[0].inv = Jr->ps[1].inv = 0;
+    Jr->ps[1].inv = 999;   // only player 1 takes it
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES - 1);
+    EXPECT_EQ_INT(Jr->ps[0].inv > 0, 1);
+    EXPECT_EQ_INT(Jr->shake > 0, 1);
+    // flying through the gap is safe and passing it scores
+    rc->x = Jr->scroll + CK_RUN_X + 30; rc->gy = 120; rc->passed = false; rc->gap = 70;
+    Jr->ps[0].y = 110; Jr->ps[0].inv = 0;
+    int sc0 = Jr->score;
+    hold(G, 60, 0, 0);
+    EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES - 1);
+    EXPECT_EQ_INT(rc->passed, 1);
+    EXPECT_EQ_INT(Jr->score >= sc0 + 10, 1);
+    // a bolt
+    Jr->bolt[0] = (ck_runbolt){ Jr->scroll + CK_RUN_X, Jr->ps[0].y + CK_RUN_HH / 2, true };
+    int b0 = Jr->bolts;
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(Jr->bolts, b0 + 1);
+    // the next stage: new scenery, a life back
+    Jr->scroll = CK_RUN_STAGE_LEN * 2 - 1;
+    for (int k = 0; k < CK_RUN_COLS; k++) Jr->col[k].x = -1000;
+    Jr->nextX = Jr->scroll + 200;
+    hold(G, 2, 0, 0);
+    EXPECT_EQ_INT(Jr->stage, 2);
+    EXPECT_EQ_INT(Jr->stageT > 0, 1);
+    EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES);
+    // a pilot that steers for each gap gets through three more stages without a bump: the gaps are fair
+    int lives = Jr->lives, startStage = Jr->stage;
+    for (int f = 0; f < 60 * 200 && Jr->stage < startStage + 3 && Jr->state == RUN_PLAY; f++) {
+        float hx = Jr->scroll + CK_RUN_X, target = 110;
+        const ck_runcol *next = NULL;
+        for (int k = 0; k < CK_RUN_COLS; k++) {
+            const ck_runcol *c = &Jr->col[k];
+            if (c->x + CK_RUN_W < hx - CK_RUN_HW || (next && next->x < c->x)) continue;
+            next = c;
+        }
+        if (next) {
+            float gy = ck_run_gap_y(Jr, next);
+            target = next->kind == RUNCOL_PILLAR ? gy - 40 : next->kind == RUNCOL_HANG ? gy + 40 : gy;
+        }
+        uint16_t b[2];
+        for (int i = 0; i < 2; i++) { float c = Jr->ps[i].y + CK_RUN_HH / 2; b[i] = c > target + 3 ? CK_UP : c < target - 3 ? CK_DOWN : 0; }
+        ck_game_step(G, b[0], b[1]);
+    }
+    printf("  jet run: stage %d, %d gates, %d bolts, %d lives lost by the pilot\n", Jr->stage, Jr->gates, Jr->bolts, lives - Jr->lives + (Jr->stage - startStage) / 2);
+    EXPECT_EQ_INT(Jr->stage, startStage + 3);
+    EXPECT_EQ_INT(Jr->state, RUN_PLAY);
+    // left alone it all ends: game over, the best kept, A starts again
+    for (int f = 0; f < 60 * 300 && Jr->state == RUN_PLAY; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(Jr->state, RUN_OVER);
+    EXPECT_EQ_INT(Jr->best, Jr->score);
+    hold(G, 70, 0, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(Jr->state, RUN_READY);
+    EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES);
+    press(G, CK_START, 0);
     // the pond: cast, wait for a bite, hook it with A, reel it in
     walk_to(G, ck_spots[SPOT_POND].x);
     press(G, CK_A, 0);

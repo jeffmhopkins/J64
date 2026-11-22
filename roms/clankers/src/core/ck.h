@@ -51,7 +51,7 @@ enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
     SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR, SONG_LULLABY, SONG_STORM,
     SONG_MAP2, SONG_MAP3, SONG_MAP4, SONG_FACTORY, SONG_MOUNTAIN, SONG_MOON, SONG_TRAVEL, SONG_PARADE,
-    SONG_PINBALL, SONG_BLASTER, SONG_RACE, SONG_VICTORY, SONG_RACE2, SONG_RACE3, SONG_RACE4, SONG_BOLTBALL,
+    SONG_PINBALL, SONG_BLASTER, SONG_RACE, SONG_VICTORY, SONG_RACE2, SONG_RACE3, SONG_RACE4, SONG_BOLTBALL, SONG_JETRUN,
     SONG_COUNT
 };
 int ck_song_by_name(const char *name);   // "level2" -> SONG_LEVEL2, unknown -> SONG_NONE
@@ -396,21 +396,21 @@ typedef struct {
 // The shop node on every map is the heroes' house: the yard, then rooms in a row along one floor
 // (web/lib/houseart.js has the same layout). Down at a room's thing uses it; some open a little
 // game of their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO). Rescued baby bots wander about.
-#define CK_HOUSE_W 1800
+#define CK_HOUSE_W 1900
 #define CK_HOUSE_FLOOR 200
 #define CK_HOUSE_CEIL 20
 #define CK_HOUSE_PILLAR 8
 #define CK_HOUSE_DOOR_TOP 120
 #define CK_HOUSE_ROOMS 8
-#define CK_HOUSE_SPOTS 15
+#define CK_HOUSE_SPOTS 16
 #define CK_HOUSE_DECOR 5
 #define CK_HOUSE_BABIES 16
 enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE,
-       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT };
+       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT, SPOT_JETRUN };
 // furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
 enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
        FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN,
-       FURN_PINBALL, FURN_ARCADE, FURN_POND, FURN_PADDLE, FURN_COUNT };
+       FURN_PINBALL, FURN_ARCADE, FURN_POND, FURN_PADDLE, FURN_JETRUN, FURN_COUNT };
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
 typedef struct { int x, kind, furn; const char *label; } ck_spot;
 typedef struct { int x, furn; } ck_decor;
@@ -599,6 +599,35 @@ typedef struct {
     int overT;
 } ck_blaster;
 void ck_bug_at(const ck_blaster *B, int k, float *x, float *y);
+// ---- the arcade's fourth cabinet (SC_JETRUN): Jet Run, the long version of the jetpack zones.
+// Fly with the jetpack as in a zone (up or A rises, down sinks, letting go hovers) through gaps in
+// pipes that go on and on; every CK_RUN_STAGE_LEN the scenery changes and it all gets quicker and
+// tighter. A bump costs one of the team's lives; bolts and gates passed score.
+#define CK_RUN_COLS 6
+#define CK_RUN_BOLTS 18
+#define CK_RUN_FLOOR 214          // the ground's top
+#define CK_RUN_X 64               // where the heroes fly, across the screen
+#define CK_RUN_HW 12              // a hero's box
+#define CK_RUN_HH 20
+#define CK_RUN_W 28               // a pipe's width
+#define CK_RUN_THEMES 5
+#define CK_RUN_STAGE_LEN 2000.0f
+#define CK_RUN_LIVES 3
+enum { RUNCOL_PIPES, RUNCOL_PILLAR, RUNCOL_HANG };   // a gap between two pipes, a pillar from the ground, a pipe from the top
+enum { RUN_READY, RUN_PLAY, RUN_OVER };
+typedef struct { float x, gy, gap, amp, ph; int kind; bool passed; } ck_runcol;
+typedef struct { float x, y; bool on; } ck_runbolt;
+typedef struct {
+    int state, stateT;
+    float scroll, speed, t;
+    ck_runcol col[CK_RUN_COLS];
+    ck_runbolt bolt[CK_RUN_BOLTS];
+    float nextX, lastGy;      // where the next column goes, and the last one's gap
+    struct { float y, vy; int inv; bool on; } ps[2];
+    int lives, score, best, bolts, gates, stage, stageT, shake;
+} ck_jetrun;
+extern const char *const ck_run_stage_names[CK_RUN_THEMES];
+float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c);   // a column's gap middle right now (moving gaps sway)
 // ---- the arcade's third cabinet (SC_BOLT): Bolt Ball. A paddle each side, a ball between: miss
 // it and the other side scores, first to CK_BOLT_WIN wins. Everyone playing presses A to say
 // ready; with two players, if only one says ready before the countdown ends, they play the
@@ -763,6 +792,7 @@ typedef struct {
     ck_pinball pin;
     ck_blaster blast;
     ck_boltball bolt;
+    ck_jetrun run;
     ck_pond pond;
 } ck_house;
 int ck_race_rank(const ck_house *H, const ck_hhero *me);   // a car's place in the race right now (1 is in front)
@@ -771,7 +801,7 @@ typedef struct { bool used; int world, bolts; } ck_slot_info;
 
 // ---------------------------------------------------------------------------- the whole game
 enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU,
-       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH, SC_BOLT };
+       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH, SC_BOLT, SC_JETRUN };
 enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
 
 // The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine

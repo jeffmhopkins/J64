@@ -712,6 +712,7 @@ function houseScene(from) {
     else if (kind === 'pinball') { SND.fx.open(); go(pinballScene(S)); }
     else if (kind === 'blast') { SND.fx.open(); go(blastScene(S)); }
     else if (kind === 'bolt') { SND.fx.open(); go(boltScene(S)); }
+    else if (kind === 'jetrun') { SND.fx.open(); go(runScene(S)); }
     else if (kind === 'pond') { SND.fx.open(); go(fishScene(S)); }
     else if (kind === 'bed') { SND.fx.select(); S.mode = 'slots'; S.pick = saveSlot - 1; }
   }
