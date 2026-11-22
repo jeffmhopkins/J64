@@ -437,8 +437,8 @@ extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 // The garage race, top down: the road scrolls down, the stick steers across three lanes to dodge
 // cones, crates, oil and slow cars; up or A goes faster, down or B brakes. Two players get a half
 // of the screen each, the same road.
-#define CK_RACE_LEN 3200
-#define CK_RACE_OBST 32
+#define CK_RACE_LEN 9600          // about a minute at cruising speed
+#define CK_RACE_OBST 64           // sparse at the start, closer together further on
 #define CK_RACE_LANE 40           // the lanes are at -40, 0 and 40 from the road's middle
 #define CK_RACE_EDGE 52           // how far from the middle a car can go
 #define CK_RACE_CAR_Y 190         // where your car sits on the screen
@@ -471,6 +471,7 @@ typedef struct {
     int laps, key, rep, bounce;
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
+    uint64_t hit;              // cars: the obstacles you have bumped, one bit each
 } ck_hhero;
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
 typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`

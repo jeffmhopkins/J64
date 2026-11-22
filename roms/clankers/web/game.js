@@ -769,7 +769,7 @@ function houseScene(from) {
           p.hold = 0; SND.fx.blow();
         }
         // A (or down) at a room's thing uses it; A anywhere else jumps
-        else if (k >= 0 && (hit(sl, 'a') || hit(sl, 'down'))) { useSpot(k, p, i); if (scene !== S || S.mode !== 'walk') return; }
+        else if (k >= 0 && hit(sl, 'a')) { useSpot(k, p, i); if (scene !== S || S.mode !== 'walk') return; }
         else if (hit(sl, 'a') && p.ground) { p.vy = HOUSE_JUMP; p.ground = false; SND.fx.jump(); }
       }
       p.vy += HOUSE_GRAV; p.x += p.vx; p.y += p.vy;
@@ -832,7 +832,7 @@ function houseScene(from) {
         foodArt(k, fx, fy, 3);
       });
       S.ps.forEach((p, j) => text(HOUSEART.FOODS[S.fpick[j]].name, j ? 300 : 20, 228, 8, p.m.slot ? '#8fd3ff' : '#ffd23f', j ? 'right' : 'left'));
-      hint('Stick choose   A take it   B close', 10);
+      hint('Stick choose   A take it   START leave', 10);
     }
     if (S.mode === 'cook') {   // the stove: a shelf of ingredients, the pan, the heat bar
       const ING = HOUSEART.COOK_INGR;
@@ -849,8 +849,8 @@ function houseScene(from) {
       if (S.dish) foodArt(S.dish - 1, 160, 132, 6);
       else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 132 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
-      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint('A take it', 226); }
-      else { text(HOUSEART.FOODS[ING[S.cpick[0]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? '< > choose   A add   B stir   START done' : '< > choose   A add to the pan   B close', 14); }
+      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint('A take it   START leave', 226); }
+      else { text(HOUSEART.FOODS[ING[S.cpick[0]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? '< > choose   A add   B stir   START leave' : '< > choose   A add to the pan   START leave', 14); }
     }
     if (S.mode === 'letter') {   // a big letter to read
       const L = HOUSEART.LETTERS[(S.letter + HOUSEART.LETTERS.length - 1) % HOUSEART.LETTERS.length];
@@ -861,7 +861,7 @@ function houseScene(from) {
       text('Dear heroes,', 58, 64, 10, '#ff8a8a', 'left');
       L.lines.forEach((s, r) => text(s, 60, 96 + r * 22, 10, '#fff6d8', 'left'));
       text('Love, ' + L.from, 262, 188, 10, '#ffd23f', 'right');
-      hint('A close', 226);
+      hint('START leave', 226);
     }
   };
   return S;
@@ -924,7 +924,7 @@ function drumScene(house) {
     DR.forEach((dr, k) => HOUSEART.drumPiece(g, dr, S.lit[k] / 10));
     for (const n of S.notes) { g.globalAlpha = Math.min(1, n.life / 20); K.circ(n.x, n.y, 3.5, hexStr(n.col)); K.rr(n.x + 2.5, n.y - 12, 1.6, 12, 0.5, hexStr(n.col)); g.globalAlpha = 1; }
     for (const [j, p] of S.ps.entries()) drawHeroPose(p.m, j ? 296 : 24, 222 - (p.bounce > 0 ? Math.sin(p.bounce / 10 * P) * 6 : 0), p.bounce > 0 ? 'cheer' : 'idle', S.t + j);
-    hint('Every button is a drum   START done', 14);
+    hint('Every button is a drum   START leave', 14);
   };
   return S;
 }
@@ -1017,7 +1017,7 @@ function paintScene(house) {
       K.circ(bx, by, 4, '#1b1426'); K.circ(bx, by, 3, c);
     }
     drawParticles(0);
-    hint('A up  v down  B paint  L R colour  ALL wipes  START done', 11);
+    hint('A up   v down   B paint   L R colour   START leave', 11);
   };
   return S;
 }
@@ -1141,7 +1141,7 @@ function aquaScene(house) {
     }
     g.restore();
     drawParticles(S.cam);
-    hint('Stick swim   A up   B food, open chests, poke crabs   START out', 14);
+    hint('Stick swim   A up   B feed, open, poke   START leave', 14);
   };
   return S;
 }
@@ -1150,7 +1150,7 @@ function aquaScene(house) {
 // the stick steers. Three laps; with two players the first one home wins.
 function carsScene(house) {
   const R = HOUSEART.RACE, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
-  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: 0, done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
+  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
   reset();
   S.update = function () {
     S.t += 1 / 60; stepParticles();
@@ -1164,7 +1164,7 @@ function carsScene(house) {
     S.cars.forEach((c, i) => {
       const sl = c.m.slot;
       let steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
-      let want = held(sl, 'up') || held(sl, 'a') ? 4.2 : held(sl, 'down') || held(sl, 'b') ? 1.5 : 3;
+      let want = held(sl, 'up') || held(sl, 'a') ? 3.6 : held(sl, 'down') || held(sl, 'b') ? 1.5 : 3;
       if (c.spin > 0) { c.spin--; want = 1; steer = 0; }
       c.s += (want - c.s) * 0.04;
       c.vx += (steer * 2.2 - c.vx) * 0.25;
@@ -1173,8 +1173,8 @@ function carsScene(house) {
       c.d += c.s;
       for (let k = 0; k < R.obst; k++) {
         const o = HOUSEART.raceObst(k, S.clock);
-        if (c.hit & (2 ** k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
-        c.hit |= 2 ** k;
+        if (c.hit.has(k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
+        c.hit.add(k);
         if (o.kind === 'oil') { c.spin = 40; c.s *= 0.6; SND.fx.slide(); } else { c.spin = 50; c.s = 0.6; SND.fx.clank(); }
       }
       if (!c.done && c.d >= R.len) { c.done = true; c.time = S.clock; SND.fx.gear(); if (S.win < 0) { S.win = i; SND.fx.flag(); confetti(160, 40, 40); } }
@@ -1199,7 +1199,7 @@ function carsScene(house) {
     if (S.count > 0) rimBanner(String(Math.ceil(S.count)), 20, 100, 34);
     else if (S.win < 0 && S.clock < 0.8) rimBanner('GO!', 20, 100, 34, '#49d17a', '#49d17a');
     if (S.win >= 0) rimBanner(n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)), 14, 98, 30);
-    hint('Stick steer   A faster   B brake   START out', H - 12);
+    hint('Stick steer   A faster   B brake   START leave', H - 12);
   };
   return S;
 }
@@ -1249,7 +1249,7 @@ function pianoScene(house) {
       const c = p.m.slot ? '#8fd3ff' : '#ffd23f', y = k.black ? KY.y + KY.bh - 10 : KY.y + KY.h - 12;
       g.fillStyle = c; g.beginPath(); g.moveTo(k.x, y - 8); g.lineTo(k.x - 5, y); g.lineTo(k.x + 5, y); g.fill();
     }
-    hint('Stick move   A play   B other octave   START done', 14);
+    hint('Stick move   A play   B other octave   START leave', 14);
   };
   return S;
 }

@@ -158,10 +158,13 @@ const HOUSEART = (() => {
 
   // ---- the garage race, top down: the road scrolls down, three lanes, things to dodge. Boxes and
   // circles only, so the N64 (draw_cars) draws the same picture.
-  const RACE = { len: 3200, obst: 32, lane: 40, edge: 52, carY: 190 };
+  const RACE = { len: 9600, obst: 64, lane: 40, edge: 52, carY: 190 };
   const raceObst = (i, clock) => {
-    const kind = ['cone', 'crate', 'oil', 'cone', 'car'][i % 5];
-    return { d: 320 + i * 90 + (kind === 'car' ? clock * 60 : 0), x: ((i * 7 + Math.floor(i / 4)) % 3 - 1) * RACE.lane, kind,
+    let kind = ['cone', 'crate', 'oil', 'cone', 'car'][i % 5];
+    if (i < 8 && kind === 'oil') kind = 'crate';   // the start is easy: no oil or slow cars yet
+    if (i < 16 && kind === 'car') kind = 'cone';
+    const t = Math.min(1, i / 48);   // the gaps shrink from about 260 px to 80 px, as on the N64
+    return { d: 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (kind === 'car' ? clock * 60 : 0), x: ((i * 7 + Math.floor(i / 4)) % 3 - 1) * RACE.lane, kind,
              w: kind === 'oil' ? 20 : kind === 'car' ? 18 : kind === 'crate' ? 18 : 12, h: kind === 'oil' ? 14 : kind === 'car' ? 28 : kind === 'crate' ? 18 : 12 };
   };
   const box = (g, x, y, w, h, c, a = 1) => { g.globalAlpha = a; g.fillStyle = typeof c === 'number' ? hx(c) : c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };

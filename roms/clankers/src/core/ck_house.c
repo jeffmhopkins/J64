@@ -299,7 +299,7 @@ void ck_house_update(ck_game *G) {
                 ck_sfx(G, SFX_BLOW);
             }
             // A (or down) at a room's thing uses it; A anywhere else jumps
-            else if (k >= 0 && (HIT(G, s, CK_A) || HIT(G, s, CK_DOWN))) { use_spot(G, k, p); if (G->scene != SC_HOUSE || H->mode != HM_WALK) return; }
+            else if (k >= 0 && HIT(G, s, CK_A)) { use_spot(G, k, p); if (G->scene != SC_HOUSE || H->mode != HM_WALK) return; }
             else if (HIT(G, s, CK_A) && p->ground) { p->vy = HOUSE_JUMP; p->ground = false; ck_sfx(G, SFX_JUMP); }
         }
         p->vy += HOUSE_GRAV; p->x += p->vx; p->y += p->vy;
@@ -572,7 +572,11 @@ static void aqua_update(ck_game *G) {
 void ck_race_obst(int i, float clock, float *d, float *x, int *kind, float *w, float *h) {
     static const int kinds[5] = { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CONE, OBST_CAR };
     *kind = kinds[i % 5];
-    *d = 320 + i * 90 + (*kind == OBST_CAR ? clock * 60 : 0);   // slow cars drive at 1 px a frame
+    if (i < 8 && *kind == OBST_OIL) *kind = OBST_CRATE;   // the start is easy: no oil or slow cars yet
+    if (i < 16 && *kind == OBST_CAR) *kind = OBST_CONE;
+    // the gaps shrink from about 260 px to 80 px over the first 48, then stay at 80
+    float t = i < 48 ? i / 48.0f : 1;
+    *d = 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (*kind == OBST_CAR ? clock * 60 : 0);   // slow cars drive at 1 px a frame
     *x = ((i * 7 + i / 4) % 3 - 1) * CK_RACE_LANE;
     *w = *kind == OBST_OIL ? 20 : *kind == OBST_CAR ? 18 : *kind == OBST_CRATE ? 18 : 12;
     *h = *kind == OBST_OIL ? 14 : *kind == OBST_CAR ? 28 : *kind == OBST_CRATE ? 18 : 12;
@@ -608,7 +612,7 @@ static void cars_update(ck_game *G) {
     for (int i = 0; i < H->np; i++) {
         ck_hhero *c = &H->gs[i];
         int s = c->slot, steer = dir_x(G, s);
-        float want = HELD(G, s, CK_UP) || HELD(G, s, CK_A) ? 4.2f : HELD(G, s, CK_DOWN) || HELD(G, s, CK_B) ? 1.5f : 3.0f;
+        float want = HELD(G, s, CK_UP) || HELD(G, s, CK_A) ? 3.6f : HELD(G, s, CK_DOWN) || HELD(G, s, CK_B) ? 1.5f : 3.0f;
         if (c->rep > 0) { c->rep--; want = 1; steer = 0; }
         c->s += (want - c->s) * 0.04f;
         c->vx += (steer * 2.2f - c->vx) * 0.25f;
@@ -618,8 +622,8 @@ static void cars_update(ck_game *G) {
         for (int k = 0; k < CK_RACE_OBST; k++) {
             float od, ox, w, h; int kind;
             ck_race_obst(k, H->clock, &od, &ox, &kind, &w, &h);
-            if (c->key & (1u << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;
-            c->key |= 1u << k;
+            if (c->hit & (1ull << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;
+            c->hit |= 1ull << k;
             if (kind == OBST_OIL) { c->rep = 40; c->s *= 0.6f; ck_sfx(G, SFX_SLIDE); }
             else { c->rep = 50; c->s = 0.6f; ck_sfx(G, SFX_CLANK); }
         }

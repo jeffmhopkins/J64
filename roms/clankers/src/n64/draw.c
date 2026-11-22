@@ -1477,7 +1477,7 @@ static void draw_house(const ck_game *G) {
         for (int j = 0; j < Hs->np; j++) {
             txt(F_SMALL, Hs->ps[j].slot ? ST_BLUE : ST_YELLOW, j ? 300 : 20, 228, j ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ck_foods[Hs->fpick[j]].name);
         }
-        hint(10, "Stick choose   A take it   B close");
+        hint(10, "Stick choose   A take it   START leave");
     }
     if (Hs->mode == HM_COOK) {   // the stove: a shelf of ingredients, the pan, the heat bar
         rect(0, 0, W, H, 0x0F0A19, 0.55f);
@@ -1501,10 +1501,10 @@ static void draw_house(const ck_game *G) {
         }
         rect(60, 196, 200, 10, 0x1B1426, 1);   // heat
         rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
-        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, "A take it"); }
+        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, "A take it   START leave"); }
         else {
             txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[0]]].name);
-            hint(14, Hs->npan ? "< > choose   A add   B stir   START done" : "< > choose   A add to the pan   B close");
+            hint(14, Hs->npan ? "< > choose   A add   B stir   START leave" : "< > choose   A add to the pan   START leave");
         }
     }
     if (Hs->mode == HM_LETTER) {   // a big letter to read
@@ -1518,7 +1518,7 @@ static void draw_house(const ck_game *G) {
         txt(F_MED, ST_RED, 58, 64, ALIGN_LEFT, "Dear heroes,");
         for (int r = 0; r < 3; r++) txt(F_MED, ST_CREAM, 60, 96 + r * 22, ALIGN_LEFT, "%s", L->lines[r]);
         txt(F_MED, ST_YELLOW, 262, 188, ALIGN_RIGHT, "Love, %s", L->from);
-        hint(226, "A close");
+        hint(226, "START leave");
     }
 }
 
@@ -1557,7 +1557,7 @@ static void draw_paint(const ck_game *G) {
         shape(SPR_DOT, bx, by, 3, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : p->col == CK_MURAL_CLEAR ? 0xE04F4F : 0xFFF6E6, 1);
     }
     particles(G, 0);
-    hint(11, "A up  v down  B paint  L R colour  ALL wipes  START done");
+    hint(11, "A up   v down   B paint   L R colour   START leave");
 }
 
 // The aquarium, three screens wide: two water tiles then the baked beach screen, swaying weed,
@@ -1612,7 +1612,7 @@ static void draw_aqua(const ck_game *G) {
         }
     }
     particles(G, cam);
-    hint(14, "Stick swim   A up   B food, open chests, poke crabs   START out");
+    hint(14, "Stick swim   A up   B feed, open, poke   START leave");
 }
 
 // The garage race, top down: a half of the screen per player, boxes and circles only (raceView
@@ -1683,7 +1683,7 @@ static void draw_cars(const ck_game *G) {
         else snprintf(s, sizeof s, "FINISHED  %s", clock_str((int)(Hs->gs[0].best * 60), c));
         banner(F_BIG, ST_YELLOW, 0xFFD23F, 98, 120, 30, 119, s);
     }
-    hint(H - 12, "Stick steer   A faster   B brake   START out");
+    hint(H - 12, "Stick steer   A faster   B brake   START leave");
 }
 
 // The music room's piano: the keys (lit while they sound), notes floating up, and each hero
@@ -1724,7 +1724,7 @@ static void draw_drums(const ck_game *G) {
         float bob = p->bounce > 0 ? sinf(p->bounce / 10.0f * PI) * 6 : 0;
         house_hero(G, p->slot, i ? 296 : 24, 222 - bob, p->bounce > 0 ? HP_CHEER : HP_IDLE, G->t + i, 1);
     }
-    hint(14, "Every button is a drum   START done");
+    hint(14, "Every button is a drum   START leave");
 }
 static void draw_piano(const ck_game *G) {
     const ck_house *Hs = &G->house;
@@ -1760,7 +1760,7 @@ static void draw_piano(const ck_game *G) {
         uint32_t c = p->slot ? 0x8FD3FF : 0xFFD23F;
         for (int r = 0; r < 8; r++) rect(x - r * 5 / 8.0f, y - 8 + r, r * 10 / 8.0f + 1, 1, c, 1);   // a little arrow
     }
-    hint(14, "Stick move   A play   B other octave   START done");
+    hint(14, "Stick move   A play   B other octave   START leave");
 }
 
 // ---------------------------------------------------------------------------- a frame

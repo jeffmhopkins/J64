@@ -959,7 +959,9 @@ static void test_house(void) {
     hold(G, 60, 0, 0);
     // the paint studio: fly up with A, hold B to paint, R changes colour
     walk_to(G, ck_spots[SPOT_PAINT].x);
-    press(G, CK_DOWN, 0);
+    press(G, CK_DOWN, 0);   // down no longer opens a game; A does
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_PAINT);
     int painted = 0;
     hold(G, 30, CK_A | CK_B | CK_RIGHT, 0);
@@ -992,7 +994,7 @@ static void test_house(void) {
     EXPECT_EQ_INT(painted > 0, 1);   // the wall keeps its paint
     // the aquarium: swim down and right; the beach is dry land
     walk_to(G, ck_spots[SPOT_AQUA].x);
-    press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_AQUA);
     float y0 = G->house.gs[0].y;
     hold(G, 40, CK_DOWN, 0);
@@ -1038,7 +1040,7 @@ static void test_house(void) {
     hold(G, 200, 0, 0);   // the countdown
     EXPECT_EQ_INT(G->house.count <= 0, 1);
     // a scripted driver steers into a lane that is clear ahead
-    for (int i = 0; i < 60 * 60 && G->house.win < 0; i++) {
+    for (int i = 0; i < 60 * 120 && G->house.win < 0; i++) {
         const ck_hhero *c = &G->house.gs[0];
         bool blocked[3] = { false, false, false };
         for (int k = 0; k < CK_RACE_OBST; k++) {
@@ -1054,21 +1056,21 @@ static void test_house(void) {
     }
     EXPECT_EQ_INT(G->house.win, 0);
     int bumps = 0;
-    for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].key >> k) & 1;
+    for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
     EXPECT_EQ_INT(bumps <= 4, 1);
     float good = G->house.gs[0].best;
     // a driver who never steers bumps into everything in the middle lane and is slower
     hold(G, 60 * 5, 0, 0);
     EXPECT_EQ_INT(G->house.win, -1);
-    for (int i = 0; i < 60 * 90 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
+    for (int i = 0; i < 60 * 240 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
     bumps = 0;
-    for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].key >> k) & 1;
+    for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
     EXPECT_EQ_INT(bumps >= 6, 1);
     EXPECT_EQ_INT(G->house.gs[0].best > good + 3, 1);
     press(G, CK_START, 0);
     // the piano: A plays the key under the hand, the stick moves along the keys
     walk_to(G, ck_spots[SPOT_PIANO].x);
-    press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_PIANO);
     ck_game_step(G, CK_A, 0);
     EXPECT_EQ_INT(G->nnotes, 1);
@@ -1107,7 +1109,7 @@ static void test_house(void) {
     hold(G, 60, 0, 0);
     // the bed saves this game into a slot of your choice
     walk_to(G, ck_spots[SPOT_BED].x);
-    press(G, CK_DOWN, 0);
+    press(G, CK_A, 0);
     EXPECT_EQ_INT(G->house.mode, HM_SLOTS);
     press(G, CK_DOWN, 0);
     press(G, CK_A, 0);
