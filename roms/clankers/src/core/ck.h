@@ -612,12 +612,17 @@ void ck_bug_at(const ck_blaster *B, int k, float *x, float *y);
 #define CK_RUN_HW 12              // a hero's box
 #define CK_RUN_HH 20
 #define CK_RUN_W 28               // a pipe's width
-#define CK_RUN_THEMES 5
+#define CK_RUN_THEMES 9
 #define CK_RUN_STAGE_LEN 2000.0f
 #define CK_RUN_LIVES 3
-enum { RUNCOL_PIPES, RUNCOL_PILLAR, RUNCOL_HANG };   // a gap between two pipes, a pillar from the ground, a pipe from the top
+#define CK_RUN_BOLT_LIFE 300      // bolts for an extra life (never more than CK_RUN_LIVES)
+// a gap between two pipes, a pillar from the ground, a pipe from the top, a spinning gear in the
+// air, two pipes that crush together and part again, a glitch drone that bobs and flies at you
+enum { RUNCOL_PIPES, RUNCOL_PILLAR, RUNCOL_HANG, RUNCOL_GEAR, RUNCOL_CRUSH, RUNCOL_DRONE };
+#define CK_RUN_GEAR_R 20
+#define CK_RUN_DRONE_R 10
 enum { RUN_READY, RUN_PLAY, RUN_OVER };
-typedef struct { float x, gy, gap, amp, ph; int kind; bool passed; } ck_runcol;
+typedef struct { float x, gy, gap, amp, ph, spd, pulse; int kind; bool passed; } ck_runcol;   // amp, spd: how far and fast it sways; pulse: how far a crusher's gap opens and shuts
 typedef struct { float x, y; bool on; } ck_runbolt;
 typedef struct {
     int state, stateT;
@@ -628,9 +633,13 @@ typedef struct {
     struct { float x, y, vy; int inv; bool on; } ps[2];   // on: this player joined in
     int readyT;
     int lives, score, best, bolts, gates, stage, stageT, shake;
+    int lifeT;                 // frames the extra life message shows
 } ck_jetrun;
 extern const char *const ck_run_stage_names[CK_RUN_THEMES];
-float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c);   // a column's gap middle right now (moving gaps sway)
+float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c);   // a column's gap middle (or a gear's or drone's middle) right now
+float ck_run_gap(const ck_jetrun *J, const ck_runcol *c);     // its gap's height right now (crushers open and shut)
+float ck_run_mid(const ck_runcol *c);                         // its middle across
+float ck_run_safe_y(const ck_jetrun *J, const ck_runcol *c);  // where a hero's middle should be to get by it right now
 // ---- the arcade's third cabinet (SC_BOLT): Bolt Ball. A paddle each side, a ball between: miss
 // it and the other side scores, first to CK_BOLT_WIN wins. Everyone playing presses A to say
 // ready; with two players, if only one says ready before the countdown ends, they play the

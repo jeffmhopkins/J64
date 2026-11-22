@@ -2232,12 +2232,24 @@ static void run_sky(uint32_t top, uint32_t bot) { for (int k = 0; k < 12; k++) r
 static float run_lx(int k, float step, float sc, float par, float span) { return fmodf(fmodf(k * step - sc * par, span) + span, span) - 60; }
 typedef struct { uint32_t body, light, dark, lip, accent; } run_pal;
 static const run_pal run_pals[CK_RUN_THEMES] = {
-    { 0x7D9A8A, 0xA5C4B2, 0x5F7A6C, 0x8FB09C, 0xC0703A },
-    { 0xB0663A, 0xE0925A, 0x7A4026, 0xC9784A, 0xFFD23F },
-    { 0x2A2A48, 0x5AD1FF, 0x18182E, 0x3A3A60, 0xFF5AC8 },
-    { 0x6A7A8E, 0x9AAABE, 0x4A5868, 0x7A8AA0, 0xFFD23F },
-    { 0xD8DCE6, 0xFFFFFF, 0x9AA0B0, 0xE6E9F0, 0xFF5A5A },
+    { 0x7D9A8A, 0xA5C4B2, 0x5F7A6C, 0x8FB09C, 0xC0703A },   // junk pipes
+    { 0xB0663A, 0xE0925A, 0x7A4026, 0xC9784A, 0xFFD23F },   // sunset factory
+    { 0xFF8FC7, 0xFFFFFF, 0xD0609A, 0xFFB8DC, 0x5AD1FF },   // candy clouds
+    { 0xA8D8F0, 0xE8F8FF, 0x78A8C8, 0xC8E8F8, 0xFFFFFF },   // ice peaks
+    { 0x2A2A48, 0x5AD1FF, 0x18182E, 0x3A3A60, 0xFF5AC8 },   // neon night
+    { 0x6A7A8E, 0x9AAABE, 0x4A5868, 0x7A8AA0, 0xFFD23F },   // storm clouds
+    { 0x5A4A48, 0x8A7A70, 0x3A2E2C, 0x6A5A56, 0xFF6A2A },   // lava caves
+    { 0xD8DCE6, 0xFFFFFF, 0x9AA0B0, 0xE6E9F0, 0xFF5A5A },   // star lanes
+    { 0x2A1A3A, 0x49F08A, 0x1A0E28, 0x3A2A50, 0xC28BFF },   // glitch zone
 };
+enum { TH_JUNK, TH_SUNSET, TH_CANDY, TH_ICE, TH_NEON, TH_STORM, TH_LAVA, TH_STARS, TH_GLITCH };
+// a mountain or a stalactite out of stacked strips: w wide at its base y, h tall, pointing up (or down)
+static void run_tri(float xc, float y, float w, float h, uint32_t col, bool down) {
+    for (int k = 0; k < 8; k++) {
+        float ww = w * (1 - k / 8.0f), hh = h / 8;
+        rect(xc - ww / 2, down ? y + k * hh : y - (k + 1) * hh, ww, hh + 0.5f, col, 1);
+    }
+}
 static void run_bg(int th, float sc, float t) {
     switch (th) {
     case 0:   // junk pipes: the zone's own blue sky, clouds and hills
@@ -2272,7 +2284,7 @@ static void run_bg(int th, float sc, float t) {
         for (int k = 0; k < 14; k++) rect(run_lx(k, 28, sc, 1, 392), CK_RUN_FLOOR + 6, 14, 4, 0x5A3048, 1);   // rail sleepers
         rect(0, CK_RUN_FLOOR + 5, W, 2, 0x9A6A6A, 1); rect(0, CK_RUN_FLOOR + 11, W, 2, 0x9A6A6A, 1);
         break;
-    case 2:   // neon night: stars, a moon, a city with lit windows and glowing signs
+    case TH_NEON:   // neon night: stars, a moon, a city with lit windows and glowing signs
         run_sky(0x08081E, 0x3A1A5A);
         for (int k = 0; k < 40; k++) shape(SPR_DOT, run_lx(k, 37, sc, 0.03f, 400), 6 + run_hash(k) * 110, 0.6f + run_hash(k + 3) * 0.8f, 0xFFFFFF, 0.4f + 0.6f * fabsf(sinf(t * 2 + k)));
         shape(SPR_DOT, 60, 44, 16, 0xFFF6D8, 0.2f); shape(SPR_DOT, 60, 44, 12, 0xF0E8D0, 1); shape(SPR_DOT, 56, 41, 2.5f, 0xD8D0B8, 1); shape(SPR_DOT, 64, 48, 1.8f, 0xD8D0B8, 1);
@@ -2293,7 +2305,7 @@ static void run_bg(int th, float sc, float t) {
         rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x14142A, 1); rect(0, CK_RUN_FLOOR, W, 2, 0x5AD1FF, 1);
         for (int k = 0; k < 10; k++) rect(run_lx(k, 40, sc, 1, 400), CK_RUN_FLOOR + 12, 20, 2, 0xFFE066, 0.8f);   // road markings
         break;
-    case 3: {   // storm clouds: grey sky, rolling clouds, rain and lightning
+    case TH_STORM: {   // storm clouds: grey sky, rolling clouds, rain and lightning
         float cyc = fmodf(t, 4.3f);
         run_sky(0x2E3440, 0x6A7488);
         if (cyc < 0.25f) {   // lightning
@@ -2311,7 +2323,54 @@ static void run_bg(int th, float sc, float t) {
         rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x2A3038, 1); rect(0, CK_RUN_FLOOR, W, 2, 0x8A9AB0, 1);
         for (int k = 0; k < 6; k++) rect(run_lx(k, 70, sc, 1, 420), CK_RUN_FLOOR + 8 + (k % 2) * 6, 26, 2, 0x8A9AB0, 0.5f);   // puddles
         break; }
-    default:   // star lanes: deep space, three layers of stars, a ringed planet, a moon to fly over
+    case TH_CANDY:   // candy clouds: a pink sky, puffy clouds, candy hills and lollipops
+        run_sky(0xFFB0D8, 0xFFE8C8);
+        for (int k = 0; k < 6; k++) { float x = run_lx(k, 100, sc, 0.12f, 600), y = 30 + run_hash(k) * 50; shape(SPR_DOT, x, y, 16, 0xFFFFFF, 0.9f); shape(SPR_DOT, x + 16, y - 6, 18, 0xFFF0F8, 0.9f); shape(SPR_DOT, x + 32, y, 14, 0xFFFFFF, 0.9f); }
+        for (int k = 0; k < 7; k++) { float x = run_lx(k, 90, sc, 0.3f, 630); shape(SPR_DOT, x, CK_RUN_FLOOR + 10, 40 + run_hash(k + 4) * 16, k % 2 ? 0xC28BFF : 0xFF8FC7, 1); shape(SPR_DOT, x - 10, CK_RUN_FLOOR - 18, 8, 0xFFFFFF, 0.5f); }
+        for (int k = 0; k < 6; k++) {   // lollipops
+            float x = run_lx(k, 110, sc, 0.6f, 660), h = 40 + run_hash(k + 9) * 30;
+            rect(x - 1.5f, CK_RUN_FLOOR - h, 3, h, 0xFFFFFF, 1);
+            shape(SPR_DOT, x, CK_RUN_FLOOR - h, 12, k % 3 == 0 ? 0xFF5A8A : k % 3 == 1 ? 0x5AD1FF : 0xFFD23F, 1);
+            shape(SPR_DOT, x - 2, CK_RUN_FLOOR - h - 2, 6, 0xFFFFFF, 0.6f); shape(SPR_DOT, x - 2, CK_RUN_FLOOR - h - 2, 3, k % 3 == 0 ? 0xFF5A8A : k % 3 == 1 ? 0x5AD1FF : 0xFFD23F, 1);
+        }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0xFFF0F6, 1);
+        for (int k = 0; k < 16; k++) rect(run_lx(k, 24, sc, 1, 384), CK_RUN_FLOOR, 12, H - CK_RUN_FLOOR, 0xFF8FC7, 1);   // candy cane stripes
+        rect(0, CK_RUN_FLOOR, W, 3, 0xFFFFFF, 1);
+        break;
+    case TH_ICE:   // ice peaks: snowy mountains, far and near, and snow falling
+        run_sky(0x5A98D8, 0xD8F0FF);
+        for (int k = 0; k < 6; k++) { float x = run_lx(k, 110, sc, 0.15f, 660) + 50, w = 120 + run_hash(k) * 60, h = 90 + run_hash(k + 3) * 50; run_tri(x, CK_RUN_FLOOR, w, h, 0xA8C8E8, false); run_tri(x, CK_RUN_FLOOR - h * 0.7f, w * 0.3f, h * 0.3f, 0xFFFFFF, false); }
+        for (int k = 0; k < 6; k++) { float x = run_lx(k, 130, sc, 0.4f, 780) + 50, w = 100 + run_hash(k + 20) * 50, h = 60 + run_hash(k + 23) * 40; run_tri(x, CK_RUN_FLOOR, w, h, 0x7898C0, false); run_tri(x, CK_RUN_FLOOR - h * 0.72f, w * 0.28f, h * 0.28f, 0xF0F8FF, false); }
+        for (int k = 0; k < 40; k++) { float fx = fmodf(k * 41 - t * 20 - sc * 0.5f + 4000, 330) - 5, fy = fmodf(k * 29 + t * (25 + (k % 3) * 10), 240); shape(SPR_DOT, fx + sinf(t * 2 + k) * 3, fy, 1 + (k % 3) * 0.5f, 0xFFFFFF, 0.9f); }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0xF0F8FF, 1); rect(0, CK_RUN_FLOOR, W, 3, 0xFFFFFF, 1);
+        for (int k = 0; k < 8; k++) { float x = run_lx(k, 50, sc, 1, 400); rect(x, CK_RUN_FLOOR + 8 + (k % 2) * 6, 18, 2, 0xC8E0F0, 1); }
+        break;
+    case TH_LAVA:   // lava caves: stalactites, a red glow, embers rising off a lava floor
+        run_sky(0x140606, 0x4A1A10);
+        for (int k = 0; k < 6; k++) shape(SPR_DOT, run_lx(k, 110, sc, 0.1f, 660), 120 + run_hash(k) * 60, 40, 0xFF5A2A, 0.12f);
+        for (int k = 0; k < 9; k++) { float x = run_lx(k, 50, sc, 0.25f, 450); run_tri(x, 0, 30 + run_hash(k) * 20, 40 + run_hash(k + 2) * 40, 0x2A1410, true); }
+        for (int k = 0; k < 7; k++) { float x = run_lx(k, 80, sc, 0.5f, 560); run_tri(x, 0, 24 + run_hash(k + 30) * 14, 24 + run_hash(k + 31) * 30, 0x3A1E18, true); run_tri(x + 20, CK_RUN_FLOOR, 30, 30 + run_hash(k + 33) * 30, 0x3A1E18, false); }
+        for (int k = 0; k < 24; k++) { float u = fmodf(t * 0.3f + run_hash(k), 1); shape(SPR_DOT, run_lx(k, 31, sc, 0.8f, 380) + sinf(t * 3 + k) * 4, CK_RUN_FLOOR - u * 200, 1.2f, k % 2 ? 0xFFB040 : 0xFF6A2A, 1 - u); }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0xFF6A2A, 1);
+        for (int x = 0; x < W; x += 8) rect(x, CK_RUN_FLOOR - 2 + sinf(x * 0.15f + t * 3 + sc * 0.05f) * 2, 8, 4, 0xFFB040, 1);
+        for (int k = 0; k < 6; k++) { float u = fmodf(t * 0.8f + run_hash(k + 50), 1); shape(SPR_DOT, run_lx(k, 64, sc, 1, 384), CK_RUN_FLOOR + 10, 2 + u * 3, 0xFFD23F, 1 - u); }   // bubbles
+        break;
+    case TH_GLITCH: {   // glitch zone: a purple grid, glitching blocks, a digital floor
+        rect(0, 0, W, H, 0x0E0618, 1);
+        for (int y = 10; y < CK_RUN_FLOOR; y += 20) rect(0, y, W, 1, 0x2A1240, 1);
+        for (int k = 0; k < 12; k++) rect(run_lx(k, 32, sc, 0.5f, 384) + 60, 0, 1, CK_RUN_FLOOR, 0x2A1240, 1);
+        int tick = (int)(t * 8);
+        for (int k = 0; k < 10; k++) {   // blocks that flicker in and out
+            float h1 = run_hash(tick * 13 + k), h2 = run_hash(tick * 7 + k * 3);
+            if (h1 < 0.5f) continue;
+            rect(h2 * 300, run_hash(k * 5 + tick) * 200, 10 + h1 * 30, 3 + h2 * 6, k % 2 ? 0x49F08A : 0xFF5AC8, 0.35f);
+        }
+        for (int k = 0; k < 8; k++) { float x = run_lx(k, 80, sc, 0.35f, 640); rect(x, CK_RUN_FLOOR - 50 - run_hash(k) * 40, 40, 90, 0x1A0E28, 1); rect(x + 4, CK_RUN_FLOOR - 46 - run_hash(k) * 40, 32, 2, 0x49F08A, 0.5f + 0.5f * sinf(t * 5 + k)); }
+        rect(0, CK_RUN_FLOOR, W, H - CK_RUN_FLOOR, 0x1A0E28, 1); rect(0, CK_RUN_FLOOR, W, 2, 0x49F08A, 1);
+        for (int k = 0; k < 14; k++) rect(run_lx(k, 28, sc, 1, 392), CK_RUN_FLOOR + 6 + (k % 3) * 5, 6, 4, k % 2 ? 0xC28BFF : 0x49F08A, 0.6f);
+        if (run_hash(tick) > 0.9f) rect(0, run_hash(tick + 1) * 200, W, 6, 0xFFFFFF, 0.15f);   // a glitch flicker
+        break; }
+    case TH_STARS:   // star lanes: deep space, three layers of stars, a ringed planet, a moon to fly over
         rect(0, 0, W, H, 0x05030F, 1);
         { float mx = 70 - fmodf(sc * 0.01f, 400); shape(SPR_DOT, mx, 150, 9, 0x8FA0C0, 1); shape(SPR_DOT, mx - 2, 148, 3, 0xB8C8E0, 1); }   // a little far moon
         for (int L = 0; L < 3; L++) for (int k = 0; k < 24; k++) shape(SPR_DOT, run_lx(k + L * 40, 23 + L * 7, sc, 0.04f + L * 0.12f, 400), run_hash(k * 3 + L * 100) * 200, 0.5f + L * 0.4f, L == 2 ? 0xFFFFFF : 0xB8C0E0, 0.5f + L * 0.25f);
@@ -2325,11 +2384,11 @@ static void run_bg(int th, float sc, float t) {
 static void run_pipe(float x, float y0, float y1, float lipY, const run_pal *P, int th, float t) {
     if (y1 <= y0) return;
     rect(x + 2, y0, CK_RUN_W - 4, y1 - y0, P->body, 1);
-    rect(x + 5, y0, 3, y1 - y0, P->light, th == 2 ? 0.8f : 1);
+    rect(x + 5, y0, 3, y1 - y0, P->light, th == TH_NEON || th == TH_GLITCH ? 0.8f : 1);
     rect(x + CK_RUN_W - 8, y0, 4, y1 - y0, P->dark, 1);
     rect(x - 2, lipY, CK_RUN_W + 4, 10, P->lip, 1);
     rect(x - 2, lipY, CK_RUN_W + 4, 2, P->light, 0.7f);
-    rect(x + 6, lipY + 4, 8, 3, P->accent, th == 4 ? (sinf(t * 5 + x) > 0 ? 1 : 0.3f) : 1);
+    rect(x + 6, lipY + 4, 8, 3, P->accent, th == TH_STARS || th == TH_GLITCH ? (sinf(t * 5 + x) > 0 ? 1 : 0.3f) : 1);
     shape(SPR_DOT, x + 2, lipY + 5, 1.3f, P->dark, 1); shape(SPR_DOT, x + CK_RUN_W - 2, lipY + 5, 1.3f, P->dark, 1);
 }
 static void draw_jetrun(const ck_game *G) {
@@ -2352,10 +2411,28 @@ static void draw_jetrun(const ck_game *G) {
                 rect(x + 6, y + 4, CK_RUN_W - 12, 4, j % 2 ? P->light : P->body, 1);
             }
             rect(x - 2, gy - 3, CK_RUN_W + 4, 4, P->accent, 1);
+        } else if (c->kind == RUNCOL_GEAR) {   // a spinning gear
+            float mx = ck_run_mid(c) - sc, a = t * 2.5f + c->ph;
+            shape(SPR_DOT, mx, gy, CK_RUN_GEAR_R - 3, P->dark, 1);
+            for (int k = 0; k < 8; k++) shape(SPR_DOT, mx + cosf(a + k * 0.785f) * (CK_RUN_GEAR_R - 3), gy + sinf(a + k * 0.785f) * (CK_RUN_GEAR_R - 3), 4, P->body, 1);
+            shape(SPR_DOT, mx, gy, CK_RUN_GEAR_R - 7, P->body, 1);
+            for (int k = 0; k < 3; k++) line(mx, gy, mx + cosf(a + k * 2.09f) * 10, gy + sinf(a + k * 2.09f) * 10, 2, P->dark, 1);
+            shape(SPR_DOT, mx, gy, 4, P->accent, 1);
+        } else if (c->kind == RUNCOL_DRONE) {   // a glitch drone: a body, two eyes, a whirring rotor
+            float mx = ck_run_mid(c) - sc;
+            shape(SPR_DOT, mx, gy, CK_RUN_DRONE_R, 0xC23A6A, 1);
+            shape(SPR_DOT, mx - 1, gy + 1, CK_RUN_DRONE_R - 3, 0xFF5A8A, 1);
+            shape(SPR_DOT, mx - 4, gy - 1, 2.5f, 0xFFFFFF, 1); shape(SPR_DOT, mx + 2, gy - 1, 2.5f, 0xFFFFFF, 1);
+            shape(SPR_DOT, mx - 5, gy - 1, 1.2f, 0x1B1426, 1); shape(SPR_DOT, mx + 1, gy - 1, 1.2f, 0x1B1426, 1);
+            rect(mx - 1, gy - CK_RUN_DRONE_R - 4, 2, 4, 0x9AA1B0, 1);
+            float rw = 6 + 6 * fabsf(sinf(t * 30 + c->ph));
+            rect(mx - rw, gy - CK_RUN_DRONE_R - 5, rw * 2, 2, 0xE6E6F0, 1);
         } else {
-            float top = c->kind == RUNCOL_HANG ? gy : gy - c->gap / 2;
+            float gap = ck_run_gap(J, c), top = c->kind == RUNCOL_HANG ? gy : gy - gap / 2;
             run_pipe(x, 0, top, top - 10, P, th, t);
-            if (c->kind == RUNCOL_PIPES) run_pipe(x, gy + c->gap / 2, CK_RUN_FLOOR, gy + c->gap / 2, P, th, t);
+            if (c->kind != RUNCOL_HANG) run_pipe(x, gy + gap / 2, CK_RUN_FLOOR, gy + gap / 2, P, th, t);
+            if (c->kind == RUNCOL_CRUSH)   // hazard stripes on the crushing ends
+                for (int k = 0; k < 4; k++) { rect(x - 2 + k * 8, top - 10, 4, 10, 0xFFD23F, 1); rect(x - 2 + k * 8, gy + gap / 2, 4, 10, 0xFFD23F, 1); }
             if (c->amp) { shape(SPR_DOT, x + CK_RUN_W / 2, top - 5, 2, 0x5AD1FF, 0.6f + 0.4f * sinf(t * 8)); }   // a swaying gap's motor light
         }
     }
@@ -2388,6 +2465,7 @@ static void draw_jetrun(const ck_game *G) {
         txt(F_SMALL, ST_CREAM, W / 2, 94 - (1 - k) * 30, ALIGN_CENTER, "%s", s);
         txt(F_MED, ST_YELLOW, W / 2, 112 - (1 - k) * 30, ALIGN_CENTER, "%s", ck_run_stage_names[th]);
     }
+    if (J->lifeT > 0) banner(F_MED, ST_GREEN, 0x49D17A, 40, 120, 20, 54, "EXTRA LIFE!");
     dark_panel(4, 4, 62, 15);
     blit_o(SPR_BOLT, 0, 13, 11.5f, (bopt){ .sx = 4 / 4.2f, .sy = 4 / 4.2f });
     txt(F_MED, ST_PLAIN, 20, 16, ALIGN_LEFT, "x%d", J->bolts);

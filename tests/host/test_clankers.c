@@ -1572,6 +1572,7 @@ static void test_house(void) {
     hold(G, CK_RUN_WAIT, 0, 0);
     EXPECT_EQ_INT(Jr->state, RUN_PLAY);
     EXPECT_EQ_INT(Jr->ps[1].on, 0);
+    EXPECT_EQ_INT(Jr->speed < 1.3f, 1);   // an easy start
     float jx0 = Jr->ps[0].x;   // left and right move across the screen
     hold(G, 20, CK_RIGHT, 0);
     EXPECT_EQ_INT(Jr->ps[0].x > jx0 + 30, 1);
@@ -1584,7 +1585,7 @@ static void test_house(void) {
     EXPECT_EQ_INT(fabsf(Jr->ps[0].vy) < 0.2f, 1);   // letting go hovers
     // a pipe right at player 1 with its gap far below: a bump
     ck_runcol *rc = &Jr->col[0];
-    *rc = (ck_runcol){ Jr->scroll + CK_RUN_X - CK_RUN_W / 2, CK_RUN_FLOOR - 40, 60, 0, 0, RUNCOL_PIPES, true };
+    *rc = (ck_runcol){ .x = Jr->scroll + CK_RUN_X - CK_RUN_W / 2, .gy = CK_RUN_FLOOR - 40, .gap = 60, .spd = 1.6f, .kind = RUNCOL_PIPES, .passed = true };
     Jr->ps[0].y = 30; Jr->ps[1].y = 30; Jr->ps[0].inv = Jr->ps[1].inv = 0;
     Jr->ps[1].inv = 999;   // only player 1 takes it
     ck_game_step(G, 0, 0);
@@ -1595,15 +1596,44 @@ static void test_house(void) {
     rc->x = Jr->scroll + CK_RUN_X + 30; rc->gy = 120; rc->passed = false; rc->gap = 70;
     Jr->ps[0].y = 110; Jr->ps[0].inv = 0;
     int sc0 = Jr->score;
-    hold(G, 60, 0, 0);
+    hold(G, 90, 0, 0);
     EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES - 1);
     EXPECT_EQ_INT(rc->passed, 1);
     EXPECT_EQ_INT(Jr->score >= sc0 + 10, 1);
-    // a bolt
+    // a bolt; every 300th gives a life back, never more than three
     Jr->bolt[0] = (ck_runbolt){ Jr->scroll + CK_RUN_X, Jr->ps[0].y + CK_RUN_HH / 2, true };
     int b0 = Jr->bolts;
     ck_game_step(G, 0, 0);
     EXPECT_EQ_INT(Jr->bolts, b0 + 1);
+    int lv0 = Jr->lives;
+    Jr->bolts = CK_RUN_BOLT_LIFE - 1;
+    Jr->bolt[0] = (ck_runbolt){ Jr->scroll + CK_RUN_X, Jr->ps[0].y + CK_RUN_HH / 2, true };
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(Jr->lives, lv0 + 1);
+    EXPECT_EQ_INT(Jr->lifeT > 0, 1);
+    Jr->bolts = CK_RUN_BOLT_LIFE * 2 - 1;   // already at three: no more
+    Jr->bolt[0] = (ck_runbolt){ Jr->scroll + CK_RUN_X, Jr->ps[0].y + CK_RUN_HH / 2, true };
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES);
+    Jr->lives = lv0;
+    // a spinning gear in the air knocks a hero flying into it; a crusher's gap opens and shuts; a drone comes at you
+    *rc = (ck_runcol){ .x = Jr->scroll + CK_RUN_X - CK_RUN_W / 2, .gy = Jr->ps[0].y + CK_RUN_HH / 2, .gap = 0, .spd = 1.6f, .kind = RUNCOL_GEAR, .passed = true };
+    Jr->ps[0].inv = 0;
+    ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(Jr->lives, lv0 - 1);
+    Jr->lives = lv0;
+    float sy = ck_run_safe_y(Jr, rc);
+    EXPECT_EQ_INT(fabsf(sy - rc->gy) > CK_RUN_GEAR_R + CK_RUN_HH / 2, 1);   // the safe way round is clear of it
+    *rc = (ck_runcol){ .x = Jr->scroll + 200, .gy = 120, .gap = 80, .pulse = 24, .spd = 1.6f, .kind = RUNCOL_CRUSH, .passed = true };
+    float gmin = 999, gmax = 0;
+    for (int i = 0; i < 180; i++) { ck_game_step(G, 0, 0); gmin = fminf(gmin, ck_run_gap(Jr, rc)); gmax = fmaxf(gmax, ck_run_gap(Jr, rc)); }
+    EXPECT_EQ_INT(gmax - gmin > 40, 1);
+    EXPECT_EQ_INT(gmin >= 50, 1);   // never too tight to get through
+    *rc = (ck_runcol){ .x = Jr->scroll + 300, .gy = 120, .amp = 20, .spd = 2.4f, .kind = RUNCOL_DRONE, .passed = true };
+    float dx0 = rc->x - Jr->scroll;
+    hold(G, 30, 0, 0);
+    EXPECT_EQ_INT(rc->x - Jr->scroll < dx0 - Jr->speed * 30 - 10, 1);
+    rc->x = -1000;
     // the next stage: new scenery, a life back
     Jr->scroll = CK_RUN_STAGE_LEN * 2 - 1;
     for (int k = 0; k < CK_RUN_COLS; k++) Jr->col[k].x = -1000;
@@ -1612,9 +1642,9 @@ static void test_house(void) {
     EXPECT_EQ_INT(Jr->stage, 2);
     EXPECT_EQ_INT(Jr->stageT > 0, 1);
     EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES);
-    // a pilot that steers for each gap gets through three more stages without a bump: the gaps are fair
-    int lives = Jr->lives, startStage = Jr->stage;
-    for (int f = 0; f < 60 * 200 && Jr->stage < startStage + 3 && Jr->state == RUN_PLAY; f++) {
+    // a pilot that steers for each gap gets through six more stages: the gaps are fair
+    int lives = Jr->lives, startStage = Jr->stage, pbumps = 0;
+    for (int f = 0; f < 60 * 400 && Jr->stage < startStage + 6 && Jr->state == RUN_PLAY; f++) {
         float hx = Jr->scroll + CK_RUN_X, target = 110;
         const ck_runcol *next = NULL;
         for (int k = 0; k < CK_RUN_COLS; k++) {
@@ -1622,16 +1652,15 @@ static void test_house(void) {
             if (c->x + CK_RUN_W < hx - CK_RUN_HW || (next && next->x < c->x)) continue;
             next = c;
         }
-        if (next) {
-            float gy = ck_run_gap_y(Jr, next);
-            target = next->kind == RUNCOL_PILLAR ? gy - 40 : next->kind == RUNCOL_HANG ? gy + 40 : gy;
-        }
+        if (next) target = ck_run_safe_y(Jr, next);
         uint16_t b[2];
         for (int i = 0; i < 2; i++) { float c = Jr->ps[i].y + CK_RUN_HH / 2; b[i] = c > target + 3 ? CK_UP : c < target - 3 ? CK_DOWN : 0; }
+        int sh = Jr->shake;
         ck_game_step(G, b[0], b[1]);
+        if (Jr->shake > sh) { pbumps++; for (int k = 0; k < CK_RUN_COLS; k++) if (fabsf(ck_run_mid(&Jr->col[k]) - hx) < 40) printf("  bump: kind %d stage %d\n", Jr->col[k].kind, Jr->stage); }
     }
-    printf("  jet run: stage %d, %d gates, %d bolts, %d lives lost by the pilot\n", Jr->stage, Jr->gates, Jr->bolts, lives - Jr->lives + (Jr->stage - startStage) / 2);
-    EXPECT_EQ_INT(Jr->stage, startStage + 3);
+    printf("  jet run: stage %d, %d gates, %d bolts, %d bumps for the pilot\n", Jr->stage, Jr->gates, Jr->bolts, pbumps); (void)lives;
+    EXPECT_EQ_INT(Jr->stage, startStage + 6);
     EXPECT_EQ_INT(Jr->state, RUN_PLAY);
     // left alone it all ends: game over, the best kept, A starts again
     for (int f = 0; f < 60 * 300 && Jr->state == RUN_PLAY; f++) ck_game_step(G, 0, 0);

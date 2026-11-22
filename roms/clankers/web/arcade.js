@@ -613,35 +613,68 @@ function boltScene(house) {
 }
 
 // ---- Jet Run: the long version of the jetpack zones, five sceneries (ck_arcade.c ck_run_update, draw.c draw_jetrun)
-const RUN = { COLS: 6, BOLTS: 18, FLOOR: 214, X: 64, HW: 12, HH: 20, W: 28, THEMES: 5, STAGE: 2000, LIVES: 3,
-  NAMES: ['JUNK PIPES', 'SUNSET FACTORY', 'NEON NIGHT', 'STORM CLOUDS', 'STAR LANES'],
-  PALS: [[0x7D9A8A, 0xA5C4B2, 0x5F7A6C, 0x8FB09C, 0xC0703A], [0xB0663A, 0xE0925A, 0x7A4026, 0xC9784A, 0xFFD23F], [0x2A2A48, 0x5AD1FF, 0x18182E, 0x3A3A60, 0xFF5AC8],
-    [0x6A7A8E, 0x9AAABE, 0x4A5868, 0x7A8AA0, 0xFFD23F], [0xD8DCE6, 0xFFFFFF, 0x9AA0B0, 0xE6E9F0, 0xFF5A5A]] };
+const RUN = { COLS: 6, BOLTS: 18, FLOOR: 214, X: 64, HW: 12, HH: 20, W: 28, THEMES: 9, STAGE: 2000, LIVES: 3, BOLT_LIFE: 300, GEAR_R: 20, DRONE_R: 10,
+  NAMES: ['JUNK PIPES', 'SUNSET FACTORY', 'CANDY CLOUDS', 'ICE PEAKS', 'NEON NIGHT', 'STORM CLOUDS', 'LAVA CAVES', 'STAR LANES', 'GLITCH ZONE'],
+  PALS: [[0x7D9A8A, 0xA5C4B2, 0x5F7A6C, 0x8FB09C, 0xC0703A], [0xB0663A, 0xE0925A, 0x7A4026, 0xC9784A, 0xFFD23F], [0xFF8FC7, 0xFFFFFF, 0xD0609A, 0xFFB8DC, 0x5AD1FF],
+    [0xA8D8F0, 0xE8F8FF, 0x78A8C8, 0xC8E8F8, 0xFFFFFF], [0x2A2A48, 0x5AD1FF, 0x18182E, 0x3A3A60, 0xFF5AC8], [0x6A7A8E, 0x9AAABE, 0x4A5868, 0x7A8AA0, 0xFFD23F],
+    [0x5A4A48, 0x8A7A70, 0x3A2E2C, 0x6A5A56, 0xFF6A2A], [0xD8DCE6, 0xFFFFFF, 0x9AA0B0, 0xE6E9F0, 0xFF5A5A], [0x2A1A3A, 0x49F08A, 0x1A0E28, 0x3A2A50, 0xC28BFF]] };
+const TH = { JUNK: 0, SUNSET: 1, CANDY: 2, ICE: 3, NEON: 4, STORM: 5, LAVA: 6, STARS: 7, GLITCH: 8 };
 const runHash = k => { let x = Math.imul(k, 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; return (x & 1023) / 1023; };
 const runMix = (a, b, t) => { const c = s => ((a >> s) & 255) + Math.trunc((((b >> s) & 255) - ((a >> s) & 255)) * t); return (c(16) << 16) | (c(8) << 8) | c(0); };
+// a mountain or stalactite out of stacked strips (run_tri)
+const runTri = (xc, y, w, h, col, down) => { for (let k = 0; k < 8; k++) { const ww = w * (1 - k / 8), hh = h / 8; aBox(xc - ww / 2, down ? y + k * hh : y - (k + 1) * hh, ww, hh + 0.5, col); } };
 const runLx = (k, step, sc, par, span) => (((k * step - sc * par) % span) + span) % span - 60;
 function runScene(house) {
   const R = RUN, S = { song: 'jetrun', t: 0, best: 0 };
-  const level = () => Math.min(S.stage, 8);
-  const gapY = c => c.gy + c.amp * Math.sin(S.t * 1.6 + c.ph);
-  const reset = () => Object.assign(S, { state: 'ready', stateT: 0, scroll: 0, speed: 0, t: 0, nextX: 360, lastGy: 110, lives: R.LIVES, score: 0, bolts: 0, gates: 0, stage: 0, stageT: 0, shake: 0,
+  const level = () => Math.min(S.stage, 9);
+  const gapY = c => c.gy + c.amp * Math.sin(S.t * c.spd + c.ph);
+  const gapH = c => c.gap + c.pulse * Math.sin(S.t * 2.2 + c.ph);   // crushers open and shut
+  const mid = c => c.x + R.W / 2, radius = c => c.kind === 'gear' ? R.GEAR_R : R.DRONE_R;
+  const safeY = c => {   // where a hero's middle should be to get by it (ck_run_safe_y)
+    const gy = gapY(c);
+    if (c.kind === 'pillar') return gy - 40;
+    if (c.kind === 'hang') return gy + 40;
+    if (c.kind === 'gear' || c.kind === 'drone') { const r = radius(c), up = gy - r - 14, dn = R.FLOOR - (gy + r); return up > dn ? (14 + gy - r) / 2 : (gy + r + R.FLOOR) / 2; }
+    return gy;
+  };
+  const hitDir = (c, hx, top, bot) => {   // which way column c knocks a hero's box, or 0 (run_hit)
+    const gy = gapY(c);
+    if (c.kind === 'gear' || c.kind === 'drone') {
+      const r = radius(c) - 2, mx = mid(c), nx = clamp(mx, hx, hx + R.HW), ny = clamp(gy, top, bot);
+      if ((nx - mx) ** 2 + (ny - gy) ** 2 > r * r) return 0;
+      return (top + bot) / 2 < gy ? -1 : 1;
+    }
+    if (hx + R.HW < c.x + 3 || hx > c.x + R.W - 3) return 0;
+    const gap = gapH(c);
+    if (c.kind === 'pillar') return bot > gy ? -1 : 0;
+    if (c.kind === 'hang') return top < gy ? 1 : 0;
+    return top < gy - gap / 2 ? 1 : bot > gy + gap / 2 ? -1 : 0;
+  };
+  const reset = () => Object.assign(S, { state: 'ready', stateT: 0, scroll: 0, speed: 0, t: 0, nextX: 360, lastGy: 110, lives: R.LIVES, score: 0, bolts: 0, gates: 0, stage: 0, stageT: 0, shake: 0, lifeT: 0,
     col: [...Array(R.COLS)].map(() => ({ x: -1000 })), bolt: [...Array(R.BOLTS)].map(() => ({ on: false, x: 0, y: 0 })), ps: [0, 1].map(i => ({ x: R.X, y: 80 + i * 50, vy: 0, inv: 0, on: false })), readyT: 0 });
   reset();
   const spawn = () => {
     const c = S.col.find(c => c.x < S.scroll - 60); if (!c) return;
-    const lv = level(), r = Math.random();
-    c.x = S.nextX; c.passed = false; c.gap = Math.max(84 - lv * 3, 60);
-    c.kind = S.stage >= 1 && r < 0.18 ? 'pillar' : S.stage >= 2 && r < 0.32 ? 'hang' : 'pipes';
-    const space = Math.max(150 - lv * 6, 110), reach = (space - R.W - R.HW) / Math.max(S.speed, 1.6) * 1.4;
-    c.gy = clamp(50 + Math.random() * (R.FLOOR - 100), S.lastGy - reach, S.lastGy + reach);
-    c.amp = S.stage >= 1 && Math.random() < 0.25 + lv * 0.05 ? 12 + Math.random() * (8 + lv * 2) : 0;
-    if (c.amp) c.gy = clamp(c.gy, 40 + c.amp, R.FLOOR - 40 - c.amp);
-    c.ph = Math.random() * 6.28;
-    S.lastGy = c.kind === 'pillar' ? c.gy - 40 : c.kind === 'hang' ? c.gy + 40 : c.gy;
-    S.nextX += space;
+    const lv = level(), r = Math.random(), st = S.stage;
+    c.x = S.nextX; c.passed = false; c.gap = Math.max(86 - lv * 3, 60);
+    c.kind = st >= 1 && r < 0.14 ? 'pillar' : st >= 2 && r < 0.26 ? 'hang' : st >= 2 && r < 0.40 ? 'gear' : st >= 3 && r < 0.52 ? 'crush' : st >= 4 && r < 0.64 ? 'drone' : 'pipes';
+    const space = Math.max(155 - lv * 5, 112), reach = (space - R.W - R.HW) / Math.max(S.speed, 1.2) * 1.4;
+    c.amp = 0; c.spd = 1.6; c.pulse = 0; c.ph = Math.random() * 6.28;
+    if (c.kind === 'gear' || c.kind === 'drone') {
+      c.gy = 70 + Math.random() * 80;
+      if (c.kind === 'drone') { c.amp = 24 + lv * 2; c.spd = 2.4; } else if (st >= 5) { c.amp = 10; c.spd = 1.2; }
+    } else {
+      c.gy = clamp(50 + Math.random() * (R.FLOOR - 100), S.lastGy - reach, S.lastGy + reach);
+      if (c.kind === 'crush') { c.gap = 80; c.pulse = 24; c.gy = clamp(c.gy, 70, R.FLOOR - 70); }
+      else if (st >= 1 && Math.random() < 0.25 + lv * 0.04) c.amp = 12 + Math.random() * (8 + lv * 2);
+      if (c.amp) c.gy = clamp(c.gy, 40 + c.amp, R.FLOOR - 40 - c.amp);
+    }
+    const was = S.t; S.t = 0; const safe = safeY(c); S.t = was;   // the resting spot
+    S.lastGy = safe; S.nextX += space;
+    const moving = c.amp || c.pulse || c.kind === 'drone';
     for (let k = 0, n = 0; k < R.BOLTS && n < 3; k++) {
       const b = S.bolt[k]; if (b.on && b.x > S.scroll - 20) continue;
-      Object.assign(b, { x: c.x + R.W / 2 + (n - 1) * 16, y: c.kind === 'pillar' ? c.gy - 30 : c.kind === 'hang' ? c.gy + 30 : c.gy, on: c.amp ? n === 1 : true });
+      Object.assign(b, { x: mid(c) + (n - 1) * 16, y: safe, on: !moving || n === 1 });
       n++;
     }
   };
@@ -664,8 +697,10 @@ function runScene(house) {
     const stage = Math.floor(S.scroll / R.STAGE);
     if (stage !== S.stage) { S.stage = stage; S.stageT = 150; if (stage % 2 === 0 && S.lives < R.LIVES) S.lives++; SND.fx.flag(); confetti(S.scroll + 160, 30, 24); }
     if (S.stageT > 0) S.stageT--;
-    S.speed = Math.min(1.6 + level() * 0.2, 3.2) * (little ? 0.85 : 1);
+    if (S.lifeT > 0) S.lifeT--;
+    S.speed = Math.min(1.2 + level() * 0.2, 3.0) * (little ? 0.85 : 1);   // an easy start, quicker every stage
     S.scroll += S.speed;
+    for (const c of S.col) if (c.kind === 'drone' && c.x > S.scroll - 60) c.x -= 0.5;   // drones fly at you
     while (S.nextX < S.scroll + W + 40) { const was = S.nextX; spawn(); if (S.nextX === was) break; }
     for (const [i, h] of house.ps.entries()) {
       const p = S.ps[i], sl = h.m.slot, up = held(sl, 'up') || held(sl, 'a'), dn = held(sl, 'down');
@@ -677,17 +712,16 @@ function runScene(house) {
       const hx = S.scroll + p.x - R.HW / 2;
       for (const c of S.col) {
         if (p.inv > 0) break;
-        if (hx + R.HW < c.x + 3 || hx > c.x + R.W - 3) continue;
-        const gy = gapY(c), top = p.y + 2, bot = p.y + R.HH - 2;
-        const hitIt = c.kind === 'pillar' ? bot > gy : c.kind === 'hang' ? top < gy : top < gy - c.gap / 2 || bot > gy + c.gap / 2;
-        if (!hitIt) continue;
-        p.inv = 90; p.vy = c.kind === 'hang' || (c.kind === 'pipes' && top < gy - c.gap / 2) ? 2.5 : -2.5;
+        const dir = hitDir(c, hx, p.y + 2, p.y + R.HH - 2);
+        if (!dir) continue;
+        p.inv = 90; p.vy = dir * 2.5;
         S.shake = 12; SND.fx.clank(); puff(hx + 6, p.y + 10, 8);
         if (--S.lives <= 0) { over(); return; }
       }
       for (const b of S.bolt) {
         if (!b.on || Math.abs(b.x - (hx + R.HW / 2)) > 10 || Math.abs(b.y - (p.y + R.HH / 2)) > 13) continue;
         b.on = false; S.bolts++; S.score += 5; SND.fx.bolt(); sparks(b.x, b.y, 3, '#ffd23f');
+        if (S.bolts % R.BOLT_LIFE === 0 && S.lives < R.LIVES) { S.lives++; S.lifeT = 120; SND.fx.power(); }   // every 300 bolts, a life back
       }
       if ((Math.round(S.t * 60) + i) % 3 === 0) particles.push({ x: hx - 2, y: p.y + R.HH - 2, vx: -0.6, vy: 0.8, life: 16, max: 16, r: 1.5, col: 'rgba(255,200,120,0.9)', kind: 'puff' });
     }
@@ -718,7 +752,7 @@ function runScene(house) {
       aBox(0, F, W, H - F, 0x3A2030); aBox(0, F, W, 2, 0xFF9A5A);
       for (let k = 0; k < 14; k++) aBox(runLx(k, 28, sc, 1, 392), F + 6, 14, 4, 0x5A3048);
       aBox(0, F + 5, W, 2, 0x9A6A6A); aBox(0, F + 11, W, 2, 0x9A6A6A);
-    } else if (th === 2) {
+    } else if (th === TH.NEON) {
       sky(0x08081E, 0x3A1A5A);
       for (let k = 0; k < 40; k++) aDot(runLx(k, 37, sc, 0.03, 400), 6 + runHash(k) * 110, 0.6 + runHash(k + 3) * 0.8, 0xFFFFFF, 0.4 + 0.6 * Math.abs(Math.sin(t * 2 + k)));
       aDot(60, 44, 16, 0xFFF6D8, 0.2); aDot(60, 44, 12, 0xF0E8D0); aDot(56, 41, 2.5, 0xD8D0B8); aDot(64, 48, 1.8, 0xD8D0B8);
@@ -733,7 +767,7 @@ function runScene(house) {
       }
       aBox(0, F, W, H - F, 0x14142A); aBox(0, F, W, 2, 0x5AD1FF);
       for (let k = 0; k < 10; k++) aBox(runLx(k, 40, sc, 1, 400), F + 12, 20, 2, 0xFFE066, 0.8);
-    } else if (th === 3) {
+    } else if (th === TH.STORM) {
       const cyc = t % 4.3;
       sky(0x2E3440, 0x6A7488);
       if (cyc < 0.25) {
@@ -747,6 +781,43 @@ function runScene(house) {
       for (let k = 0; k < 50; k++) { const rx = ((k * 53 - t * 90 - sc * 0.8 + 4000) % 340) - 10, ry = (k * 31 + t * 260) % 240; aLine(rx, ry, rx - 3, ry + 9, 1.5, 0xB8C8E0, 0.7); }
       aBox(0, F, W, H - F, 0x2A3038); aBox(0, F, W, 2, 0x8A9AB0);
       for (let k = 0; k < 6; k++) aBox(runLx(k, 70, sc, 1, 420), F + 8 + (k % 2) * 6, 26, 2, 0x8A9AB0, 0.5);
+    } else if (th === TH.CANDY) {
+      sky(0xFFB0D8, 0xFFE8C8);
+      for (let k = 0; k < 6; k++) { const x = runLx(k, 100, sc, 0.12, 600), y = 30 + runHash(k) * 50; aDot(x, y, 16, 0xFFFFFF, 0.9); aDot(x + 16, y - 6, 18, 0xFFF0F8, 0.9); aDot(x + 32, y, 14, 0xFFFFFF, 0.9); }
+      for (let k = 0; k < 7; k++) { const x = runLx(k, 90, sc, 0.3, 630); aDot(x, F + 10, 40 + runHash(k + 4) * 16, k % 2 ? 0xC28BFF : 0xFF8FC7); aDot(x - 10, F - 18, 8, 0xFFFFFF, 0.5); }
+      for (let k = 0; k < 6; k++) {
+        const x = runLx(k, 110, sc, 0.6, 660), h = 40 + runHash(k + 9) * 30, c = k % 3 === 0 ? 0xFF5A8A : k % 3 === 1 ? 0x5AD1FF : 0xFFD23F;
+        aBox(x - 1.5, F - h, 3, h, 0xFFFFFF); aDot(x, F - h, 12, c); aDot(x - 2, F - h - 2, 6, 0xFFFFFF, 0.6); aDot(x - 2, F - h - 2, 3, c);
+      }
+      aBox(0, F, W, H - F, 0xFFF0F6);
+      for (let k = 0; k < 16; k++) aBox(runLx(k, 24, sc, 1, 384), F, 12, H - F, 0xFF8FC7);
+      aBox(0, F, W, 3, 0xFFFFFF);
+    } else if (th === TH.ICE) {
+      sky(0x5A98D8, 0xD8F0FF);
+      for (let k = 0; k < 6; k++) { const x = runLx(k, 110, sc, 0.15, 660) + 50, w = 120 + runHash(k) * 60, h = 90 + runHash(k + 3) * 50; runTri(x, F, w, h, 0xA8C8E8, false); runTri(x, F - h * 0.7, w * 0.3, h * 0.3, 0xFFFFFF, false); }
+      for (let k = 0; k < 6; k++) { const x = runLx(k, 130, sc, 0.4, 780) + 50, w = 100 + runHash(k + 20) * 50, h = 60 + runHash(k + 23) * 40; runTri(x, F, w, h, 0x7898C0, false); runTri(x, F - h * 0.72, w * 0.28, h * 0.28, 0xF0F8FF, false); }
+      for (let k = 0; k < 40; k++) { const fx = ((k * 41 - t * 20 - sc * 0.5 + 4000) % 330) - 5, fy = (k * 29 + t * (25 + (k % 3) * 10)) % 240; aDot(fx + Math.sin(t * 2 + k) * 3, fy, 1 + (k % 3) * 0.5, 0xFFFFFF, 0.9); }
+      aBox(0, F, W, H - F, 0xF0F8FF); aBox(0, F, W, 3, 0xFFFFFF);
+      for (let k = 0; k < 8; k++) aBox(runLx(k, 50, sc, 1, 400), F + 8 + (k % 2) * 6, 18, 2, 0xC8E0F0);
+    } else if (th === TH.LAVA) {
+      sky(0x140606, 0x4A1A10);
+      for (let k = 0; k < 6; k++) aDot(runLx(k, 110, sc, 0.1, 660), 120 + runHash(k) * 60, 40, 0xFF5A2A, 0.12);
+      for (let k = 0; k < 9; k++) runTri(runLx(k, 50, sc, 0.25, 450), 0, 30 + runHash(k) * 20, 40 + runHash(k + 2) * 40, 0x2A1410, true);
+      for (let k = 0; k < 7; k++) { const x = runLx(k, 80, sc, 0.5, 560); runTri(x, 0, 24 + runHash(k + 30) * 14, 24 + runHash(k + 31) * 30, 0x3A1E18, true); runTri(x + 20, F, 30, 30 + runHash(k + 33) * 30, 0x3A1E18, false); }
+      for (let k = 0; k < 24; k++) { const u = (t * 0.3 + runHash(k)) % 1; aDot(runLx(k, 31, sc, 0.8, 380) + Math.sin(t * 3 + k) * 4, F - u * 200, 1.2, k % 2 ? 0xFFB040 : 0xFF6A2A, 1 - u); }
+      aBox(0, F, W, H - F, 0xFF6A2A);
+      for (let x = 0; x < W; x += 8) aBox(x, F - 2 + Math.sin(x * 0.15 + t * 3 + sc * 0.05) * 2, 8, 4, 0xFFB040);
+      for (let k = 0; k < 6; k++) { const u = (t * 0.8 + runHash(k + 50)) % 1; aDot(runLx(k, 64, sc, 1, 384), F + 10, 2 + u * 3, 0xFFD23F, 1 - u); }
+    } else if (th === TH.GLITCH) {
+      aBox(0, 0, W, H, 0x0E0618);
+      for (let y = 10; y < F; y += 20) aBox(0, y, W, 1, 0x2A1240);
+      for (let k = 0; k < 12; k++) aBox(runLx(k, 32, sc, 0.5, 384) + 60, 0, 1, F, 0x2A1240);
+      const tick = Math.floor(t * 8);
+      for (let k = 0; k < 10; k++) { const h1 = runHash(tick * 13 + k), h2 = runHash(tick * 7 + k * 3); if (h1 < 0.5) continue; aBox(h2 * 300, runHash(k * 5 + tick) * 200, 10 + h1 * 30, 3 + h2 * 6, k % 2 ? 0x49F08A : 0xFF5AC8, 0.35); }
+      for (let k = 0; k < 8; k++) { const x = runLx(k, 80, sc, 0.35, 640); aBox(x, F - 50 - runHash(k) * 40, 40, 90, 0x1A0E28); aBox(x + 4, F - 46 - runHash(k) * 40, 32, 2, 0x49F08A, 0.5 + 0.5 * Math.sin(t * 5 + k)); }
+      aBox(0, F, W, H - F, 0x1A0E28); aBox(0, F, W, 2, 0x49F08A);
+      for (let k = 0; k < 14; k++) aBox(runLx(k, 28, sc, 1, 392), F + 6 + (k % 3) * 5, 6, 4, k % 2 ? 0xC28BFF : 0x49F08A, 0.6);
+      if (runHash(tick) > 0.9) aBox(0, runHash(tick + 1) * 200, W, 6, 0xFFFFFF, 0.15);
     } else {
       aBox(0, 0, W, H, 0x05030F);
       { const mx = 70 - (sc * 0.01) % 400; aDot(mx, 150, 9, 0x8FA0C0); aDot(mx - 2, 148, 3, 0xB8C8E0); }
@@ -759,9 +830,9 @@ function runScene(house) {
   function pipe(x, y0, y1, lipY, P, th, t) {
     if (y1 <= y0) return;
     const [body, light, dark, lip, accent] = P;
-    aBox(x + 2, y0, R.W - 4, y1 - y0, body); aBox(x + 5, y0, 3, y1 - y0, light, th === 2 ? 0.8 : 1); aBox(x + R.W - 8, y0, 4, y1 - y0, dark);
+    aBox(x + 2, y0, R.W - 4, y1 - y0, body); aBox(x + 5, y0, 3, y1 - y0, light, th === TH.NEON || th === TH.GLITCH ? 0.8 : 1); aBox(x + R.W - 8, y0, 4, y1 - y0, dark);
     aBox(x - 2, lipY, R.W + 4, 10, lip); aBox(x - 2, lipY, R.W + 4, 2, light, 0.7);
-    aBox(x + 6, lipY + 4, 8, 3, accent, th === 4 ? (Math.sin(t * 5 + x) > 0 ? 1 : 0.3) : 1);
+    aBox(x + 6, lipY + 4, 8, 3, accent, th === TH.STARS || th === TH.GLITCH ? (Math.sin(t * 5 + x) > 0 ? 1 : 0.3) : 1);
     aDot(x + 2, lipY + 5, 1.3, dark); aDot(x + R.W - 2, lipY + 5, 1.3, dark);
   }
   S.draw = function () {
@@ -774,10 +845,23 @@ function runScene(house) {
       if (c.kind === 'pillar') {
         for (let y = gy; y < R.FLOOR; y += 14) { const j = Math.floor((y - gy) / 14); aBox(x + (j % 2), y, R.W - (j % 2) * 2, 13, j % 2 ? P[3] : P[2]); aBox(x + 6, y + 4, R.W - 12, 4, j % 2 ? P[1] : P[0]); }
         aBox(x - 2, gy - 3, R.W + 4, 4, P[4]);
+      } else if (c.kind === 'gear') {   // a spinning gear
+        const mx = mid(c) - sc, a = t * 2.5 + c.ph;
+        aDot(mx, gy, R.GEAR_R - 3, P[2]);
+        for (let k = 0; k < 8; k++) aDot(mx + Math.cos(a + k * 0.785) * (R.GEAR_R - 3), gy + Math.sin(a + k * 0.785) * (R.GEAR_R - 3), 4, P[0]);
+        aDot(mx, gy, R.GEAR_R - 7, P[0]);
+        for (let k = 0; k < 3; k++) aLine(mx, gy, mx + Math.cos(a + k * 2.09) * 10, gy + Math.sin(a + k * 2.09) * 10, 2, P[2]);
+        aDot(mx, gy, 4, P[4]);
+      } else if (c.kind === 'drone') {   // a glitch drone: a body, two eyes, a whirring rotor
+        const mx = mid(c) - sc, rw = 6 + 6 * Math.abs(Math.sin(t * 30 + c.ph));
+        aDot(mx, gy, R.DRONE_R, 0xC23A6A); aDot(mx - 1, gy + 1, R.DRONE_R - 3, 0xFF5A8A);
+        aDot(mx - 4, gy - 1, 2.5, 0xFFFFFF); aDot(mx + 2, gy - 1, 2.5, 0xFFFFFF); aDot(mx - 5, gy - 1, 1.2, 0x1B1426); aDot(mx + 1, gy - 1, 1.2, 0x1B1426);
+        aBox(mx - 1, gy - R.DRONE_R - 4, 2, 4, 0x9AA1B0); aBox(mx - rw, gy - R.DRONE_R - 5, rw * 2, 2, 0xE6E6F0);
       } else {
-        const top = c.kind === 'hang' ? gy : gy - c.gap / 2;
+        const gap = gapH(c), top = c.kind === 'hang' ? gy : gy - gap / 2;
         pipe(x, 0, top, top - 10, P, th, t);
-        if (c.kind === 'pipes') pipe(x, gy + c.gap / 2, R.FLOOR, gy + c.gap / 2, P, th, t);
+        if (c.kind !== 'hang') pipe(x, gy + gap / 2, R.FLOOR, gy + gap / 2, P, th, t);
+        if (c.kind === 'crush') for (let k = 0; k < 4; k++) { aBox(x - 2 + k * 8, top - 10, 4, 10, 0xFFD23F); aBox(x - 2 + k * 8, gy + gap / 2, 4, 10, 0xFFD23F); }
         if (c.amp) aDot(x + R.W / 2, top - 5, 2, 0x5AD1FF, 0.6 + 0.4 * Math.sin(t * 8));
       }
     }
@@ -795,6 +879,7 @@ function runScene(house) {
       const k = S.stageT > 130 ? (150 - S.stageT) / 20 : S.stageT < 20 ? S.stageT / 20 : 1, dy = (1 - k) * 30;
       panel(W / 2 - 80, 78 - dy, 160, 42); text('STAGE ' + (S.stage + 1), W / 2, 94 - dy, 8, '#fff6d8', 'center', null); text(R.NAMES[th], W / 2, 112 - dy, 11, '#ffd23f');
     }
+    if (S.lifeT > 0) rimBanner('EXTRA LIFE!', 10, 40, 20, '#49d17a', '#49d17a');
     panel(4, 4, 62, 15); K.nut(13, 11.5, 4, t, '#ffd23f'); text('×' + S.bolts, 20, 16, 9, '#fff6d8', 'left', null);
     text('SCORE ' + S.score, W / 2, 12, 8, '#ffd23f'); text('BEST ' + S.best, W / 2, 22, 7, '#49d17a');
     for (let k = 0; k < R.LIVES; k++) { const x = W - 18 - k * 16; aBox(x, 6, 12, 8, 0x1B1426); aBox(x + 12, 8, 2, 4, 0x1B1426); if (k < S.lives) aBox(x + 1.5, 7.5, 9, 5, 0x49D17A); }

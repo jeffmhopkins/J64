@@ -642,32 +642,76 @@ void ck_bolt_update(ck_game *G) {
 }
 
 // ---------------------------------------------------------------------------- Jet Run
-const char *const ck_run_stage_names[CK_RUN_THEMES] = { "JUNK PIPES", "SUNSET FACTORY", "NEON NIGHT", "STORM CLOUDS", "STAR LANES" };
-float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c) { return c->gy + c->amp * sinf(J->t * 1.6f + c->ph); }
+const char *const ck_run_stage_names[CK_RUN_THEMES] = { "JUNK PIPES", "SUNSET FACTORY", "CANDY CLOUDS", "ICE PEAKS", "NEON NIGHT", "STORM CLOUDS", "LAVA CAVES", "STAR LANES", "GLITCH ZONE" };
+float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c) { return c->gy + c->amp * sinf(J->t * c->spd + c->ph); }
+float ck_run_gap(const ck_jetrun *J, const ck_runcol *c) { return c->gap + c->pulse * sinf(J->t * 2.2f + c->ph); }
+float ck_run_mid(const ck_runcol *c) { return c->x + CK_RUN_W / 2.0f; }
+static float run_radius(const ck_runcol *c) { return c->kind == RUNCOL_GEAR ? CK_RUN_GEAR_R : CK_RUN_DRONE_R; }
+float ck_run_safe_y(const ck_jetrun *J, const ck_runcol *c) {
+    float gy = ck_run_gap_y(J, c);
+    switch (c->kind) {
+    case RUNCOL_PILLAR: return gy - 40;
+    case RUNCOL_HANG: return gy + 40;
+    case RUNCOL_GEAR: case RUNCOL_DRONE: {   // over it or under it, whichever has more room
+        float r = run_radius(c), up = gy - r - 14, dn = CK_RUN_FLOOR - (gy + r);
+        return up > dn ? (14 + gy - r) / 2 : (gy + r + CK_RUN_FLOOR) / 2;
+    }
+    default: return gy;
+    }
+}
 // how hard it is now: every stage a little quicker, tighter and closer together, up to a limit
-static float run_level(const ck_jetrun *J) { return ck_minf(J->stage, 8); }
+static float run_level(const ck_jetrun *J) { return ck_minf(J->stage, 9); }
 static void run_spawn(ck_game *G, ck_jetrun *J) {
     ck_runcol *c = NULL;
     for (int i = 0; i < CK_RUN_COLS; i++) if (J->col[i].x < J->scroll - 60) { c = &J->col[i]; break; }
     if (!c) return;
     float lv = run_level(J), r = ck_rand(G);
+    int st = J->stage;
     c->x = J->nextX; c->passed = false;
-    c->gap = ck_maxf(84 - lv * 3, 60);
-    c->kind = J->stage >= 1 && r < 0.18f ? RUNCOL_PILLAR : J->stage >= 2 && r < 0.32f ? RUNCOL_HANG : RUNCOL_PIPES;
+    c->gap = ck_maxf(86 - lv * 3, 60);
+    c->kind = st >= 1 && r < 0.14f ? RUNCOL_PILLAR : st >= 2 && r < 0.26f ? RUNCOL_HANG : st >= 2 && r < 0.40f ? RUNCOL_GEAR
+            : st >= 3 && r < 0.52f ? RUNCOL_CRUSH : st >= 4 && r < 0.64f ? RUNCOL_DRONE : RUNCOL_PIPES;
     // never further from the last gap than a hero can fly before getting here
-    float space = ck_maxf(150 - lv * 6, 110), reach = (space - CK_RUN_W - CK_RUN_HW) / ck_maxf(J->speed, 1.6f) * 1.4f;
-    c->gy = ck_clampf(50 + ck_rand(G) * (CK_RUN_FLOOR - 100), J->lastGy - reach, J->lastGy + reach);
-    c->amp = J->stage >= 1 && ck_rand(G) < 0.25f + lv * 0.05f ? 12 + ck_rand(G) * (8 + lv * 2) : 0;   // gaps that sway up and down
-    if (c->amp) c->gy = ck_clampf(c->gy, 40 + c->amp, CK_RUN_FLOOR - 40 - c->amp);
+    float space = ck_maxf(155 - lv * 5, 112), reach = (space - CK_RUN_W - CK_RUN_HW) / ck_maxf(J->speed, 1.2f) * 1.4f;
+    c->amp = 0; c->spd = 1.6f; c->pulse = 0;
     c->ph = ck_rand(G) * 6.28f;
-    J->lastGy = c->kind == RUNCOL_PILLAR ? c->gy - 40 : c->kind == RUNCOL_HANG ? c->gy + 40 : c->gy;
+    if (c->kind == RUNCOL_GEAR || c->kind == RUNCOL_DRONE) {
+        c->gy = 70 + ck_rand(G) * 80;
+        if (c->kind == RUNCOL_DRONE) { c->amp = 24 + lv * 2; c->spd = 2.4f; }
+        else if (st >= 5) { c->amp = 10; c->spd = 1.2f; }
+    } else {
+        c->gy = ck_clampf(50 + ck_rand(G) * (CK_RUN_FLOOR - 100), J->lastGy - reach, J->lastGy + reach);
+        if (c->kind == RUNCOL_CRUSH) { c->gap = 80; c->pulse = 24; c->gy = ck_clampf(c->gy, 70, CK_RUN_FLOOR - 70); }
+        else if (st >= 1 && ck_rand(G) < 0.25f + lv * 0.04f) c->amp = 12 + ck_rand(G) * (8 + lv * 2);   // gaps that sway up and down
+        if (c->amp) c->gy = ck_clampf(c->gy, 40 + c->amp, CK_RUN_FLOOR - 40 - c->amp);
+    }
+    float was = J->t; J->t = 0;   // the resting spot, for the next column's reach and the bolts
+    float safe = ck_run_safe_y(J, c);
+    J->t = was;
+    J->lastGy = safe;
     J->nextX += space;
-    // a row of bolts through the gap and one on the way to the next
+    // a row of bolts through the gap (just one where things move)
+    bool moving = c->amp || c->pulse || c->kind == RUNCOL_DRONE;
     for (int k = 0, n = 0; k < CK_RUN_BOLTS && n < 3; k++) {
         if (J->bolt[k].on && J->bolt[k].x > J->scroll - 20) continue;
-        J->bolt[k] = (ck_runbolt){ c->x + CK_RUN_W / 2 + (n - 1) * 16, c->kind == RUNCOL_PILLAR ? c->gy - 30 : c->kind == RUNCOL_HANG ? c->gy + 30 : c->gy, true };
-        if (c->amp) J->bolt[k].on = n == 1;   // a swaying gap: just the middle one, at its resting spot
+        J->bolt[k] = (ck_runbolt){ ck_run_mid(c) + (n - 1) * 16, safe, !moving || n == 1 };
         n++;
+    }
+}
+// does a hero's box (hx across, top to bot) touch column c? Returns which way it knocks them (1 down, -1 up), or 0.
+static int run_hit(const ck_jetrun *J, const ck_runcol *c, float hx, float top, float bot) {
+    float gy = ck_run_gap_y(J, c);
+    if (c->kind == RUNCOL_GEAR || c->kind == RUNCOL_DRONE) {
+        float r = run_radius(c) - 2, mx = ck_run_mid(c), nx = ck_clampf(mx, hx, hx + CK_RUN_HW), ny = ck_clampf(gy, top, bot);
+        if ((nx - mx) * (nx - mx) + (ny - gy) * (ny - gy) > r * r) return 0;
+        return (top + bot) / 2 < gy ? -1 : 1;
+    }
+    if (hx + CK_RUN_HW < c->x + 3 || hx > c->x + CK_RUN_W - 3) return 0;
+    float gap = ck_run_gap(J, c);
+    switch (c->kind) {
+    case RUNCOL_PILLAR: return bot > gy ? -1 : 0;
+    case RUNCOL_HANG: return top < gy ? 1 : 0;
+    default: return top < gy - gap / 2 ? 1 : bot > gy + gap / 2 ? -1 : 0;
     }
 }
 static void run_reset(ck_jetrun *J) {
@@ -716,8 +760,10 @@ void ck_run_update(ck_game *G) {
         ck_sfx(G, SFX_FLAG); ck_confetti(G, J->scroll + 160, 30, 24);
     }
     if (J->stageT > 0) J->stageT--;
-    J->speed = ck_minf(1.6f + run_level(J) * 0.2f, 3.2f) * (G->prog.little ? 0.85f : 1);
+    if (J->lifeT > 0) J->lifeT--;
+    J->speed = ck_minf(1.2f + run_level(J) * 0.2f, 3.0f) * (G->prog.little ? 0.85f : 1);   // an easy start, quicker every stage
     J->scroll += J->speed;
+    for (int k = 0; k < CK_RUN_COLS; k++) if (J->col[k].kind == RUNCOL_DRONE && J->col[k].x > J->scroll - 60) J->col[k].x -= 0.5f;   // drones fly at you
     while (J->nextX < J->scroll + CK_W + 40) { float was = J->nextX; run_spawn(G, J); if (J->nextX == was) break; }
     for (int i = 0; i < H->np; i++) {
         __typeof__(J->ps[0]) *p = &J->ps[i];
@@ -730,12 +776,9 @@ void ck_run_update(ck_game *G) {
         if (p->inv > 0) p->inv--;
         float hx = J->scroll + p->x - CK_RUN_HW / 2;
         for (int k = 0; k < CK_RUN_COLS && p->inv <= 0; k++) {
-            const ck_runcol *c = &J->col[k];
-            if (hx + CK_RUN_HW < c->x + 3 || hx > c->x + CK_RUN_W - 3) continue;
-            float gy = ck_run_gap_y(J, c), top = p->y + 2, bot = p->y + CK_RUN_HH - 2;
-            bool hit = c->kind == RUNCOL_PILLAR ? bot > gy : c->kind == RUNCOL_HANG ? top < gy : top < gy - c->gap / 2 || bot > gy + c->gap / 2;
-            if (!hit) continue;
-            p->inv = 90; p->vy = c->kind == RUNCOL_HANG || (c->kind == RUNCOL_PIPES && top < gy - c->gap / 2) ? 2.5f : -2.5f;
+            int dir = run_hit(J, &J->col[k], hx, p->y + 2, p->y + CK_RUN_HH - 2);
+            if (!dir) continue;
+            p->inv = 90; p->vy = dir * 2.5f;
             J->shake = 12;
             ck_sfx(G, SFX_CLANK);
             ck_puff(G, hx + 6, p->y + 10, 8, 0xFFF8E6, 230);
@@ -746,6 +789,7 @@ void ck_run_update(ck_game *G) {
             if (!b->on || fabsf(b->x - (hx + CK_RUN_HW / 2)) > 10 || fabsf(b->y - (p->y + CK_RUN_HH / 2)) > 13) continue;
             b->on = false; J->bolts++; J->score += 5;
             ck_sfx(G, SFX_BOLT);
+            if (J->bolts % CK_RUN_BOLT_LIFE == 0 && J->lives < CK_RUN_LIVES) { J->lives++; J->lifeT = 120; ck_sfx(G, SFX_POWER); }   // every 300 bolts, a life back
             ck_sparks(G, b->x, b->y, 3, 0xFFD23F);
         }
         if (((int)(J->t * 60) + i) % 3 == 0) ck_puff(G, hx - 2, p->y + CK_RUN_HH - 2, 1, 0xFFC878, 230);
