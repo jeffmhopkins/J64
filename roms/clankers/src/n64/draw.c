@@ -1372,15 +1372,13 @@ static void food_art(int kind, float x, float y, float sc) {
         else rect(x + s->x * sc, y + s->y * sc, s->w * sc, s->h * sc, s->col, 1);
     }
 }
-// A cooked dish's extras on top: a little one of each ingredient (bits of ck_cook_ingr).
+// A cooked dish's extras on top: a little one of each ingredient (shelf indices into ck_cook_ingr).
 // web/game.js garnishArt draws the same.
-static void garnish_art(uint64_t mask, float x, float y, float sc) {
-    int n = 0;
-    for (int i = 0; i < CK_COOK_INGR; i++) n += mask >> i & 1;
-    for (int i = 0, j = 0; i < CK_COOK_INGR; i++) {
-        if (!(mask >> i & 1)) continue;
-        food_art(ck_cook_ingr[i], x + (j - (n - 1) / 2.0f) * 4.5f * sc, y - 3.5f * sc + (j % 2) * 1.5f * sc, 0.4f * sc);
-        j++;
+static void garnish_art(ck_garnish gar, float x, float y, float sc) {
+    int n = gar.n < CK_COOK_PAN ? gar.n : CK_COOK_PAN;
+    for (int j = 0; j < n; j++) {
+        if (gar.i[j] >= CK_COOK_INGR) continue;
+        food_art(ck_cook_ingr[gar.i[j]], x + (j - (n - 1) / 2.0f) * 4.5f * sc, y - 3.5f * sc + (j % 2) * 1.5f * sc, 0.4f * sc);
     }
 }
 static void house_hero(const ck_game *G, int slot, float x, float y, int pose, float t, int face) {
@@ -1555,18 +1553,23 @@ static void draw_house(const ck_game *G) {
         // a shelf row for each player, six on show, scrolled to keep their pick in view
         rect(30, 22, 260, 4 + 31 * Hs->np, 0x8A5A3C, 1);
         for (int j = 0; j < Hs->np; j++) {
-            int c = Hs->cpick[j], first = c - 2 < 0 ? 0 : c - 2 > CK_COOK_INGR - CK_COOK_ROW ? CK_COOK_INGR - CK_COOK_ROW : c - 2;
+            // the row shows the pick's group, scrolled to keep the pick in view
+            int c = Hs->cpick[j], g = ck_cook_group_of(c), a = ck_cook_group[g], len = ck_cook_group[g + 1] - a;
+            int show = len < CK_COOK_ROW ? len : CK_COOK_ROW, first = c - 2 < a ? a : c - 2 > a + len - show ? a + len - show : c - 2;
             float fy = 39 + j * 31;
             uint32_t col = Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F;
             rect(34, 26 + j * 31, 252, 27, 0xC98A4B, 1);
-            for (int k = 0; k < CK_COOK_ROW; k++) {
+            for (int k = 0; k < show; k++) {
                 float fx = 56 + k * 42;
                 if (first + k == c && !Hs->dish) shape(SPR_RING, fx, fy, 13, col, 1);
                 food_art(ck_cook_ingr[first + k], fx, fy, 2.0f);
             }
-            if (first > 0) txt(F_SMALL, ST_CREAM, 26, fy + 3, ALIGN_CENTER, "<");
-            if (first < CK_COOK_INGR - CK_COOK_ROW) txt(F_SMALL, ST_CREAM, 294, fy + 3, ALIGN_CENTER, ">");
-            if (!Hs->dish) txt(F_SMALL, Hs->ps[j].slot ? ST_BLUE : ST_YELLOW, j ? 310 : 10, 222, j ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ck_foods[ck_cook_ingr[c]].name);
+            if (first > a) txt(F_SMALL, ST_CREAM, 26, fy + 3, ALIGN_CENTER, "<");
+            if (first < a + len - show) txt(F_SMALL, ST_CREAM, 294, fy + 3, ALIGN_CENTER, ">");
+            if (!Hs->dish) {   // the group's name, and the pick's under it
+                txt(F_SMALL, ST_CREAM, j ? 310 : 10, 211, j ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ck_cook_group_name[g]);
+                txt(F_SMALL, Hs->ps[j].slot ? ST_BLUE : ST_YELLOW, j ? 310 : 10, 222, j ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ck_foods[ck_cook_ingr[c]].name);
+            }
         }
         rect(50, 150, 220, 80, 0x3A3F4A, 1);   // the stove top
         rect(56, 156, 208, 6, 0x5A5E6A, 1);
@@ -1583,7 +1586,7 @@ static void draw_house(const ck_game *G) {
         rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
         if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, Hs->np > 1 ? "A take one each" : "A take it"); }
         else {
-            hint(14, Hs->npan ? "Stick scroll   A add   B stir   START leave" : "Stick scroll   A add to the pan   START leave");
+            hint(14, Hs->npan ? "Up/down group   A add   B stir   START leave" : "Up/down group   Left/right pick   A add to the pan");
         }
     }
     if (Hs->mode == HM_LETTER) {   // a big letter to read

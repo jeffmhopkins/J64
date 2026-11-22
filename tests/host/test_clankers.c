@@ -1180,28 +1180,58 @@ static void test_house(void) {
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->house.mode, HM_COOK);
     G->house.cpick[1] = 0;   // keep player 2 out of the way
-    // each player scrolls their own row through all the ingredients
-    press(G, CK_LEFT, 0); EXPECT_EQ_INT(G->house.cpick[0], CK_COOK_INGR - 1);
-    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->house.cpick[0], CK_COOK_ROW - 1);
-    press(G, CK_UP, 0); press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->house.cpick[0], 0);
-    press(G, 0, CK_DOWN); EXPECT_EQ_INT(G->house.cpick[1], CK_COOK_ROW);
-    EXPECT_EQ_INT(G->house.cpick[0], 0);
+    // each player has their own row: left and right go round a group, up and down change the group
+    press(G, CK_LEFT, 0); EXPECT_EQ_INT(G->house.cpick[0], ck_cook_group[1] - 1);   // round to the end of the fruit
+    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->house.cpick[0], 0);
+    press(G, CK_RIGHT, 0); press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->house.cpick[0], ck_cook_group[1]);   // a new group starts at its first
+    press(G, CK_UP, 0); press(G, CK_UP, 0); EXPECT_EQ_INT(G->house.cpick[0], ck_cook_group[CK_COOK_GROUPS - 1]);   // up from the first group: round to the last
+    press(G, 0, CK_DOWN); EXPECT_EQ_INT(G->house.cpick[1], ck_cook_group[1]);
+    for (int g = 0; g < CK_COOK_GROUPS; g++) {   // every group has a name and some food, and the groups cover the shelf
+        EXPECT_EQ_INT(ck_cook_group[g + 1] > ck_cook_group[g], 1);
+        EXPECT_EQ_INT(ck_cook_group_name[g] != NULL && ck_cook_group_name[g][0] != 0, 1);
+        for (int i = ck_cook_group[g]; i < ck_cook_group[g + 1]; i++) EXPECT_EQ_INT(ck_cook_group_of(i), g);
+    }
+    EXPECT_EQ_INT(ck_cook_group[0], 0);
+    EXPECT_EQ_INT(ck_cook_group[CK_COOK_GROUPS], CK_COOK_INGR);
+    {   // every food on the shelf is there once, and has a name and a picture
+        bool on[FOOD_DISH0] = { 0 };
+        for (int i = 0; i < CK_COOK_INGR; i++) {
+            int f = ck_cook_ingr[i];
+            EXPECT_EQ_INT(f >= 0 && f < FOOD_DISH0 && !on[f], 1);
+            on[f] = true;
+            EXPECT_EQ_INT(ck_foods[f].name != NULL && ck_foods[f].n > 0 && ck_foods[f].n <= 6, 1);
+        }
+        for (int d = 0; d < CK_DISHES; d++) EXPECT_EQ_INT(ck_foods[FOOD_DISH0 + d].name != NULL && ck_foods[FOOD_DISH0 + d].n > 0, 1);
+    }
+    // walk to the egg (eggs and dairy), into the pan, then the cheese next to it
+    int eggAt = -1;
+    for (int i = 0; i < CK_COOK_INGR; i++) if (ck_cook_ingr[i] == FOOD_EGG) eggAt = i;
+    EXPECT_EQ_INT(ck_cook_ingr[eggAt + 1], FOOD_CHEESE);
+    for (int i = 0; i < CK_COOK_GROUPS && ck_cook_group_of(G->house.cpick[0]) != ck_cook_group_of(eggAt); i++) press(G, CK_DOWN, 0);
+    for (int i = 0; i < CK_COOK_INGR && G->house.cpick[0] != eggAt; i++) press(G, CK_RIGHT, 0);
+    EXPECT_EQ_INT(G->house.cpick[0], eggAt);
     G->house.cpick[1] = 0;
     press(G, CK_A, 0);                             // egg
-    press(G, CK_RIGHT, 0); press(G, CK_RIGHT, 0);
+    press(G, CK_RIGHT, 0);
     press(G, CK_A, 0);                             // cheese
     EXPECT_EQ_INT(G->house.npan, 2);
-    press(G, CK_A, 0); press(G, CK_A, 0); press(G, CK_A, 0);   // a full pan of four swaps its last one
+    press(G, CK_A, 0); press(G, CK_A, 0);         // the pan is full: egg, cheese, cheese, cheese
     EXPECT_EQ_INT(G->house.npan, 4);
+    // a full pan swaps out its oldest first, then the next oldest, round and round
+    press(G, CK_RIGHT, 0); int third = ck_cook_ingr[G->house.cpick[0]];
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.pan[0], third);
     EXPECT_EQ_INT(G->house.pan[3], FOOD_CHEESE);
-    press(G, CK_RIGHT, 0); press(G, CK_A, 0);
-    EXPECT_EQ_INT(G->house.pan[3], FOOD_MUSHROOM);
-    EXPECT_EQ_INT(G->house.pan[2], FOOD_CHEESE);
+    press(G, CK_A, 0); press(G, CK_A, 0); press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.pan[1], third); EXPECT_EQ_INT(G->house.pan[2], third); EXPECT_EQ_INT(G->house.pan[3], third);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.npan, 4);
+    G->house.pan[0] = FOOD_EGG; G->house.pan[1] = FOOD_CHEESE;
     G->house.npan = 2;   // back to egg and cheese
     for (int i = 0; i < 12 && !G->house.dish; i++) press(G, CK_B, 0);
     EXPECT_EQ_INT(G->house.dish, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
     EXPECT_EQ_INT(strcmp(G->house.dishName, "Cheesy omelette"), 0);
-    EXPECT_EQ_INT(G->house.dishExtra, 0);
+    EXPECT_EQ_INT(G->house.dishExtra.n, 0);
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->house.mode, HM_WALK);
     EXPECT_EQ_INT(G->house.ps[0].hold, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
@@ -1221,11 +1251,27 @@ static void test_house(void) {
             { { FOOD_BANANA, FOOD_BREAD }, 2, DISH_BANANA_BREAD, "Banana bread" },
             { { FOOD_CARROT, FOOD_EGG }, 2, DISH_CARROT_CAKE, "Carrot cake" },
             { { FOOD_CHEESE }, 1, DISH_CHEESE_PLATE, "Melted cheese" },
+            { { FOOD_HOTDOG }, 1, DISH_HOTDOG, "Hot dog" },
+            { { FOOD_HOTDOG, FOOD_CHILI }, 2, DISH_CHILI_DOG, "Chili dog" },
+            { { FOOD_BACON, FOOD_LETTUCE, FOOD_TOMATO }, 3, DISH_BLT, "BLT sandwich" },
+            { { FOOD_STEAK, FOOD_POTATO }, 2, DISH_STEAK_POTATOES, "Steak and potatoes" },
+            { { FOOD_LAMB, FOOD_POTATO }, 2, DISH_SHEPHERDS_PIE, "Shepherd's pie" },
+            { { FOOD_TURKEY, FOOD_BREAD }, 2, DISH_TURKEY_BURGER, "Turkey burger" },
+            { { FOOD_RICE, FOOD_SALMON }, 2, DISH_SUSHI, "Sushi" },
+            { { FOOD_EGG, FOOD_BACON }, 2, DISH_BACON_EGGS, "Bacon and eggs" },
+            { { FOOD_PEANUTBUTTER, FOOD_BREAD, FOOD_JAM }, 3, DISH_PBJ, "PB and J sandwich" },
+            { { FOOD_CELERY, FOOD_PEANUTBUTTER }, 2, DISH_ANTS_LOG, "Ants on a log" },
+            { { FOOD_WHITEFISH, FOOD_POTATO }, 2, DISH_FISH_CHIPS, "Fish and chips" },
+            { { FOOD_TCHIPS, FOOD_NACHO }, 2, DISH_NACHOS, "Nachos" },
+            { { FOOD_MARSHMALLOW, FOOD_CHOCOLATE }, 2, DISH_SMORES, "S'mores" },
+            { { FOOD_LEMON, FOOD_SUGAR }, 2, DISH_LEMONADE, "Lemonade" },
+            { { FOOD_GRAVY, FOOD_FLOUR }, 2, DISH_BISCUITS_GRAVY, "Biscuits and gravy" },
         };
         for (size_t i = 0; i < sizeof R / sizeof R[0]; i++) {
-            int dish; uint64_t extra; char name[40];
+            int dish; ck_garnish extra; char name[40];
             ck_cook_dish(R[i].pan, R[i].n, &dish, &extra, name, sizeof name);
-            EXPECT_EQ_INT(extra, 0);
+            if (strcmp(name, R[i].name)) printf("  %s, not %s\n", name, R[i].name);
+            EXPECT_EQ_INT(extra.n, 0);
             EXPECT_EQ_INT(dish, FOOD_DISH0 + R[i].dish + 1);
             EXPECT_EQ_INT(strcmp(name, R[i].name), 0);
         }
@@ -1233,28 +1279,29 @@ static void test_house(void) {
         bool seen[CK_DISHES] = { 0 };
         for (int a = 0; a < CK_COOK_INGR; a++) for (int b = a; b < CK_COOK_INGR; b++) for (int c = b; c < CK_COOK_INGR; c++)
             for (int n = 1; n <= 3; n++) {
-                int pan[3] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c] }, dish; uint64_t extra; char name[40];
+                int pan[3] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c] }, dish; ck_garnish extra; char name[40];
                 ck_cook_dish(pan, n, &dish, &extra, name, sizeof name);
                 seen[dish - 1 - FOOD_DISH0] = true;
             }
         for (int k = 0; k < CK_DISHES; k++) { if (!seen[k]) printf("  dish %d never cooks\n", k); EXPECT_EQ_INT(seen[k], 1); }
         // the rest of the pan goes into the name and on top as garnish, so most pans read differently
         {
-            int pan[4] = { FOOD_EGG, FOOD_CHEESE, FOOD_SAUSAGE, FOOD_MUSHROOM }, dish; uint64_t extra; char name[40];
+            int pan[4] = { FOOD_EGG, FOOD_CHEESE, FOOD_SAUSAGE, FOOD_MUSHROOM }, dish; ck_garnish extra; char name[40];
             ck_cook_dish(pan, 4, &dish, &extra, name, sizeof name);
             EXPECT_EQ_INT(dish, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
             EXPECT_EQ_INT(strcmp(name, "Foresty cheesy omelette with sausage"), 0);
-            EXPECT_EQ_INT(extra, (1 << 3) | (1 << 8));   // mushroom and sausage on top
+            EXPECT_EQ_INT(extra.n, 2);   // mushroom and sausage on top, in shelf order
+            EXPECT_EQ_INT(ck_cook_ingr[extra.i[0]] == FOOD_MUSHROOM && ck_cook_ingr[extra.i[1]] == FOOD_SAUSAGE, 1);
             int four[4] = { FOOD_CHEESE, FOOD_CHEESE, FOOD_CHEESE, FOOD_CHEESE };
             ck_cook_dish(four, 4, &dish, &extra, name, sizeof name);
             EXPECT_EQ_INT(strcmp(name, "Mega cheese soup"), 0);
         }
         // every full pan of four: count the names that come out different
-        enum { PANS = 48 * 49 * 50 * 51 / 24 };
+        enum { PANS = CK_COOK_INGR * (CK_COOK_INGR + 1) * (CK_COOK_INGR + 2) * (CK_COOK_INGR + 3) / 24 };
         static char names[PANS][40];
         int pans = 0;
         for (int a = 0; a < CK_COOK_INGR; a++) for (int b = a; b < CK_COOK_INGR; b++) for (int c = b; c < CK_COOK_INGR; c++) for (int e = c; e < CK_COOK_INGR; e++) {
-            int pan[4] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c], ck_cook_ingr[e] }, dish; uint64_t extra;
+            int pan[4] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c], ck_cook_ingr[e] }, dish; ck_garnish extra;
             ck_cook_dish(pan, 4, &dish, &extra, names[pans], 40);
             if (strlen(names[pans]) > 38) { printf("  too long: %s\n", names[pans]); EXPECT_EQ_INT(0, 1); }
             pans++;
@@ -1264,7 +1311,7 @@ static void test_house(void) {
         for (int i = 1; i < pans; i++) nn += strcmp(names[i], names[i - 1]) != 0;
         printf("  kitchen: %d full pans make %d different dishes\n", pans, nn);
         EXPECT_EQ_INT(pans, PANS);
-        EXPECT_EQ_INT(nn * 10 >= pans * 4, 1);
+        EXPECT_EQ_INT(nn * 10 >= pans * 3, 1);   // 66 ingredients: about a third of all pans read differently
     }
     press(G, CK_A, 0);   // eat it
     hold(G, 60, 0, 0);
