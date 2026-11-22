@@ -292,6 +292,8 @@ function bakeAll() {
   worlds.forEach((world, k) => strip('map_boss_' + (k + 1), 48, 52, 24, 44, 2, (g, i) => world.drawBoss(g, { x: 0, y: 0 }, 0.4, i === 1)));
   strip('map_shop', 32, 24, 16, 20, 2, (g, i) => { g.globalAlpha = i ? 0.5 : 1; K.rr(-11, -9, 22, 14, 2, '#7a5aa6'); g.fillStyle = '#5b3f86'; g.beginPath(); g.moveTo(-14, -8); g.lineTo(0, -19); g.lineTo(14, -8); g.fill(); K.rr(-4, -3, 8, 8, 1, '#2b2230'); K.gear(0, -13, 4, 8, 0, '#ffd23f', '#5b3f86'); g.globalAlpha = 1; }, 'rgba32');
   worlds.forEach((world, k) => strip('map_exit_' + (k + 1), 40, 56, 20, 34, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0)));
+  // the start building, drawn over the roads that lead out of it
+  worlds.forEach((world, k) => strip('map_home_' + (k + 1), 40, 52, 20, 34, 1, g => world.drawHome(g, { x: 0, y: 0 }, 0)));
 
   // ---- full-screen pictures (RGBA16)
   function picture(name, w, h, draw) { strip(name, w, h, 0, 0, 1, draw, 'rgba16'); }
@@ -301,8 +303,7 @@ function bakeAll() {
   THEME_ORDER.forEach((th, k) => picture('bg_far_boss_' + k, 640, 240, g => LTHEMES[th].far(g, true)));
   THEME_ORDER.forEach((th, k) => strip('bg_mid_' + k, 640, 80, 0, -160, 1, g => LTHEMES[th].mid(g), 'rgba16'));
   worlds.forEach((world, k) => picture('map_w' + (k + 1), 320, 240, g => {
-    world.drawGround(g); world.drawLive(g, 0.6);
-    const home = node(world, 'home'); if (home) world.drawHome(g, home, 0);
+    world.drawGround(g); world.drawLive(g, 0.6);   // the home building is map_home_N, drawn over the roads
   }));
   // ---- the films between worlds (web/lib/cutart.js): a backdrop each, and the things that move
   [1, 2, 3, 4].forEach(k => picture('cut_bg_' + k, 320, 240, g => CUTART.bg(g, k)));

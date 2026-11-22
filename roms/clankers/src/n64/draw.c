@@ -522,7 +522,7 @@ static void draw_map(const ck_game *G) {
         int id = order[oi];
         const ck_node *nd = &Wd->nodes[id];
         bool beaten = ck_node_beaten(G, id), reach = ck_node_reachable(G, id);
-        if (nd->kind == CK_NODE_HOME) continue;   // baked into the map picture
+        if (nd->kind == CK_NODE_HOME) { blit(SPR_MAP_HOME_1 + wi, 0, nd->x, nd->y); continue; }   // over the roads leading out of it
         if (nd->kind == CK_NODE_SHOP) { blit(SPR_MAP_SHOP, reach ? 0 : 1, nd->x, nd->y); continue; }
         if (nd->kind == CK_NODE_EXIT) { blit(SPR_MAP_EXIT_1 + wi, reach ? 0 : 1, nd->x, nd->y); continue; }
         if (nd->kind == CK_NODE_BOSS) blit(SPR_MAP_BOSS_1 + wi, beaten ? 1 : 0, nd->x, nd->y);
