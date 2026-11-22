@@ -429,7 +429,7 @@ const selectScene = {
       if (m.hero === 'robot') K.robot(x + w / 2, y + 120, 0.2, hex, { t, bob: Math.sin(t * 3) * 3, armR: ready ? -150 + Math.sin(t * 8) * 20 : -22, eyes: { happy: ready ? 0.7 : 0.45 }, acc: closet.wear[i] });
       else K.ostrich(x + w / 2, y + 120, 0.19, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: ready ? 0.7 : 0.4 }, acc: closet.wear[i] });
       text(m.hero === 'robot' ? 'ROBOT' : 'ROBOT OSTRICH', x + w / 2, y + 138, 10);
-      text('◀ ▶ hero   ▲ ▼ ' + CNAMES[m.col].toLowerCase(), x + w / 2, y + 151, 7, '#d9d2e6', 'center', null);
+      text('◀ ▶ hero   ▲ ▼ ' + (closet.rainbow[i] ? 'rainbow' : CNAMES[m.col].toLowerCase()), x + w / 2, y + 151, 7, '#d9d2e6', 'center', null);
       if (ready) { K.rr(x + 30, y + 22, w - 60, 16, 5, '#49d17a'); text('READY!', x + w / 2, y + 34, 10, '#fff', 'center', '#1f6b3c'); }
     }
     const blink = Math.floor(t * 2) % 2;

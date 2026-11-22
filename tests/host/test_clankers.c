@@ -886,6 +886,17 @@ static void test_shop(void) {
         EXPECT_EQ_INT(old.closet.wear[0][SLOT_HEAD], ACC_CHEF + 1);
         G->prog.bolts = 100;
     }
+    // every name the shop and the hero screen print is a real string, whatever the item or colour
+    // (the rainbow paint is colour 8, past the names: the N64 read garbage there and crashed)
+    {
+        char nb[32];
+        int ok = 1;
+        for (int a = 0; a < SHOP_COUNT; a++) { const char *s = ck_shop_name(a, nb, sizeof nb); if (!s || !s[0] || s[0] == '?' || !ck_shop_sec_name(a)[0]) ok = 0; }
+        EXPECT_EQ_INT(ok, 1);
+        for (int c = 0; c <= CK_RAINBOW_COL + 1; c++) if (!ck_col_name(c) || !ck_col_name(c)[0]) ok = 0;
+        EXPECT_EQ_INT(ok, 1);
+        EXPECT_EQ_INT(strcmp(ck_col_name(CK_NCOLS), "Rainbow"), 0);
+    }
     // the last section: heroes swap for free, paint pots are bought then worn, the bubble gun is bought once
     G->prog.hero[1] = HERO_ROBOT;
     G->shopCur[1] = SHOP_OSTRICH; bolts = G->prog.bolts;

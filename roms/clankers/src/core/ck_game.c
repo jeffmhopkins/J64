@@ -9,6 +9,7 @@
 
 const uint32_t ck_cols[CK_NCOLS] = { 0x5AD1FF, 0xFFD23F, 0xFF7A59, 0x49F08A, 0xC28BFF, 0xFF8FC7, 0x7FA7C9, 0xF5F1E8 };
 const char *const ck_col_names[CK_NCOLS] = { "Sky", "Sunny", "Tangerine", "Lime", "Grape", "Bubblegum", "Steel", "Snow" };
+const char *ck_col_name(int col) { return col >= 0 && col < CK_NCOLS ? ck_col_names[col] : "Rainbow"; }
 const char *const ck_power_names[5] = { "", "MEGA BATTERY!", "RAINBOW OVERDRIVE!", "BUBBLE BLASTER!", "MAGNET HELMET!" };
 
 void ck_prog_fresh(ck_prog *p) {

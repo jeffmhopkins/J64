@@ -992,6 +992,7 @@ int ck_foes_left(const ck_level *lv);
 int ck_map_here(const ck_game *G);        // node index, or -1 while walking
 extern const uint32_t ck_cols[CK_NCOLS];
 extern const char *const ck_col_names[CK_NCOLS];
+const char *ck_col_name(int col);   // any colour number: past the eight (the rainbow paint) is "Rainbow"
 extern const char *const ck_power_names[5];
 
 #endif

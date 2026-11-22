@@ -454,7 +454,7 @@ static void draw_select(const ck_game *G) {
         int frame = ready ? 25 + ((int)(G->t * 4) % 2) : (int)(G->t / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
         hero_front(hero, col, frame, x + w / 2, y + 120, 2.6f, false, wear_of(G, i), G->t + i);
         txt(F_MED, ST_CREAM, x + w / 2, y + 138, ALIGN_CENTER, hero == HERO_ROBOT ? "ROBOT" : "ROBOT OSTRICH");
-        txt(F_SMALL, ST_PALE, x + w / 2, y + 151, ALIGN_CENTER, "< > hero   ^ v %s", ck_col_names[col]);
+        txt(F_SMALL, ST_PALE, x + w / 2, y + 151, ALIGN_CENTER, "< > hero   ^ v %s", ck_col_name(col));   // col is SKIN_RAINBOW in the rainbow paint
         if (ready) { rect(x + 30, y + 22, w - 60, 16, 0x49D17A, 1); txt(F_MED, ST_WHITE, x + w / 2, y + 34, ALIGN_CENTER, "READY!"); }
     }
     if ((int)(G->t * 2) % 2) txt(F_MED, ST_CREAM, W / 2, 220, ALIGN_CENTER, "A when ready  -  START to go");
