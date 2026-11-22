@@ -265,8 +265,9 @@ static void lose_life(ck_game *G, ck_player *p) {
         ck_player *q = &lv->players[k];
         if (q != p && !q->dead && !q->bubble) { buddy = q; break; }
     }
-    if (buddy && G->prog.lives > 0) {
-        // co-op: float back to your buddy in a bubble, the level carries on
+    if (buddy) {
+        // co-op: float back to your buddy in a bubble, the level carries on. Out of lives, you stay
+        // in the bubble while your buddy plays on; it is game over only when they are out too.
         p->bubble = 1; p->vx = 0; p->vy = 0; p->wob = 0;
         p->x = ck_clampf(p->x, lv->camX + 8, lv->camX + W - 20);
         p->y = ck_minf(p->y, H - 50);
@@ -642,7 +643,7 @@ static void update_players(ck_game *G, int *outcome) {
             p->x += (tx - p->x) * 0.05f;
             p->y += (ty - p->y) * 0.05f + sinf(lv->t * 4) * 0.3f;
             // the bubble only pops once the buddy stands on firm ground, and sets you down on the floor beside them
-            if (p->bubble > 50 && (hypotf(tx - p->x, ty - p->y) < 14 || HIT(G, p->slot, CK_A))) {
+            if (p->bubble > 50 && G->prog.lives > 0 && (hypotf(tx - p->x, ty - p->y) < 14 || HIT(G, p->slot, CK_A))) {
                 float bx = p->x, by = p->y;
                 if (ck_set_down(lv, p, b)) {
                     p->bubble = 0; p->inv = 90; p->safeX = p->x; p->safeY = p->y;

@@ -1027,6 +1027,7 @@ static void draw_player(const ck_game *G, const ck_player *p, float cam, int npl
         blit(sheet, 28, fx, fy);
         hero_acc(wear, p->hero, 28, fx, fy, 1, false, t);
         bubble_at(fx, p->y + p->h / 2 + shakeY, 21);
+        if (G->prog.lives <= 0) txt(F_SMALL, ST_RED, fx, p->y + p->h / 2 + shakeY - 25, ALIGN_CENTER, "OUT");   // out of lives: riding along
         return;
     }
     float mega = ck_has(p, PW_MEGA) ? 1.5f : 1;

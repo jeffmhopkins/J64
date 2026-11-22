@@ -1603,8 +1603,9 @@ function levelScene(id, retry, defIn, snap) {
     if (p.dead || p.bubble || S.dyingT >= 0 || S.clearT >= 0) return;
     prog.lives = Math.max(0, (prog.lives ?? 3) - 1); p.stack = []; p.rainbowT = 0; p.magnetT = 0; saveProg();
     const buddy = players.find(q => q !== p && !q.dead && !q.bubble);
-    if (buddy && prog.lives > 0) {
-      // co-op: float back to your buddy in a bubble, the level carries on
+    if (buddy) {
+      // co-op: float back to your buddy in a bubble, the level carries on. Out of lives, you stay
+      // in the bubble while your buddy plays on; it is game over only when they are out too.
       p.bubble = 1; p.vx = 0; p.vy = 0; p.wob = 0; p.x = clamp(p.x, S.camX + 8, S.camX + W - 20); p.y = Math.min(p.y, H - 50); SND.fx.ouch(); return;
     }
     for (const q of players) if (!q.bubble) { q.dead = q === p; }
@@ -1837,7 +1838,7 @@ function levelScene(id, retry, defIn, snap) {
         p.bubble++; const tx = b.x - b.face * 4, ty = b.y - 26;
         p.x += (tx - p.x) * 0.05; p.y += (ty - p.y) * 0.05 + Math.sin(S.t * 4) * 0.3;
         // the bubble only pops once the buddy stands on firm ground, and sets you down on the floor beside them
-        if (p.bubble > 50 && (Math.hypot(tx - p.x, ty - p.y) < 14 || hit(p.slot, 'a'))) {
+        if (p.bubble > 50 && prog.lives > 0 && (Math.hypot(tx - p.x, ty - p.y) < 14 || hit(p.slot, 'a'))) {
           const bx = p.x, by = p.y;
           if (setDown(p, b)) { p.bubble = 0; p.inv = 90; p.safeX = p.x; p.safeY = p.y; SND.fx.pop(); puff(bx + p.w / 2, by + p.h / 2, 8, 'rgba(190,240,255,0.9)'); }
         }
@@ -2282,6 +2283,7 @@ function levelScene(id, retry, defIn, snap) {
       if (p.hero === 'robot') K.robot(fx, p.y + p.h, 0.074, p.hex, { t: S.t, eyes: { happy: 0.4 }, acc: p.acc }); else K.ostrich(fx, p.y + p.h, 0.071, p.hex, { t: S.t, acc: p.acc });
       g.globalAlpha = 0.28; K.circ(fx, cy, 21, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = 'rgba(220,250,255,0.9)'; g.lineWidth = 1.5; g.beginPath(); g.arc(fx, cy, 21, 0, P * 2); g.stroke();
       K.circ(fx - 8, cy - 9, 3, 'rgba(255,255,255,0.8)');
+      if (prog.lives <= 0) text('OUT', fx, cy - 25, 8, '#ff8a8a');   // out of lives: riding along until the level ends
       return;
     }
     const mega = has(p, 'mega') ? 1.5 : 1, hexNow = p.rainbowT > 0 ? COLS[Math.floor(S.t * 12 + p.i * 3) % COLS.length] : p.hex;

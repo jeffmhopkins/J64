@@ -733,6 +733,20 @@ static void test_movement(void) {
     EXPECT_EQ_INT(b->bubble, 0);
     for (int f = 0; f < 3; f++) ck_game_step(G, 0, 0);
     EXPECT_EQ_INT(b->ground, 1);
+    // out of lives with a buddy still going: stay in the bubble and the level carries on
+    G->prog.lives = 1;
+    for (int f = 0; f < 120; f++) ck_game_step(G, 0, 0);   // let the landing's safe time run out
+    b->y = 240 + 40; ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(G->prog.lives, 0);
+    EXPECT_EQ_INT(b->bubble > 0, 1);
+    for (int f = 0; f < 400; f++) ck_game_step(G, f % 2 ? CK_A : 0, f % 2 ? CK_A : 0);
+    EXPECT_EQ_INT(b->bubble > 0, 1);
+    EXPECT_EQ_INT(lv->dyingT, -1);
+    // and when the buddy is out too, it is game over
+    a->y = 240 + 40;
+    for (int f = 0; f < 300 && G->scene == SC_LEVEL; f++) ck_game_step(G, 0, 0);
+    EXPECT_EQ_INT(G->scene, SC_MAP);
+    EXPECT_EQ_INT(G->prog.lives, 3);   // game over refills the tries
     G->prog.joined[1] = 0;
 }
 
