@@ -960,7 +960,7 @@ static void draw_jet(const ck_game *G) {
     if (J->endT >= 0) rect(0, 0, W, H, 0, fminf(1, J->endT / 40.0f));
 }
 
-static void draw_pause(const ck_game *G, bool scan) {
+static void draw_pause(const ck_game *G, bool scan, bool interlaced) {
     draw_level(G);
     const ck_level *lv = &G->lv;
     rect(0, 0, W, H, 0x0F0A19, 0.6f);
@@ -969,7 +969,7 @@ static void draw_pause(const ck_game *G, bool scan) {
     txt(F_SMALL, ST_PLAIN, W / 2, 122, ALIGN_CENTER, "A: keep playing   B: back to map");
     if (lv->def->kind == CK_KIND_LEVEL)
         txt(F_SMALL, ST_PALE, W / 2, 138, ALIGN_CENTER, "Bolts %d/%d    Glitchies left %d", lv->boltGot, lv->boltTotal, ck_foes_left(lv));
-    txt(F_SMALL, ST_GREY, W / 2, 156, ALIGN_CENTER, "Z: TV lines %s", scan ? "on" : "off");
+    txt(F_SMALL, ST_GREY, W / 2, 156, ALIGN_CENTER, "Z: TV lines %s   R: %s", scan ? "on" : "off", interlaced ? "480i" : "240p");
 }
 
 // ---------------------------------------------------------------------------- the films between worlds
@@ -1033,7 +1033,7 @@ static void draw_cut(const ck_game *G) {
 
 // ---------------------------------------------------------------------------- a frame
 
-void draw_frame(const ck_game *G, bool scanlines) {
+void draw_frame(const ck_game *G, bool scanlines, bool interlaced) {
     free_for(G);
     mode = M_NONE;
     shakeY = 0;
@@ -1046,7 +1046,7 @@ void draw_frame(const ck_game *G, bool scanlines) {
     case SC_SHOP: draw_shop(G); break;
     case SC_LEVEL: draw_level(G); break;
     case SC_JET: draw_jet(G); break;
-    case SC_PAUSE: draw_pause(G, scanlines); break;
+    case SC_PAUSE: draw_pause(G, scanlines, interlaced); break;
     case SC_CUT: draw_cut(G); break;
     }
     if (scanlines) {
