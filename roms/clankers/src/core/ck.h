@@ -464,7 +464,7 @@ extern const int ck_aqua_pop[CK_AQUA_SECTIONS][CK_AQUA_PER_SEC];   // the kinds 
 // pushes the car to its outside. Up or A goes faster, down or B brakes. Boost pads speed you up and
 // ramps jump you over whatever is just past them. Two players get a half of the screen each.
 #define CK_RACE_LEN 9600          // about a minute at cruising speed
-#define CK_RACE_OBST 64           // sparse at the start, closer together further on
+#define CK_RACE_OBST 36           // sparse at the start, closer together further on
 #define CK_RACE_LANE 40           // the lanes are at -40, 0 and 40 from the road's middle
 #define CK_RACE_ROAD 64           // the road's half width; past it is the kerb, then grass that slows you
 #define CK_RACE_EDGE 84           // how far from the middle a car can go

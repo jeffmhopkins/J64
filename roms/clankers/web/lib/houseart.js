@@ -195,7 +195,7 @@ const HOUSEART = (() => {
   // ---- the garage race from behind the car: the road runs to a horizon and bends; strips of road
   // from the bottom up, things shrinking with distance. Boxes and circles only, so the N64
   // (race_view in draw.c) draws the same picture.
-  const RACE = { len: 9600, obst: 64, lane: 40, road: 64, edge: 84, pads: 14, HZ: 96, ZC: 2880, CAR_Z: 26, PX0: 2.66, BEND: 0.0026 };
+  const RACE = { len: 9600, obst: 36, lane: 40, road: 64, edge: 84, pads: 14, HZ: 96, ZC: 2880, CAR_Z: 26, PX0: 2.66, BEND: 0.0026 };
   // four tracks (ck_tracks in ck_house.c): the obstacle kinds behave the same and only look different
   const TRACKS = [
     { name: 'Green Hills', ground: 0x5DBB63, deco: 0x3F9D4E, road: 0x5A5E6A, kerbA: 0xE04F4F, kerbB: 0xFFFFFF, line: 0xFFF6D8, sky: 0x8FD3FF, hills: 0x3F9D4E, amp: 0.8 },
@@ -214,13 +214,13 @@ const HOUSEART = (() => {
   const racePad = (track, i) => ({ d: 800 + i * 620 + (track * 37) % 100, x: ((i * 2 + track) % 3 - 1) * RACE.lane, kind: i % 3 === 2 ? 'ramp' : 'boost' });
   const raceObst = (track, i, clock) => {
     let kind = ['cone', 'crate', 'oil', 'cone', 'car'][i % 5];
-    if (i < 8 && kind === 'oil') kind = 'crate';   // the start is easy: no oil or slow cars yet
-    if (i < 16 && kind === 'car') kind = 'cone';
-    const t = Math.min(1, i / 48);   // the gaps shrink from about 260 px to 80 px, as on the N64
+    if (i < 5 && kind === 'oil') kind = 'crate';   // the start is easy: no oil or slow cars yet
+    if (i < 10 && kind === 'car') kind = 'cone';
+    const t = Math.min(1, i / 30);   // the gaps shrink from about 390 to 150, as on the N64
     const across = track === 1 || track === 2;   // tumbleweeds and penguins wander across the road
     let x = ((i * 7 + Math.floor(i / 4)) % 3 - 1) * RACE.lane;
     if (kind === 'car' && across) x = Math.sin(clock * (track === 2 ? 0.9 : 1.4) + i) * 44;
-    return { d: 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (kind === 'car' && !across ? clock * 60 : 0), x, kind,
+    return { d: 400 + i * 150 + 3600 * (1 - (1 - t) * (1 - t)) + (kind === 'car' && !across ? clock * 60 : 0), x, kind,
              w: kind === 'oil' ? 20 : kind === 'car' ? (across ? 14 : 18) : kind === 'crate' ? 18 : 12, h: kind === 'oil' ? 14 : kind === 'car' ? (across ? 14 : 28) : kind === 'crate' ? 18 : 12 };
   };
   const box = (g, x, y, w, h, c, a = 1) => { g.globalAlpha = a; g.fillStyle = typeof c === 'number' ? hx(c) : c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };

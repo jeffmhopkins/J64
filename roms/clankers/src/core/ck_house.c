@@ -779,12 +779,12 @@ void ck_race_pad(int track, int i, float *d, float *x, int *kind) {
 void ck_race_obst(int track, int i, float clock, float *d, float *x, int *kind, float *w, float *h) {
     static const int kinds[5] = { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CONE, OBST_CAR };
     *kind = kinds[i % 5];
-    if (i < 8 && *kind == OBST_OIL) *kind = OBST_CRATE;   // the start is easy: no oil or slow cars yet
-    if (i < 16 && *kind == OBST_CAR) *kind = OBST_CONE;
-    // the gaps shrink from about 260 px to 80 px over the first 48, then stay at 80
-    float t = i < 48 ? i / 48.0f : 1;
+    if (i < 5 && *kind == OBST_OIL) *kind = OBST_CRATE;   // the start is easy: no oil or slow cars yet
+    if (i < 10 && *kind == OBST_CAR) *kind = OBST_CONE;
+    // the gaps shrink from about 390 to 150 over the first 30, then stay at 150
+    float t = i < 30 ? i / 30.0f : 1;
     bool across = track == TRACK_DESERT || track == TRACK_SNOW;   // tumbleweeds and penguins wander across
-    *d = 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (*kind == OBST_CAR && !across ? clock * 60 : 0);   // cars drive at 1 px a frame
+    *d = 400 + i * 150 + 3600 * (1 - (1 - t) * (1 - t)) + (*kind == OBST_CAR && !across ? clock * 60 : 0);   // cars drive at 1 px a frame
     *x = ((i * 7 + i / 4) % 3 - 1) * CK_RACE_LANE;
     if (*kind == OBST_CAR && across) *x = sinf(clock * (track == TRACK_SNOW ? 0.9f : 1.4f) + i) * 44;
     *w = *kind == OBST_OIL ? 20 : *kind == OBST_CAR ? (across ? 14 : 18) : *kind == OBST_CRATE ? 18 : 12;

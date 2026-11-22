@@ -1194,13 +1194,14 @@ static void test_house(void) {
         if (tr == 0) good = G->house.gs[0].best;
         hold(G, 60 * 5, 0, 0);   // then the next track comes up
     }
-    // a driver who never steers bumps into everything in the middle lane and is slower
+    // a driver who never steers drifts wide on the bends, bumps into things and is slower
     EXPECT_EQ_INT(G->house.track, TRACK_HILLS);
     press(G, CK_A, 0);
     for (int i = 0; i < 60 * 240 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
     int bumps = 0;
     for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
-    EXPECT_EQ_INT(bumps >= 6, 1);
+    if (bumps < 3) printf("  the driver who never steers bumped %d times\n", bumps);
+    EXPECT_EQ_INT(bumps >= 3, 1);
     EXPECT_EQ_INT(G->house.gs[0].best > good + 3, 1);
     // the road starts straight then bends both ways; a bend pushes a car that does not steer outwards
     {
