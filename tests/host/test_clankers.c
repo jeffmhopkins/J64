@@ -926,7 +926,13 @@ static void test_race_view(void) {
         EXPECT_EQ_INT(fabsf(ck_race_depth(ck_race_row(z)) - z) < z * 0.001f, 1);
         EXPECT_EQ_INT(ck_race_row(z) > CK_RACE_ZC / z, 1);   // further down the screen than a true camera puts it: in view for longer
     }
-    EXPECT_EQ_INT(ck_race_row(CK_RACE_FAR) > 4, 1);   // the far end is still a few rows below the horizon
+    EXPECT_EQ_INT(ck_race_row(CK_RACE_FAR) > 4, 1);
+    // every row the road is drawn on, and the one above the horizon it peeks at, gives a real depth
+    for (int y = CK_H - 2; y >= CK_RACE_HZ - 2; y--) {
+        EXPECT_EQ_INT(isfinite(ck_race_depth(y + 1 - CK_RACE_HZ)) && ck_race_depth(y + 1 - CK_RACE_HZ) > 0, 1);
+        EXPECT_EQ_INT(isfinite(ck_race_depth(y - 1 - CK_RACE_HZ)) && ck_race_depth(y - 1 - CK_RACE_HZ) > 0, 1);
+    }
+    EXPECT_EQ_INT(isfinite(ck_race_row(0)) && isfinite(ck_race_row(-5)), 1);   // the far end is still a few rows below the horizon
     // something big enough to read (scale 0.4) gets more than twice the time a true camera gives it
     float px = CK_RACE_PX0 / (CK_H - CK_RACE_HZ), seen = ck_race_depth(0.4f / px), trueSeen = CK_RACE_ZC * px / 0.4f;
     EXPECT_EQ_INT(seen - CK_RACE_CAR_Z > 2 * (trueSeen - CK_RACE_CAR_Z), 1);

@@ -891,8 +891,10 @@ const ck_racetrack ck_tracks[CK_RACE_TRACKS] = {
     { "Snowy Pass", 0xEEF6FF, 0x3F7D5E, 0x7D8CA3, 0x3A6FC0, 0xFFFFFF, 0xFFFFFF, 0xBFD9F2, 0x8FA8C8 },
     { "Moon Run", 0x2B2840, 0x8F8AA8, 0x5A566E, 0xFFD23F, 0x3A3650, 0xC9C4E0, 0x0F0A19, 0x4A4560 },
 };
-float ck_race_row(float zr) { return CK_RACE_ZC / CK_RACE_CAR_Z * powf(CK_RACE_CAR_Z / zr, CK_RACE_SQUASH); }
-float ck_race_depth(float row) { return CK_RACE_CAR_Z * powf(CK_RACE_ZC / CK_RACE_CAR_Z / row, 1 / CK_RACE_SQUASH); }
+// both clamp what they are given: the N64 stops dead on powf of a negative number (the horizon row
+// asked for the row above it, row -1, and that crashed a race)
+float ck_race_row(float zr) { return CK_RACE_ZC / CK_RACE_CAR_Z * powf(CK_RACE_CAR_Z / ck_maxf(zr, 1), CK_RACE_SQUASH); }
+float ck_race_depth(float row) { return CK_RACE_CAR_Z * powf(CK_RACE_ZC / CK_RACE_CAR_Z / ck_maxf(row, 0.5f), 1 / CK_RACE_SQUASH); }
 float ck_race_curve(int track, float d) {
     if (d < 500) return 0;   // a straight start
     static const float amp[CK_RACE_TRACKS] = { 0.8f, 0.7f, 1.0f, 0.6f };
