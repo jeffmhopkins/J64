@@ -1252,74 +1252,113 @@ function aquaScene(house) {
 // the stick steers. Three laps; with two players the first one home wins.
 function carsScene(house) {
   const R = HOUSEART.RACE, S = { song: 'race', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
-  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), pads: new Set(), done: false, time: 0, jz: 0, jvz: 0, lean: 0, sky: 0, boost: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; S.pickTrack = true; };
+  const SONGS = ['race', 'race2', 'race3', 'race4'];   // each track has its own tune
+  const BOT_COL = [0xFF5A5A, 0x49D17A, 0xC28BFF], BOT_TOP = [3.4, 3.3, 3.2];   // the computer cars: colours and top speeds
+  const ORD = ['-', '1st', '2nd', '3rd', '4th'];
+  const tune = name => { S.song = name; if (SND.ready) SND.playSong(name); };
+  const newCar = (x, d) => ({ x, vx: 0, d, s: 0, spin: 0, hit: new Set(), pads: new Set(), done: false, time: 0, place: 0, jz: 0, jvz: 0, lean: 0, sky: 0, boost: 0 });
+  const reset = () => {
+    const np = house.ps.length;
+    S.cars = house.ps.map((h, i) => Object.assign(newCar(np > 1 ? (i - 0.5) * R.lane : 0, 0), { m: h.m }));   // two players start side by side
+    S.bots = BOT_COL.slice(0, 4 - np).map((col, b) => Object.assign(newCar((b - 1) * R.lane, 40 + b * 12), { col, b, lane: b, think: 0 }));   // computer cars fill the grid to four
+    S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; S.pickTrack = true; S.nfin = 0;
+    tune(SONGS[S.track % 4]);
+  };
   S.track = 0;
   reset();
+  const rank = me => 1 + [...S.cars, ...S.bots].filter(o => o !== me && (o.place ? !me.place || o.place < me.place : !me.place && o.d > me.d)).length;
+  // one car's frame: gas, brakes, bends, pads, jumps and bumps (sounds only for the players' cars)
+  function drive(c, steer, gas, brake, top, player) {
+    const me = player >= 0, air = c.jz > 0;
+    let want = gas && !brake ? top : 0, grip = brake ? 0.08 : gas ? 0.04 : 0.015;
+    if (Math.abs(c.x) > R.road + 2 && !air) want = Math.min(want, 1.8);   // on the grass
+    if (c.boost > 0) { c.boost--; want = 5; grip = 0.04; }
+    if (c.spin > 0) { c.spin--; want = Math.min(want, 1); steer = 0; }
+    c.s += (want - c.s) * grip;
+    c.vx += (steer * 2.2 - c.vx) * 0.25;
+    const bend = HOUSEART.raceCurve(S.track, c.d);
+    c.x = clamp(c.x + c.vx - bend * c.s * 0.3, -R.edge, R.edge);   // a bend pushes you to its outside
+    c.lean += (clamp(c.vx / 2.2 + bend * 0.5, -1, 1) - c.lean) * 0.2;
+    c.sky += bend * c.s * 0.25;
+    if (c.done) c.s *= 0.97;   // past the line: roll to a stop
+    c.d += c.s;
+    if (air || c.jvz > 0) { c.jvz -= 0.14; c.jz += c.jvz; if (c.jz <= 0) { c.jz = c.jvz = 0; if (me) SND.fx.hop(); } }
+    for (let k = 0; k < R.pads; k++) {
+      const o = HOUSEART.racePad(S.track, k);
+      if (c.pads.has(k) || c.jz > 0 || Math.abs(c.x - o.x) > 14 + 9 || Math.abs(c.d - o.d) > 15 + 12) continue;
+      c.pads.add(k);
+      if (o.kind === 'boost') { c.boost = 75; c.s = Math.max(c.s, 4.4); if (me) SND.fx.boost(); } else { c.jvz = 3; c.jz = 0.01; if (me) SND.fx.boing(); }
+    }
+    for (let k = 0; k < R.obst && c.jz <= 2; k++) {
+      const o = HOUSEART.raceObst(S.track, k, S.clock);
+      if (c.hit.has(k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
+      c.hit.add(k);
+      if (o.kind === 'oil') { c.spin = 40; c.s *= 0.6; if (me) SND.fx.slide(); } else { c.spin = 50; c.s = 0.6; if (me) SND.fx.clank(); }
+    }
+    if (!c.done && c.d >= R.len) {
+      c.done = true; c.time = S.clock; c.place = ++S.nfin;
+      if (me) SND.fx.gear();
+      if (me && S.win < 0) { S.win = player; SND.fx.flag(); confetti(160, 40, 40); tune('victory'); }   // the race music stops for a fanfare
+    }
+  }
+  // a computer driver: every so often it picks the lane that is clear furthest ahead and steers for it
+  function bot(c) {
+    if (--c.think <= 0) {
+      c.think = 8 + c.b * 3;
+      const look = 120 - c.b * 15, clear = [look, look, look];
+      for (let k = 0; k < R.obst; k++) {
+        const o = HOUSEART.raceObst(S.track, k, S.clock), d = o.d - c.d;
+        if (d < -20 || d > look) continue;
+        for (let l = 0; l < 3; l++) if (Math.abs(o.x - (l - 1) * R.lane) < o.w / 2 + 14) clear[l] = Math.min(clear[l], d);
+      }
+      const lane = clamp(Math.round(c.x / R.lane) + 1, 0, 2);
+      let best = c.lane;
+      if (clear[best] < look) { best = lane; for (let l = 0; l < 3; l++) if (clear[l] > clear[best] + 1 || (clear[l] >= clear[best] - 1 && Math.abs(l - lane) < Math.abs(best - lane) && clear[l] >= clear[best])) best = l; }
+      c.lane = best;
+    }
+    const tx = (c.lane - 1) * R.lane;
+    drive(c, tx > c.x + 3 ? 1 : tx < c.x - 3 ? -1 : 0, !c.done, false, BOT_TOP[c.b] * (little ? 0.93 : 1), -1);   // gentler for little kids
+  }
   S.update = function () {
     S.t += 1 / 60; stepParticles();
     if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
     if (S.pickTrack) {   // left and right pick the track, A starts the countdown
       const d = (anyHit('right') ? 1 : 0) - (anyHit('left') ? 1 : 0), n = HOUSEART.TRACKS.length;
-      if (d) { S.track = (S.track + d + n) % n; SND.fx.select(); }
+      if (d) { S.track = (S.track + d + n) % n; SND.fx.select(); tune(SONGS[S.track % 4]); }
       if (anyHit('a')) { S.pickTrack = false; SND.fx.confirm(); }
       return;
     }
     if (S.count > 0) { const was = Math.ceil(S.count); S.count -= 1 / 60; if (Math.ceil(S.count) !== was) SND.fx[S.count <= 0 ? 'confirm' : 'tick'](); return; }
     if (S.win >= 0) {   // the others get 4 seconds to finish too
       if ((S.endT += 1 / 60) > 4) { S.track = (S.track + 1) % HOUSEART.TRACKS.length; reset(); return; }   // on to the next track
-      if (S.cars.every(c => c.done)) return;
+      if (S.cars.every(c => c.done)) return;   // the race ends with the players
     }
     S.clock += 1 / 60;
     S.cars.forEach((c, i) => {
       const sl = c.m.slot;
-      let steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
-      const air = c.jz > 0;
       // the car only goes while you hold the gas (A or up); let go and it rolls to a stop, B or down brakes
-      const gas = held(sl, 'up') || held(sl, 'a'), brake = held(sl, 'down') || held(sl, 'b');
-      let want = gas && !brake ? 3.6 : 0, grip = brake ? 0.08 : gas ? 0.04 : 0.015;
-      if (Math.abs(c.x) > R.road + 2 && !air) want = Math.min(want, 1.8);   // on the grass
-      if (c.boost > 0) { c.boost--; want = 5; grip = 0.04; }
-      if (c.spin > 0) { c.spin--; want = Math.min(want, 1); steer = 0; }
-      c.s += (want - c.s) * grip;
-      c.vx += (steer * 2.2 - c.vx) * 0.25;
-      const bend = HOUSEART.raceCurve(S.track, c.d);
-      c.x = clamp(c.x + c.vx - bend * c.s * 0.3, -R.edge, R.edge);   // a bend pushes you to its outside
-      c.lean += (clamp(c.vx / 2.2 + bend * 0.5, -1, 1) - c.lean) * 0.2;
-      c.sky += bend * c.s * 0.25;
-      if (c.done) c.s *= 0.97;   // past the line: roll to a stop
-      c.d += c.s;
-      if (air || c.jvz > 0) { c.jvz -= 0.14; c.jz += c.jvz; if (c.jz <= 0) { c.jz = c.jvz = 0; SND.fx.hop(); } }
-      for (let k = 0; k < R.pads; k++) {
-        const o = HOUSEART.racePad(S.track, k);
-        if (c.pads.has(k) || c.jz > 0 || Math.abs(c.x - o.x) > 14 + 9 || Math.abs(c.d - o.d) > 15 + 12) continue;
-        c.pads.add(k);
-        if (o.kind === 'boost') { c.boost = 75; c.s = Math.max(c.s, 4.4); SND.fx.boost(); } else { c.jvz = 3; c.jz = 0.01; SND.fx.boing(); }
-      }
-      for (let k = 0; k < R.obst && c.jz <= 2; k++) {
-        const o = HOUSEART.raceObst(S.track, k, S.clock);
-        if (c.hit.has(k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
-        c.hit.add(k);
-        if (o.kind === 'oil') { c.spin = 40; c.s *= 0.6; SND.fx.slide(); } else { c.spin = 50; c.s = 0.6; SND.fx.clank(); }
-      }
-      if (!c.done && c.d >= R.len) { c.done = true; c.time = S.clock; SND.fx.gear(); if (S.win < 0) { S.win = i; SND.fx.flag(); confetti(160, 40, 40); } }
+      drive(c, (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0), held(sl, 'up') || held(sl, 'a'), held(sl, 'down') || held(sl, 'b'), 3.6, i);
     });
+    S.bots.forEach(bot);
   };
   S.draw = function () {
     K.g = g;
     const n = S.cars.length, vw = n > 1 ? W / 2 : W;
+    const hexOf = q => q.col !== undefined ? q.col : /^#[0-9a-f]{6}$/i.test(q.m.hex) ? parseInt(q.m.hex.slice(1), 16) : 0xE6E6F0;
     S.cars.forEach((c, i) => {
       const x0 = i * vw;
       g.save(); g.beginPath(); g.rect(x0, 0, vw, H); g.clip();
-      const hexOf = q => /^#[0-9a-f]{6}$/i.test(q.m.hex) ? parseInt(q.m.hex.slice(1), 16) : 0xE6E6F0;
-      HOUSEART.raceView(g, S.track, x0, vw, c, S.cars.filter(o => o !== c).map(o => ({ d: o.d, x: o.x, jz: o.jz, hex: hexOf(o), lean: o.lean, boost: o.boost > 0 })), S.clock, S.t);
+      HOUSEART.raceView(g, S.track, x0, vw, c, [...S.cars, ...S.bots].filter(o => o !== c).map(o => ({ d: o.d, x: o.x, jz: o.jz, hex: hexOf(o), lean: o.lean, boost: o.boost > 0 })), S.clock, S.t);
       const p = HOUSEART.raceProject(S.track, c.d, c.x * 0.7, x0 + vw / 2, vw, R.CAR_Z, c.x), wob = c.spin > 0 ? Math.sin(c.spin * 0.6) * 4 : 0;
       if (c.jz > 0) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(p.x - 11 * p.s, p.y - 1.5 * p.s, 22 * p.s, 3 * p.s); }
       HOUSEART.carBack(g, p.x + wob, p.y - c.jz * p.s, p.s, hexOf(c), c.lean, c.boost > 0, S.t);
       // the progress bar and the player's label sit by the middle of the screen, back to back
       const left = n > 1 && i === 1, bx = left ? x0 + 7 : x0 + vw - 12;
       g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(bx, 20, 5, 150);
+      for (const o of S.bots) { g.fillStyle = hexStr(o.col); g.fillRect(bx, 167 - 146 * Math.min(1, o.d / R.len), 5, 2); }
       g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(bx - 1, 166 - 146 * Math.min(1, c.d / R.len), 7, 4);
       if (n > 1) text('P' + (c.m.slot + 1), left ? x0 + 16 : x0 + vw - 16, 14, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', left ? 'left' : 'right');
+      if (!S.pickTrack) { const rk = rank(c); text(ORD[rk], left ? x0 + vw - 8 : x0 + 8, 22, 10, rk === 1 ? '#ffd23f' : '#fff6d8', left ? 'right' : 'left'); }   // your place in the race
       if (c.boost > 0) text('BOOST!', x0 + vw / 2, 112, 8, '#ffd23f');
       g.restore();
     });
@@ -1335,7 +1374,7 @@ function carsScene(house) {
     }
     if (S.count > 0) rimBanner(String(Math.ceil(S.count)), 20, 100, 34);
     else if (S.win < 0 && S.clock < 0.8) rimBanner('GO!', 20, 100, 34, '#49d17a', '#49d17a');
-    if (S.win >= 0) rimBanner(n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)), 14, 98, 30);
+    if (S.win >= 0) rimBanner(n > 1 ? 'P1 ' + ORD[S.cars[0].place] + '   P2 ' + ORD[S.cars[1].place] : ORD[S.cars[0].place] + '!  ' + clock(Math.round(S.cars[0].time * 60)), 14, 98, 30);   // places when it is over
     hint('Stick steer   A gas   B brake   START leave', H - 12);
   };
   return S;

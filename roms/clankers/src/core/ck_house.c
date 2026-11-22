@@ -837,6 +837,8 @@ void ck_race_obst(int track, int i, float clock, float *d, float *x, int *kind, 
     *w = *kind == OBST_OIL ? 20 : *kind == OBST_CAR ? (across ? 14 : 18) : *kind == OBST_CRATE ? 18 : 12;
     *h = *kind == OBST_OIL ? 14 : *kind == OBST_CAR ? (across ? 14 : 28) : *kind == OBST_CRATE ? 18 : 12;
 }
+const uint32_t ck_race_bot_col[CK_RACE_CARS - 1] = { 0xFF5A5A, 0x49D17A, 0xC28BFF };
+static const float bot_top[CK_RACE_CARS - 1] = { 3.4f, 3.3f, 3.2f };   // the computer cars' top speeds
 static void cars_reset(ck_game *G) {
     ck_house *H = &G->house;
     for (int i = 0; i < H->np; i++) {
@@ -844,8 +846,94 @@ static void cars_reset(ck_game *G) {
         int slot = c->slot;
         memset(c, 0, sizeof *c);
         c->slot = slot; c->face = 1;
+        c->x = (i - 0.5f) * CK_RACE_LANE * (H->np > 1);   // two players start side by side
     }
-    H->count = 3; H->win = -1; H->endT = 0; H->clock = 0; H->pickTrack = true;
+    H->nbots = CK_RACE_CARS - H->np;
+    for (int b = 0; b < H->nbots; b++) {   // the computer cars line up just ahead, one per lane
+        ck_hhero *c = &H->bot[b];
+        memset(c, 0, sizeof *c);
+        c->slot = -1; c->face = 1;
+        c->x = (b - 1) * CK_RACE_LANE; c->a = 40 + b * 12; c->key = b;
+    }
+    H->count = 3; H->win = -1; H->endT = 0; H->clock = 0; H->pickTrack = true; H->nfin = 0;
+    ck_play(G, ck_race_song(H->track));
+}
+// each track has its own tune
+int ck_race_song(int track) { static const int s[CK_RACE_TRACKS] = { SONG_RACE, SONG_RACE2, SONG_RACE3, SONG_RACE4 }; return s[track % CK_RACE_TRACKS]; }
+// where a car is in the race right now: 1 is in front
+int ck_race_rank(const ck_house *H, const ck_hhero *me) {
+    int r = 1;
+    for (int i = 0; i < H->np + H->nbots; i++) {
+        const ck_hhero *o = i < H->np ? &H->gs[i] : &H->bot[i - H->np];
+        if (o == me) continue;
+        if (o->place && (!me->place || o->place < me->place)) r++;
+        else if (!o->place && !me->place && o->a > me->a) r++;
+    }
+    return r;
+}
+// one car's frame: gas, brakes, bends, pads, jumps and bumps (sounds only for the players' cars)
+static void car_step(ck_game *G, ck_hhero *c, int steer, bool gas, bool brake, float top, int player) {
+    ck_house *H = &G->house;
+    bool air = c->jz > 0, me = player >= 0;
+    float want = gas && !brake ? top : 0, grip = brake ? 0.08f : gas ? 0.04f : 0.015f;
+    if (fabsf(c->x) > CK_RACE_ROAD + 2 && !air) want = ck_minf(want, 1.8f);   // on the grass
+    if (c->boost > 0) { c->boost--; want = 5.0f; grip = 0.04f; }
+    if (c->rep > 0) { c->rep--; want = ck_minf(want, 1); steer = 0; }
+    c->s += (want - c->s) * grip;
+    c->vx += (steer * 2.2f - c->vx) * 0.25f;
+    float bend = ck_race_curve(H->track, c->a);
+    c->x = ck_clampf(c->x + c->vx - bend * c->s * 0.3f, -CK_RACE_EDGE, CK_RACE_EDGE);   // a bend pushes you to its outside
+    c->lean += (ck_clampf(c->vx / 2.2f + bend * 0.5f, -1, 1) - c->lean) * 0.2f;
+    c->sky += bend * c->s * 0.25f;
+    if (c->laps) c->s *= 0.97f;   // past the line: roll to a stop
+    c->a += c->s;
+    if (air || c->jvz > 0) { c->jvz -= 0.14f; c->jz += c->jvz; if (c->jz <= 0) { c->jz = c->jvz = 0; if (me) ck_sfx(G, SFX_HOP); } }
+    for (int k = 0; k < CK_RACE_PADS; k++) {
+        float pd, px; int kind;
+        ck_race_pad(H->track, k, &pd, &px, &kind);
+        if (c->pads & (1u << k) || c->jz > 0 || fabsf(c->x - px) > 14 + 9 || fabsf(c->a - pd) > 15 + 12) continue;
+        c->pads |= 1u << k;
+        if (kind == PAD_BOOST) { c->boost = 75; c->s = ck_maxf(c->s, 4.4f); if (me) ck_sfx(G, SFX_BOOST); }
+        else { c->jvz = 3.0f; c->jz = 0.01f; if (me) ck_sfx(G, SFX_BOING); }
+    }
+    for (int k = 0; k < CK_RACE_OBST; k++) {
+        if (c->jz > 2) break;   // flying over it
+        float od, ox, w, h; int kind;
+        ck_race_obst(H->track, k, H->clock, &od, &ox, &kind, &w, &h);
+        if (c->hit & (1ull << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;
+        c->hit |= 1ull << k;
+        if (kind == OBST_OIL) { c->rep = 40; c->s *= 0.6f; if (me) ck_sfx(G, SFX_SLIDE); }
+        else { c->rep = 50; c->s = 0.6f; if (me) ck_sfx(G, SFX_CLANK); }
+    }
+    if (c->laps == 0 && c->a >= CK_RACE_LEN) {
+        c->laps = 1; c->best = H->clock; c->place = ++H->nfin;
+        if (me) ck_sfx(G, SFX_GEAR);
+        if (me && H->win < 0) { H->win = player; ck_sfx(G, SFX_FLAG); ck_confetti(G, 160, 40, 40); ck_play(G, SONG_VICTORY); }   // the race music stops for a fanfare
+    }
+}
+// A computer driver: every so often it picks the lane that is clear furthest ahead and steers for it.
+static void bot_drive(ck_game *G, ck_hhero *c, int b) {
+    ck_house *H = &G->house;
+    if (--c->bounce <= 0) {
+        c->bounce = 8 + b * 3;
+        float look = 120 - b * 15, clear[3] = { look, look, look };
+        for (int k = 0; k < CK_RACE_OBST; k++) {
+            float od, ox, w, h; int kind;
+            ck_race_obst(H->track, k, H->clock, &od, &ox, &kind, &w, &h);
+            float d = od - c->a;
+            if (d < -20 || d > look) continue;
+            for (int l = 0; l < 3; l++) if (fabsf(ox - (l - 1) * CK_RACE_LANE) < w / 2 + 14) clear[l] = ck_minf(clear[l], d);
+        }
+        int lane = (int)lroundf(c->x / CK_RACE_LANE) + 1, best = c->key;
+        if (best < 0 || best > 2) best = 1;
+        if (clear[best] < look) {   // its lane is blocked: the clearest one, the nearest if they tie
+            best = lane < 0 ? 0 : lane > 2 ? 2 : lane;
+            for (int l = 0; l < 3; l++) if (clear[l] > clear[best] + 1 || (clear[l] >= clear[best] - 1 && abs(l - lane) < abs(best - lane) && clear[l] >= clear[best])) best = l;
+        }
+        c->key = best;
+    }
+    float tx = (c->key - 1) * CK_RACE_LANE;
+    car_step(G, c, tx > c->x + 3 ? 1 : tx < c->x - 3 ? -1 : 0, !c->laps, false, bot_top[b] * (G->prog.little ? 0.93f : 1), -1);   // gentler for little kids
 }
 static void cars_start(ck_game *G) { ck_house_game_heroes(G); cars_reset(G); ck_go(G, SC_CARS); }
 // Before each race: left and right pick the track, A starts the countdown.
@@ -855,7 +943,7 @@ static void cars_update(ck_game *G) {
     if (ANYHIT(G, CK_START)) { back_to_house(G); return; }
     if (H->pickTrack) {
         int d = (ANYHIT(G, CK_RIGHT) ? 1 : 0) - (ANYHIT(G, CK_LEFT) ? 1 : 0);
-        if (d) { H->track = (H->track + d + CK_RACE_TRACKS) % CK_RACE_TRACKS; ck_sfx(G, SFX_SELECT); }
+        if (d) { H->track = (H->track + d + CK_RACE_TRACKS) % CK_RACE_TRACKS; ck_sfx(G, SFX_SELECT); ck_play(G, ck_race_song(H->track)); }
         if (ANYHIT(G, CK_A)) { H->pickTrack = false; ck_sfx(G, SFX_CONFIRM); }
         return;
     }
@@ -866,7 +954,7 @@ static void cars_update(ck_game *G) {
         return;
     }
     bool all = true;
-    for (int i = 0; i < H->np; i++) if (H->gs[i].laps == 0) all = false;
+    for (int i = 0; i < H->np; i++) if (H->gs[i].laps == 0) all = false;   // the race ends with the players
     if (H->win >= 0) {   // the others get 4 seconds to finish too
         if ((H->endT += 1.0f / 60) > 4) { H->track = (H->track + 1) % CK_RACE_TRACKS; cars_reset(G); return; }   // on to the next track
         if (all) return;
@@ -874,46 +962,11 @@ static void cars_update(ck_game *G) {
     H->clock += 1.0f / 60;
     for (int i = 0; i < H->np; i++) {
         ck_hhero *c = &H->gs[i];
-        int s = c->slot, steer = dir_x(G, s);
-        bool air = c->jz > 0;
+        int s = c->slot;
         // the car only goes while you hold the gas (A or up); let go and it rolls to a stop, B or down brakes
-        bool gas = HELD(G, s, CK_UP) || HELD(G, s, CK_A), brake = HELD(G, s, CK_DOWN) || HELD(G, s, CK_B);
-        float want = gas && !brake ? 3.6f : 0, grip = brake ? 0.08f : gas ? 0.04f : 0.015f;
-        if (fabsf(c->x) > CK_RACE_ROAD + 2 && !air) want = ck_minf(want, 1.8f);   // on the grass
-        if (c->boost > 0) { c->boost--; want = 5.0f; grip = 0.04f; }
-        if (c->rep > 0) { c->rep--; want = ck_minf(want, 1); steer = 0; }
-        c->s += (want - c->s) * grip;
-        c->vx += (steer * 2.2f - c->vx) * 0.25f;
-        float bend = ck_race_curve(H->track, c->a);
-        c->x = ck_clampf(c->x + c->vx - bend * c->s * 0.3f, -CK_RACE_EDGE, CK_RACE_EDGE);   // a bend pushes you to its outside
-        c->lean += (ck_clampf(c->vx / 2.2f + bend * 0.5f, -1, 1) - c->lean) * 0.2f;
-        c->sky += bend * c->s * 0.25f;
-        if (c->laps) c->s *= 0.97f;   // past the line: roll to a stop
-        c->a += c->s;
-        if (air || c->jvz > 0) { c->jvz -= 0.14f; c->jz += c->jvz; if (c->jz <= 0) { c->jz = c->jvz = 0; ck_sfx(G, SFX_HOP); } }
-        for (int k = 0; k < CK_RACE_PADS; k++) {
-            float pd, px; int kind;
-            ck_race_pad(H->track, k, &pd, &px, &kind);
-            if (c->pads & (1u << k) || c->jz > 0 || fabsf(c->x - px) > 14 + 9 || fabsf(c->a - pd) > 15 + 12) continue;
-            c->pads |= 1u << k;
-            if (kind == PAD_BOOST) { c->boost = 75; c->s = ck_maxf(c->s, 4.4f); ck_sfx(G, SFX_BOOST); }
-            else { c->jvz = 3.0f; c->jz = 0.01f; ck_sfx(G, SFX_BOING); }
-        }
-        for (int k = 0; k < CK_RACE_OBST; k++) {
-            if (c->jz > 2) break;   // flying over it
-            float od, ox, w, h; int kind;
-            ck_race_obst(H->track, k, H->clock, &od, &ox, &kind, &w, &h);
-            if (c->hit & (1ull << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;
-            c->hit |= 1ull << k;
-            if (kind == OBST_OIL) { c->rep = 40; c->s *= 0.6f; ck_sfx(G, SFX_SLIDE); }
-            else { c->rep = 50; c->s = 0.6f; ck_sfx(G, SFX_CLANK); }
-        }
-        if (c->laps == 0 && c->a >= CK_RACE_LEN) {
-            c->laps = 1; c->best = H->clock;
-            ck_sfx(G, SFX_GEAR);
-            if (H->win < 0) { H->win = i; ck_sfx(G, SFX_FLAG); ck_confetti(G, 160, 40, 40); }
-        }
+        car_step(G, c, dir_x(G, s), HELD(G, s, CK_UP) || HELD(G, s, CK_A), HELD(G, s, CK_DOWN) || HELD(G, s, CK_B), 3.6f, i);
     }
+    for (int b = 0; b < H->nbots; b++) bot_drive(G, &H->bot[b], b);
 }
 
 // ---------------------------------------------------------------------------- the piano

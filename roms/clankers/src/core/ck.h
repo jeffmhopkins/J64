@@ -51,7 +51,7 @@ enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
     SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR, SONG_LULLABY, SONG_STORM,
     SONG_MAP2, SONG_MAP3, SONG_MAP4, SONG_FACTORY, SONG_MOUNTAIN, SONG_MOON, SONG_TRAVEL, SONG_PARADE,
-    SONG_PINBALL, SONG_BLASTER, SONG_RACE,
+    SONG_PINBALL, SONG_BLASTER, SONG_RACE, SONG_VICTORY, SONG_RACE2, SONG_RACE3, SONG_RACE4,
     SONG_COUNT
 };
 int ck_song_by_name(const char *name);   // "level2" -> SONG_LEVEL2, unknown -> SONG_NONE
@@ -468,6 +468,9 @@ extern const int ck_aqua_pop[CK_AQUA_SECTIONS][CK_AQUA_PER_SEC];   // the kinds 
 // pushes the car to its outside. Up or A goes faster, down or B brakes. Boost pads speed you up and
 // ramps jump you over whatever is just past them. Two players get a half of the screen each.
 #define CK_RACE_LEN 9600          // about a minute at cruising speed
+int ck_race_song(int track);
+#define CK_RACE_CARS 4            // always four on the grid: the players, then computer cars
+extern const uint32_t ck_race_bot_col[CK_RACE_CARS - 1];
 #define CK_RACE_OBST 36           // sparse at the start, closer together further on
 #define CK_RACE_LANE 40           // the lanes are at -40, 0 and 40 from the road's middle
 #define CK_RACE_ROAD 64           // the road's half width; past it is the kerb, then grass that slows you
@@ -625,6 +628,7 @@ typedef struct {
     int boost;                 // cars: frames of boost pad speed left
     uint32_t pads;             // cars: the boost pads and ramps you have used, one bit each
     int laps, key, rep, bounce;
+    int place;                 // cars: where you finished (1 first), 0 still racing
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
     int garnish;               // a cooked dish's extras on top (bits of ck_cook_ingr)
@@ -698,7 +702,9 @@ typedef struct {
     int nfood;
     float gcam;                // the camera in a game that scrolls (the aquarium)
     float count, endT, clock;  // cars: the countdown, the time since the winner got home, the race clock
-    int win;                   // cars: the winner's index, or -1
+    int win;                   // cars: the first player home (index in gs), or -1
+    ck_hhero bot[CK_RACE_CARS - 1];   // cars: computer drivers fill the grid up to four cars
+    int nbots, nfin;           // cars: how many bots; how many cars are home
     int track;                 // cars: which track (TRACK_*)
     bool pickTrack;            // cars: choosing the track before the countdown
     uint8_t lit[CK_KEYS_N];    // piano: frames a key stays lit
@@ -721,6 +727,7 @@ typedef struct {
     ck_blaster blast;
     ck_pond pond;
 } ck_house;
+int ck_race_rank(const ck_house *H, const ck_hhero *me);   // a car's place in the race right now (1 is in front)
 #define CK_SLOTS 3
 typedef struct { bool used; int world, bolts; } ck_slot_info;
 

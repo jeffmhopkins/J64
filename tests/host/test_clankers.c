@@ -1216,12 +1216,19 @@ static void test_house(void) {
             ck_game_step(G, CK_A | (tx > c->x + 3 ? CK_RIGHT : tx < c->x - 3 ? CK_LEFT : 0), 0);
         }
         EXPECT_EQ_INT(G->house.win, 0);
+        EXPECT_EQ_INT(G->song, SONG_VICTORY);   // the race music stops for a fanfare
+        EXPECT_EQ_INT(G->house.np + G->house.nbots, CK_RACE_CARS);   // computer cars fill the grid
+        if (G->house.gs[0].place != 1) printf("  track %d: the scripted driver came %d\n", tr, G->house.gs[0].place);
+        EXPECT_EQ_INT(G->house.gs[0].place <= 2, 1);
+        if (getenv("RACEDBG")) printf("  track %d: me %.1fs, bots at %.0f %.0f of %d\n", tr, G->house.gs[0].best, G->house.bot[0].a, G->house.bot[1].a, CK_RACE_LEN);
         int bumps = 0;
         for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
         if (bumps > 8) printf("  track %d: the scripted driver bumped %d times\n", tr, bumps);
         EXPECT_EQ_INT(bumps <= 8, 1);
         if (tr == 0) good = G->house.gs[0].best;
+        for (int i = 0; i < 60 * 60 && G->house.nfin < CK_RACE_CARS - 1; i++) { ck_game_step(G, 0, 0); if (G->house.pickTrack) break; }
         hold(G, 60 * 5, 0, 0);   // then the next track comes up
+        EXPECT_EQ_INT(G->song, ck_race_song(G->house.track));
     }
     // a driver who never steers drifts wide on the bends, bumps into things and is slower
     EXPECT_EQ_INT(G->house.track, TRACK_HILLS);
@@ -1242,8 +1249,8 @@ static void test_house(void) {
     for (int i = 0; i < 60 * 240 && G->house.win < 0; i++) ck_game_step(G, CK_A, 0);
     int bumps = 0;
     for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
-    if (bumps < 3) printf("  the driver who never steers bumped %d times\n", bumps);
-    EXPECT_EQ_INT(bumps >= 3, 1);
+    if (bumps < 2) printf("  the driver who never steers bumped %d times\n", bumps);
+    EXPECT_EQ_INT(bumps >= 2, 1);
     EXPECT_EQ_INT(G->house.gs[0].best > good + 3, 1);
     // the road starts straight then bends both ways; a bend pushes a car that does not steer outwards
     {

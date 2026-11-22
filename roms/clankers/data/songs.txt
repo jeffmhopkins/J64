@@ -131,3 +131,28 @@ song race bpm=172 loop
 square 0.1 A4 C5 E5 A5 G5 E5 C5 E5 | F5 A5 C6 A5 G5 E5 D5 E5 | A4 C5 E5 A5 B5 A5 G5 E5 | D5 E5 G5 E5 D5- C5 B4 | A4 C5 E5 A5 G5 E5 C5 E5 | F5 A5 C6 F6 E6 C6 A5 C6 | G5 B5 D6 G6 F6 D6 B5 G5 | A5-- E5 A5- . . | C5 E5 G5 C6 B5 G5 E5 G5 | D5 F5 A5 D6 C6 A5 F5 A5 | E5 G#5 B5 E6 D6 B5 G#5 B5 | A5 E5 C5 E5 A5- . . | F5 A5 C6 F6 E6 C6 A5 C6 | G5 B5 D6 G6 F6 D6 B5 D6 | E5 G#5 B5 E6 G#5 B5 E6 G#6 | A6-- E6 A5- . .
 sawtooth 0.07 A2 A2 A3 A2 A2 A2 A3 A2 | F2 F2 F3 F2 F2 F2 F3 F2 | A2 A2 A3 A2 A2 A2 A3 A2 | G2 G2 G3 G2 G2 G2 G3 G2 | A2 A2 A3 A2 A2 A2 A3 A2 | F2 F2 F3 F2 F2 F2 F3 F2 | G2 G2 G3 G2 G2 G2 G3 G2 | A2 A2 A3 A2 E2 E2 E3 E2 | C3 C3 C4 C3 C3 C3 C4 C3 | D3 D3 D4 D3 D3 D3 D4 D3 | E2 E2 E3 E2 E2 E2 E3 E2 | A2 A2 A3 A2 A2 A2 A3 A2 | F2 F2 F3 F2 F2 F2 F3 F2 | G2 G2 G3 G2 G2 G2 G3 G2 | E2 E2 E3 E2 E2 E2 E3 E2 | A2 A2 A3 A2 E2 E2 E3 E2
 drum 0.11 k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k s k s s s s s | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k h s h k k s h | k s k s s s s s
+
+# the garage: a race is over, a fanfare for whoever got home
+song victory bpm=152
+square 0.13 G4 C5 E5 G5 | C6-- . A5 C6-- . | D6 C6 D6 E6 F6 E6 D6 . | E6 C6 G5 C6 E6 G6 C7--- | . . . .
+square 0.07 E4 G4 C5 E5 | E5-- . F5 A5-- . | B5 A5 B5 C6 D6 C6 B5 . | C6 G5 E5 G5 C6 E6 G6--- | . . . .
+triangle 0.22 C3 . G3 . | A2 . F3 . | G2 . G3 . G2 . B2 . | C3 . G3 . C4 . C3--- | . . . .
+drum 0.12 k . s . | k . s s | k . s . k s k s | k s k s k s s s | k . . .
+
+# the garage, Dusty Desert: a dry, bouncy chase
+song race2 bpm=160 loop
+square 0.1 D5 F5 A5 D6 C6 A5 F5 A5 | G5 A#5 D6 A#5 A5 G5 F5 E5 | D5 F5 A5 D6 E6 D6 C6 A5 | A#5-- A5 G5 F5 E5 F5 | D5 F5 A5 D6 C6 A5 F5 A5 | G5 A#5 D6 G6 F6 D6 A#5 G5 | A5 C#6 E6 A6 G6 E6 C#6 A5 | D6-- A5 D6- . . | F5 . F5 G5 A5 . A5 C6 | A#5 A5 G5 F5 G5- . . | E5 . E5 F5 G5 . G5 A#5 | A5 G5 F5 E5 F5- . . | D6 C6 A#5 A5 G5 F5 E5 D5 | A#4 D5 F5 A#5 A5 F5 D5 F5 | A4 C#5 E5 A5 C#6 E6 A6 G6 | F6 E6 D6 A5 D6- . .
+sawtooth 0.07 D2 D2 D3 D2 D2 D2 D3 D2 | G2 G2 G3 G2 G2 G2 G3 G2 | D2 D2 D3 D2 D2 D2 D3 D2 | A#1 A#1 A#2 A#1 A#1 A#1 A#2 A#1 | D2 D2 D3 D2 D2 D2 D3 D2 | G2 G2 G3 G2 G2 G2 G3 G2 | A1 A1 A2 A1 A1 A1 A2 A1 | D2 D2 D3 D2 D2 D2 D3 D2 | F2 F2 F3 F2 F2 F2 F3 F2 | A#1 A#1 A#2 A#1 A#1 A#1 A#2 A#1 | C2 C2 C3 C2 C2 C2 C3 C2 | F2 F2 F3 F2 F2 F2 F3 F2 | A#1 A#1 A#2 A#1 A#1 A#1 A#2 A#1 | A#1 A#1 A#2 A#1 A#1 A#1 A#2 A#1 | A1 A1 A2 A1 A1 A1 A2 A1 | D2 D2 D3 D2 D2 D2 D3 D2
+drum 0.11 k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k s k s k s s s | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k . s k . k s . | k s k s k s s s
+
+# the garage, Snowy Peaks: a bright sleigh-bell dash
+song race3 bpm=168 loop
+square 0.1 G5 B5 D6 B5 G5 B5 D6 G6 | E6 D6 C6 B5 A5 B5 C6 A5 | D5 F#5 A5 D6 C6 A5 F#5 A5 | B5 A5 G5 F#5 G5- . . | G5 B5 D6 B5 G5 B5 D6 G6 | E6 G6 E6 C6 A5 C6 E6 C6 | D6 C6 B5 A5 G5 F#5 E5 F#5 | G5-- D5 G5- . . | C6 . C6 B5 A5 . A5 G5 | B5 . B5 A5 G5 . G5 F#5 | A5 B5 C6 D6 E6 D6 C6 B5 | A5- F#5 D5 A5- . . | G5 A5 B5 C6 D6 E6 F#6 G6 | E6 C6 A5 C6 E6 G6 E6 C6 | D6 F#6 A6 F#6 D6 C6 A5 F#5 | G6-- D6 G5- . .
+triangle 0.22 G2 G2 G3 G2 G2 G2 G3 G2 | C3 C3 C4 C3 C3 C3 C4 C3 | D3 D3 D4 D3 D3 D3 D4 D3 | G2 G2 G3 G2 G2 G2 G3 G2 | G2 G2 G3 G2 G2 G2 G3 G2 | A2 A2 A3 A2 A2 A2 A3 A2 | D3 D3 D4 D3 D3 D3 D4 D3 | G2 G2 G3 G2 G2 G2 G3 G2 | C3 C3 C4 C3 C3 C3 C4 C3 | G2 G2 G3 G2 G2 G2 G3 G2 | A2 A2 A3 A2 A2 A2 A3 A2 | D3 D3 D4 D3 D3 D3 D4 D3 | G2 G2 G3 G2 G2 G2 G3 G2 | C3 C3 C4 C3 C3 C3 C4 C3 | D3 D3 D4 D3 D3 D3 D4 D3 | G2 G2 G3 G2 G2 G2 G3 G2
+drum 0.1 k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h s h k s s s | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h h h s h h h | k h s h k s s s
+
+# the garage, Moon Base: a floaty, spacey cruise
+song race4 bpm=150 loop
+square 0.09 E5 G5 B5 E6 B5 G5 E5 G5 | C5 E5 G5 C6 G5 E5 C5 E5 | D5 F#5 A5 D6 A5 F#5 D5 F#5 | B4 D#5 F#5 B5 F#5 D#5 B4 D#5 | E5 G5 B5 E6 F#6 E6 D6 B5 | C6 B5 A5 G5 A5 B5 C6 E6 | D6 C6 B5 A5 G5 F#5 G5 A5 | B5-- . B5 . . . | G5--- F#5---  | E5--- D5--- | C5--- D5 E5 F#5 G5 | B5----- . . | E6 B5 G5 E5 E6 B5 G5 E5 | C6 G5 E5 C5 C6 G5 E5 C5 | D6 A5 F#5 D5 F#5 A5 D6 F#6 | E6---- . . .
+sawtooth 0.06 E2 E2 E3 E2 E2 E3 E2 E3 | C2 C2 C3 C2 C2 C3 C2 C3 | D2 D2 D3 D2 D2 D3 D2 D3 | B1 B1 B2 B1 B1 B2 B1 B2 | E2 E2 E3 E2 E2 E3 E2 E3 | C2 C2 C3 C2 C2 C3 C2 C3 | D2 D2 D3 D2 D2 D3 D2 D3 | B1 B1 B2 B1 B1 B2 B1 B2 | G2 G2 G3 G2 G2 G3 G2 G3 | E2 E2 E3 E2 E2 E3 E2 E3 | C2 C2 C3 C2 C2 C3 C2 C3 | B1 B1 B2 B1 B1 B2 B1 B2 | E2 E2 E3 E2 E2 E3 E2 E3 | C2 C2 C3 C2 C2 C3 C2 C3 | D2 D2 D3 D2 D2 D3 D2 D3 | E2 E2 E3 E2 E2 E3 E2 E3
+drum 0.1 k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . s . k s s s | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . h . s . h h | k . s . k s s s

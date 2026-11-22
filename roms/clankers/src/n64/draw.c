@@ -1847,7 +1847,7 @@ static void race_view(const ck_game *G, int track, float x0, float vw, const ck_
         }
     }
     // things on the road, far ones first
-    race_spr list[CK_RACE_OBST + CK_RACE_PADS + 2];
+    race_spr list[CK_RACE_OBST + CK_RACE_PADS + CK_RACE_CARS];
     int n = 0;
     for (int i = 0; i < CK_RACE_OBST; i++) {
         float od, ox, w, h; int kind;
@@ -1867,6 +1867,11 @@ static void race_view(const ck_game *G, int track, float x0, float vw, const ck_
         float zr = o->a - cam;
         int col = skin_col(G, o->slot);
         if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, col < CK_NCOLS ? ck_cols[col] : 0xE6E6F0, o->lean, o->boost > 0 };
+    }
+    for (int b = 0; b < Hs->nbots; b++) {   // the computer cars
+        const ck_hhero *o = &Hs->bot[b];
+        float zr = o->a - cam;
+        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, ck_race_bot_col[b], o->lean, o->boost > 0 };
     }
     for (int i = 1; i < n; i++) for (int j = i; j > 0 && list[j].zr > list[j - 1].zr; j--) { race_spr t = list[j]; list[j] = list[j - 1]; list[j - 1] = t; }
     for (int i = 0; i < n; i++) {
@@ -1911,7 +1916,13 @@ static void draw_cars(const ck_game *G) {
         bool left = n > 1 && i == 1;
         float bx = left ? x0 + 7 : x0 + vw - 12;
         rect(bx, 20, 5, 150, 0x1B1426, 0.7f);
+        for (int b = 0; b < Hs->nbots; b++) rect(bx, 167 - 146 * fminf(1, Hs->bot[b].a / CK_RACE_LEN), 5, 2, ck_race_bot_col[b], 1);
         rect(bx - 1, 166 - 146 * fminf(1, k->a / CK_RACE_LEN), 7, 4, k->slot ? 0x8FD3FF : 0xFFD23F, 1);
+        if (!Hs->pickTrack) {   // your place in the race
+            static const char *const ord[CK_RACE_CARS] = { "1st", "2nd", "3rd", "4th" };
+            int rk = ck_race_rank(Hs, k);
+            txt(F_MED, rk == 1 ? ST_YELLOW : ST_CREAM, left ? x0 + vw - 8 : x0 + 8, 22, left ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ord[rk - 1]);
+        }
         if (n > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, left ? x0 + 16 : x0 + vw - 16, 14, left ? ALIGN_LEFT : ALIGN_RIGHT, "P%d", k->slot + 1);
         if (k->boost > 0) txt(F_SMALL, ST_YELLOW, x0 + vw / 2, 112, ALIGN_CENTER, "BOOST!");
     }
@@ -1930,9 +1941,10 @@ static void draw_cars(const ck_game *G) {
     }
     if (Hs->count > 0) { snprintf(s, sizeof s, "%d", (int)ceilf(Hs->count)); banner(F_HUGE, ST_YELLOW, 0xFFD23F, 100, 60, 34, 126, s); }
     else if (Hs->win < 0 && Hs->clock < 0.8f) banner(F_HUGE, ST_GREEN, 0x49D17A, 100, 80, 34, 126, "GO!");
-    if (Hs->win >= 0) {
-        if (n > 1) snprintf(s, sizeof s, "P%d WINS!", Hs->gs[Hs->win].slot + 1);
-        else snprintf(s, sizeof s, "FINISHED  %s", clock_str((int)(Hs->gs[0].best * 60), c));
+    if (Hs->win >= 0) {   // places when the race is over
+        static const char *const ord[CK_RACE_CARS + 1] = { "-", "1st", "2nd", "3rd", "4th" };
+        if (n > 1) snprintf(s, sizeof s, "P1 %s   P2 %s", ord[Hs->gs[0].place], ord[Hs->gs[1].place]);
+        else snprintf(s, sizeof s, "%s!  %s", ord[Hs->gs[0].place], clock_str((int)(Hs->gs[0].best * 60), c));
         banner(F_BIG, ST_YELLOW, 0xFFD23F, 98, 120, 30, 119, s);
     }
     hint(H - 12, "Stick steer   A gas   B brake   START leave");

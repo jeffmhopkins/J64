@@ -421,7 +421,7 @@ static void go(ck_game *G, int scene) {
     case SC_MENU: G->menuPick = 0; G->menuAsk = false; break;
     case SC_SLOTS: G->slotPick = G->slot; ck_play(G, SONG_TITLE); break;
     case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_FISH: ck_play(G, SONG_SELECT); break;
-    case SC_CARS: ck_play(G, SONG_RACE); break;
+    case SC_CARS: ck_play(G, ck_race_song(G->house.track)); break;
     case SC_PINBALL: ck_play(G, SONG_PINBALL); break;
     case SC_BLAST: ck_play(G, SONG_BLASTER); break;
     case SC_PIANO: ck_play(G, SONG_NONE); break;
