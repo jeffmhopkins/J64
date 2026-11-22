@@ -273,14 +273,17 @@ function drawParticles(camX = 0) {
 }
 
 // ----------------------------------------------------------------------------- TEXT HELPERS
+// a lone space is doubled: the font's space is narrow and words crowd together (the N64 does the same)
+const wide = s => String(s).replace(/(?<=[^ ]) (?=[^ ])/g, '  ');
 function text(s, x, y, size = 10, col = '#fff6d8', align = 'center', outline = '#1b1426') {
+  s = wide(s);
   g.font = `${size}px ${FONT}`; g.textAlign = align; g.textBaseline = 'alphabetic';
   if (outline) { g.lineJoin = 'round'; g.strokeStyle = outline; g.lineWidth = Math.max(2, size / 3); g.strokeText(s, x, y); }
   g.fillStyle = col; g.fillText(s, x, y);
 }
 function panel(x, y, w, h, c = 'rgba(27,20,38,0.86)') { K.rr(x, y, w, h, 5, c); }
 // width of a line of text, so a box can grow to hold it (no letters spilling off a banner)
-function textW(s, size) { g.font = `${size}px ${FONT}`; return Math.ceil(g.measureText(s).width); }
+function textW(s, size) { g.font = `${size}px ${FONT}`; return Math.ceil(g.measureText(wide(s)).width); }
 // a box centred on the screen at least w wide, wider if the words need it
 function fitPanel(s, size, w, y, h, c) { const ww = Math.min(W - 6, Math.max(w, textW(s, size) + 20)); panel((W - ww) / 2, y, ww, h, c); }
 // a line of help in a game: light words on a dark strip, readable on anything (the N64's hint())

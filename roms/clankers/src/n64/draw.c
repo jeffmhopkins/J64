@@ -249,10 +249,12 @@ static void txt(int font, int style, float x, float y, int align, const char *fm
     va_start(ap, fmt);
     vsnprintf(raw, sizeof raw, fmt, ap);
     va_end(ap);
-    // rdpq_text reads $xx and ^xx as font and style changes; double them to print them as they are
+    // rdpq_text reads $xx and ^xx as font and style changes; double them to print them as they are.
+    // A lone space is doubled too: the font's space is narrow and words crowd together on a TV.
     size_t n = 0;
     for (const char *c = raw; *c && n < sizeof buf - 2; c++) {
         if (*c == '$' || *c == '^') buf[n++] = *c;
+        else if (*c == ' ' && c > raw && c[-1] != ' ' && c[1] != ' ') buf[n++] = ' ';
         buf[n++] = *c;
     }
     buf[n] = 0;
@@ -263,10 +265,17 @@ static void txt(int font, int style, float x, float y, int align, const char *fm
 }
 
 // How wide a line of text is in a font, so a box can grow to hold it.
-static float txt_w(int font, const char *s) {
-    int n = (int)strlen(s);
+static float txt_w(int font, const char *s0) {
+    char s[192];   // the same wider spaces as txt()
+    size_t m = 0;
+    for (const char *c = s0; *c && m < sizeof s - 2; c++) {
+        if (*c == ' ' && c > s0 && c[-1] != ' ' && c[1] != ' ') s[m++] = ' ';
+        s[m++] = *c;
+    }
+    s[m] = 0;
+    int n = (int)m;
     rdpq_paragraph_t *pg = rdpq_paragraph_build(&(rdpq_textparms_t){ .disable_aa_fix = true }, font, s, &n);
-    float w = pg ? pg->bbox.x1 - pg->bbox.x0 : (float)strlen(s) * 6;
+    float w = pg ? pg->bbox.x1 - pg->bbox.x0 : (float)m * 6;
     if (pg) rdpq_paragraph_free(pg);
     return w;
 }
