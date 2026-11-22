@@ -51,6 +51,7 @@ enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
     SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR, SONG_LULLABY, SONG_STORM,
     SONG_MAP2, SONG_MAP3, SONG_MAP4, SONG_FACTORY, SONG_MOUNTAIN, SONG_MOON, SONG_TRAVEL, SONG_PARADE,
+    SONG_PINBALL, SONG_BLASTER, SONG_RACE,
     SONG_COUNT
 };
 int ck_song_by_name(const char *name);   // "level2" -> SONG_LEVEL2, unknown -> SONG_NONE
@@ -562,14 +563,19 @@ enum { HM_WALK, HM_SLOTS, HM_SLEEP, HM_FRIDGE, HM_LETTER, HM_COOK };
 // Food from the fridge (and apples off the tree): held in the hand, A eats it, B throws it.
 // Each is drawn from a few circles and boxes, the same in both frontends.
 enum { FOOD_APPLE, FOOD_BANANA, FOOD_CHEESE, FOOD_CARROT, FOOD_CAKE, FOOD_ICECREAM, FOOD_MILK, FOOD_PIZZA, FOOD_COOKIE,   // the fridge
-       FOOD_EGG, FOOD_TOMATO, FOOD_MUSHROOM, FOOD_BREAD,                                                                   // stove ingredients
-       FOOD_OMELETTE, FOOD_SOUP, FOOD_TOASTIE, FOOD_COUNT };                                                               // what the stove cooks
+       FOOD_EGG, FOOD_TOMATO, FOOD_MUSHROOM, FOOD_BREAD, FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA,                 // stove ingredients
+       FOOD_OMELETTE, FOOD_SOUP, FOOD_TOASTIE, FOOD_HOTDOG, FOOD_SPAGHETTI, FOOD_RICEBOWL, FOOD_PIE, FOOD_PANCAKES,       // what the stove cooks
+       FOOD_CHIPS, FOOD_COUNT };
 #define CK_FRIDGE_FOODS 9
-// The stove: six ingredients on a shelf (CK_COOK_INGR from ck_cook_ingr), up to four in the pan,
-// B stirs it till the heat bar fills, and out comes a dish named by ck_cook_name().
-#define CK_COOK_INGR 6
+// The stove: twelve ingredients on a shelf in two rows of six (CK_COOK_INGR from ck_cook_ingr), up
+// to four in the pan, B stirs it till the heat bar fills, and out comes a dish named by what went
+// in. Everyone playing gets one.
+#define CK_COOK_INGR 12
+#define CK_COOK_ROW 6
 #define CK_COOK_PAN 4
 extern const int ck_cook_ingr[CK_COOK_INGR];
+// what a pan of n ingredients cooks into: *dish is FOOD_* + 1, name its name
+void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size);
 typedef struct { uint8_t kind; float x, y, w, h; uint32_t col; } ck_fshape;   // kind 0: a circle (w is its radius), 1: a box
 typedef struct { const char *name; int n; ck_fshape s[5]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];

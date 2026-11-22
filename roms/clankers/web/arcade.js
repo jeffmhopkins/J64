@@ -20,7 +20,7 @@ const PIN = {
 };
 const pinFlipper = (side, a) => { const [x0, y0] = PIN.pivot[side]; return [x0, y0, x0 + (side ? -1 : 1) * Math.cos(a) * PIN.FLIP_LEN, y0 + Math.sin(a) * PIN.FLIP_LEN]; };
 function pinballScene(house) {
-  const S = { song: 'select', t: 0, best: 0 };
+  const S = { song: 'pinball', t: 0, best: 0 };
   const newBall = () => { S.x = PIN.LANE_X; S.y = PIN.LANE_Y; S.vx = S.vy = 0; };
   const reset = () => { S.balls = PIN.BALLS; S.score = 0; S.flip = [PIN.REST, PIN.REST]; S.flipW = [0, 0]; S.flash = PIN.bumps.map(() => 0); S.lit = 0; S.litT = 0; S.over = false; S.overT = 0; newBall(); };
   reset();
@@ -97,7 +97,7 @@ function pinballScene(house) {
 // ---- Bug Blaster
 const BLAST = { COLS: 8, ROWS: 4, DX: 24, DY: 18, Y: 216, BOMBS: 6, SHIELDS: [52, 142, 232], SW: 6, SH: 3, CELL: 6, SY: 180 };
 function blastScene(house) {
-  const B = BLAST, S = { song: 'select', t: 0, best: 0 };
+  const B = BLAST, S = { song: 'blaster', t: 0, best: 0 };
   const bugAt = k => [S.bx + (k % B.COLS) * B.DX, S.by + Math.floor(k / B.COLS) * B.DY];
   const wave = () => { S.bugs = new Array(B.COLS * B.ROWS).fill(true); S.bx = 76; S.by = 40 + Math.min(S.wave, 5) * 6; S.dir = 1; S.stepT = 0; S.bombs = []; S.shots = [null, null]; S.waveT = 90; };
   const reset = () => { S.lives = 3; S.score = 0; S.wave = 0; S.over = false; S.overT = 0; S.frame = 0; S.gun = [140, 180]; S.inv = [0, 0]; S.shield = B.SHIELDS.map(() => new Array(B.SW * B.SH).fill(1)); wave(); };
@@ -140,7 +140,6 @@ function blastScene(house) {
       let lo = 999, hi = -999, low = 0;
       S.bugs.forEach((a, k) => { if (!a) return; const [x, y] = bugAt(k); lo = Math.min(lo, x); hi = Math.max(hi, x); low = Math.max(low, y); });
       if ((S.dir > 0 && hi + 4 > W - 12) || (S.dir < 0 && lo - 4 < 12)) { S.dir = -S.dir; S.by += 8; } else S.bx += S.dir * 4;
-      (S.frame ? SND.fx.step : SND.fx.tick)();
       if (low + 8 >= B.SY) { end(); return; }
     }
     if (S.waveT <= 0 && Math.random() < 0.02 + S.wave * 0.006 && S.bombs.length < B.BOMBS) {

@@ -53,11 +53,22 @@ const ck_foodart ck_foods[FOOD_COUNT] = {
     { "tomato", 3, { C(0, 0, 4, 0xE04F4F), R(-1.5f, -5, 3, 1.5f, 0x49D17A), C(-1.5f, -1.5f, 1, 0xFF8A8A) } },
     { "mushroom", 3, { R(-1.5f, -1, 3, 5, 0xFFF6E6), R(-5, -4, 10, 3.5f, 0xC98A4B), C(-2, -3, 0.8f, 0xFFF6E6) } },
     { "bread", 3, { R(-4, -4, 8, 8, 0xE8B46A), R(-4, -5, 8, 2, 0xC98A4B), R(-3, -3, 6, 6, 0xFFE2A8) } },
+    { "potato", 3, { C(0, 0, 4.5f, 0xC9A35A), C(-1.5f, -1, 0.8f, 0x8A6A3C), C(1.5f, 1.5f, 0.7f, 0x8A6A3C) } },
+    { "rice", 3, { R(-4, -4, 8, 9, 0xE8D9B8), R(-4, -4, 8, 2, 0xC9B27A), C(0, 1, 1.5f, 0xFFFFFF) } },
+    { "sausage", 4, { R(-5, -1.5f, 10, 3.5f, 0xC0504A), C(-5, 0.25f, 1.75f, 0xC0504A), C(5, 0.25f, 1.75f, 0xC0504A), R(-3, -1, 6, 1, 0xE07A6A) } },
+    { "pasta", 5, { R(-3, -6, 1, 12, 0xFFE2A8), R(-1, -6, 1, 12, 0xFFE2A8), R(1, -6, 1, 12, 0xFFE2A8), R(3, -6, 1, 12, 0xFFE2A8), R(-4, -1, 9, 2, 0xE04F4F) } },
     { "omelette", 3, { C(0, 0, 5, 0xFFE066), C(-2, -1, 1.5f, 0xFFF6A0), C(2, 1, 1, 0xE0A92B) } },
     { "soup", 4, { R(-5, -1, 10, 5, 0x5AD1FF), C(0, -1, 4.5f, 0xE04F4F), C(-1.5f, -2, 1, 0xFF8A3D), C(1.5f, -1, 1, 0x49D17A) } },
     { "toastie", 3, { R(-5, -3, 10, 6, 0xC98A4B), R(-5, -1, 10, 2, 0xFFD23F), R(-4, -2.5f, 8, 1, 0xE8B46A) } },
+    { "hot dog", 3, { R(-6, -1, 12, 4, 0xE8B46A), R(-5, -2.5f, 10, 2.5f, 0xC0504A), R(-4, -2, 8, 1, 0xFFD23F) } },
+    { "spaghetti", 4, { R(-6, 0, 12, 4, 0xFFFFFF), C(0, -1, 4.5f, 0xFFE2A8), C(0, -2, 2.2f, 0xE04F4F), C(2, -1, 1, 0xC0504A) } },
+    { "rice bowl", 4, { R(-6, 0, 12, 4, 0x5AD1FF), C(0, -1, 4.5f, 0xFFFFFF), C(-2, -2, 1, 0xFF8A3D), C(2, -1, 1, 0x49D17A) } },
+    { "pie", 4, { C(0, 0, 5.5f, 0xC98A4B), C(0, -0.5f, 4, 0xE8B46A), R(-3, -1, 6, 1, 0xC98A4B), R(-0.5f, -4, 1, 7, 0xC98A4B) } },
+    { "pancakes", 4, { R(-5, 1, 10, 2.5f, 0xE8B46A), R(-5, -1.5f, 10, 2.5f, 0xC98A4B), R(-5, -4, 10, 2.5f, 0xE8B46A), R(-3, -5, 6, 1.2f, 0xFFE066) } },
+    { "chips", 5, { R(-4, -1, 8, 6, 0xE04F4F), R(-3, -5, 1.5f, 5, 0xFFD23F), R(-1, -6, 1.5f, 6, 0xFFD23F), R(1, -5, 1.5f, 5, 0xFFD23F), R(3, -4.5f, 1.2f, 4, 0xFFD23F) } },
 };
-const int ck_cook_ingr[CK_COOK_INGR] = { FOOD_EGG, FOOD_TOMATO, FOOD_CHEESE, FOOD_MUSHROOM, FOOD_CARROT, FOOD_BREAD };
+const int ck_cook_ingr[CK_COOK_INGR] = { FOOD_EGG, FOOD_TOMATO, FOOD_CHEESE, FOOD_MUSHROOM, FOOD_CARROT, FOOD_BREAD,
+                                         FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA, FOOD_APPLE, FOOD_BANANA };
 #undef C
 #undef R
 const ck_letter ck_letters[CK_LETTERS] = {
@@ -196,28 +207,38 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
 void ck_house_back(ck_game *G) { ck_sfx(G, SFX_SELECT); G->scene = SC_HOUSE; G->t = 0; ck_play(G, SONG_SELECT); }
 #define back_to_house ck_house_back
 
-// The stove: the dish is named by what went in the pan.
-static void cook_name(ck_house *H) {
+// The stove: the dish is named by what went in the pan (the first rule that fits wins).
+void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size) {
     bool has[FOOD_COUNT] = { 0 };
-    for (int i = 0; i < H->npan; i++) has[H->pan[i]] = true;
-    const char *n;
-    if (has[FOOD_EGG]) { H->dish = FOOD_OMELETTE + 1; n = has[FOOD_CHEESE] ? "Cheesy omelette" : has[FOOD_MUSHROOM] ? "Mushroom omelette" : has[FOOD_TOMATO] ? "Tomato omelette" : "Omelette"; }
-    else if (has[FOOD_BREAD]) { H->dish = FOOD_TOASTIE + 1; n = has[FOOD_CHEESE] && has[FOOD_TOMATO] ? "Pizza toastie" : has[FOOD_CHEESE] ? "Cheese toastie" : "Toast"; }
-    else { H->dish = FOOD_SOUP + 1; n = has[FOOD_TOMATO] ? "Tomato soup" : has[FOOD_MUSHROOM] ? "Mushroom soup" : has[FOOD_CARROT] ? "Carrot soup" : "Cheese soup"; }
-    snprintf(H->dishName, sizeof H->dishName, "%s", n);
+    for (int i = 0; i < n; i++) has[pan[i]] = true;
+    const char *s;
+    int d;
+    if (has[FOOD_SAUSAGE] && has[FOOD_BREAD]) { d = FOOD_HOTDOG; s = has[FOOD_CHEESE] ? "Cheesy hot dog" : has[FOOD_TOMATO] ? "Hot dog and ketchup" : "Hot dog"; }
+    else if (has[FOOD_PASTA]) { d = FOOD_SPAGHETTI; s = has[FOOD_TOMATO] && has[FOOD_SAUSAGE] ? "Spaghetti and meatballs" : has[FOOD_TOMATO] ? "Spaghetti and sauce" : has[FOOD_CHEESE] ? "Mac and cheese" : has[FOOD_MUSHROOM] ? "Mushroom pasta" : "Buttered pasta"; }
+    else if (has[FOOD_RICE]) { d = FOOD_RICEBOWL; s = has[FOOD_EGG] ? "Egg fried rice" : has[FOOD_SAUSAGE] ? "Sausage rice" : has[FOOD_CARROT] || has[FOOD_MUSHROOM] ? "Veggie rice" : has[FOOD_BANANA] || has[FOOD_APPLE] ? "Rice pudding" : "Rice bowl"; }
+    else if (has[FOOD_APPLE]) { d = FOOD_PIE; s = has[FOOD_BANANA] ? "Fruit pie" : "Apple pie"; }
+    else if (has[FOOD_BANANA]) { d = FOOD_PANCAKES; s = "Banana pancakes"; }
+    else if (has[FOOD_EGG]) { d = FOOD_OMELETTE; s = has[FOOD_CHEESE] ? "Cheesy omelette" : has[FOOD_MUSHROOM] ? "Mushroom omelette" : has[FOOD_TOMATO] ? "Tomato omelette" : has[FOOD_SAUSAGE] ? "Big breakfast" : has[FOOD_POTATO] ? "Potato omelette" : "Omelette"; }
+    else if (has[FOOD_BREAD]) { d = FOOD_TOASTIE; s = has[FOOD_CHEESE] && has[FOOD_TOMATO] ? "Pizza toastie" : has[FOOD_CHEESE] ? "Cheese toastie" : has[FOOD_MUSHROOM] ? "Mushroom toast" : "Toast"; }
+    else if (has[FOOD_POTATO] && !has[FOOD_TOMATO] && !has[FOOD_CARROT] && !has[FOOD_MUSHROOM]) { d = FOOD_CHIPS; s = has[FOOD_CHEESE] ? "Cheesy chips" : has[FOOD_SAUSAGE] ? "Sausage and chips" : "Chips"; }
+    else { d = FOOD_SOUP; s = has[FOOD_POTATO] ? "Veggie stew" : has[FOOD_SAUSAGE] ? "Sausage stew" : has[FOOD_TOMATO] ? "Tomato soup" : has[FOOD_MUSHROOM] ? "Mushroom soup" : has[FOOD_CARROT] ? "Carrot soup" : "Cheese soup"; }
+    *dish = d + 1;
+    snprintf(name, size, "%s", s);
 }
+static void cook_name(ck_house *H) { ck_cook_dish(H->pan, H->npan, &H->dish, H->dishName, sizeof H->dishName); }
 static void cook_update(ck_game *G) {
     ck_house *H = &G->house;
     for (int i = 0; i < H->np; i++) {
         ck_hhero *p = &H->ps[i];
         int s = p->slot, *c = &H->cpick[i];
-        if (HIT(G, s, CK_LEFT) && *c > 0) { (*c)--; ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, s, CK_RIGHT) && *c < CK_COOK_INGR - 1) { (*c)++; ck_sfx(G, SFX_SELECT); }
-        if (H->dish) {   // done: A takes the dish
+        if (HIT(G, s, CK_LEFT) && *c % CK_COOK_ROW > 0) { (*c)--; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_RIGHT) && *c % CK_COOK_ROW < CK_COOK_ROW - 1) { (*c)++; ck_sfx(G, SFX_SELECT); }
+        if ((HIT(G, s, CK_UP) || HIT(G, s, CK_DOWN)) && !H->dish) { *c = (*c + CK_COOK_ROW) % CK_COOK_INGR; ck_sfx(G, SFX_SELECT); }   // the other shelf
+        if (H->dish) {   // done: A takes the dish, and everyone playing gets one
             if (HIT(G, s, CK_A)) {
-                p->hold = H->dish;
-                char m[32];
-                snprintf(m, sizeof m, "%s!", H->dishName);
+                for (int k = 0; k < H->np; k++) H->ps[k].hold = H->dish;
+                char m[40];
+                snprintf(m, sizeof m, H->np > 1 ? "%s for two!" : "%s!", H->dishName);
                 say(H, m);
                 ck_sfx(G, SFX_BUY);
                 H->mode = HM_WALK;

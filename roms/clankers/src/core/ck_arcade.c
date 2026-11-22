@@ -215,7 +215,7 @@ void ck_blast_update(ck_game *G) {
         for (int k = 0; k < 32; k++) if (B->bugs & (1u << k)) { float x, y; ck_bug_at(B, k, &x, &y); lo = ck_minf(lo, x); hi = ck_maxf(hi, x); low = ck_maxf(low, y); }
         if ((B->dir > 0 && hi + 4 > CK_W - 12) || (B->dir < 0 && lo - 4 < 12)) { B->dir = -B->dir; B->by += 8; }
         else B->bx += B->dir * 4;
-        ck_sfx(G, B->frame ? SFX_STEP : SFX_TICK);
+        // no march beep: the music carries the tension
         if (low + 8 >= CK_SHIELD_Y) {   // they reached the shields: game over
             B->over = true; B->overT = 0; if (B->score > B->best) B->best = B->score;
             ck_sfx(G, SFX_OUCH);

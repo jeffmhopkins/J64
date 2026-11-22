@@ -1485,30 +1485,31 @@ static void draw_house(const ck_game *G) {
     }
     if (Hs->mode == HM_COOK) {   // the stove: a shelf of ingredients, the pan, the heat bar
         rect(0, 0, W, H, 0x0F0A19, 0.55f);
-        rect(30, 24, 260, 50, 0x8A5A3C, 1);
-        rect(34, 28, 252, 42, 0xC98A4B, 1);
+        rect(30, 22, 260, 66, 0x8A5A3C, 1);   // two shelves of six
+        rect(34, 26, 252, 27, 0xC98A4B, 1);
+        rect(34, 57, 252, 27, 0xC98A4B, 1);
         for (int k = 0; k < CK_COOK_INGR; k++) {
-            float fx = 56 + k * 42, fy = 49;
-            for (int j = 0; j < Hs->np; j++) if (Hs->cpick[j] == k && !Hs->dish) shape(SPR_RING, fx, fy, 17 + j * 3, Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F, 1);
-            food_art(ck_cook_ingr[k], fx, fy, 2.4f);
+            float fx = 56 + (k % CK_COOK_ROW) * 42, fy = 39 + (k / CK_COOK_ROW) * 31;
+            for (int j = 0; j < Hs->np; j++) if (Hs->cpick[j] == k && !Hs->dish) shape(SPR_RING, fx, fy, 13 + j * 3, Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F, 1);
+            food_art(ck_cook_ingr[k], fx, fy, 2.0f);
         }
         rect(50, 150, 220, 80, 0x3A3F4A, 1);   // the stove top
         rect(56, 156, 208, 6, 0x5A5E6A, 1);
         shape(SPR_DOT, 160, 160, 34, Hs->heat > 0 && !Hs->dish ? 0xFF8A3D : 0x2B2833, 1);   // the burner glows while it cooks
-        shape(SPR_DOT, 160, 132, 50, 0x5A5E6A, 1);   // the pan
-        shape(SPR_DOT, 160, 132, 44, 0x2B2833, 1);
-        rect(206, 128, 60, 8, 0x3A2618, 1);   // its handle
-        if (Hs->dish) food_art(Hs->dish - 1, 160, 132, 6);
+        shape(SPR_DOT, 160, 140, 46, 0x5A5E6A, 1);   // the pan
+        shape(SPR_DOT, 160, 140, 40, 0x2B2833, 1);
+        rect(202, 136, 62, 8, 0x3A2618, 1);   // its handle
+        if (Hs->dish) food_art(Hs->dish - 1, 160, 140, 6);
         else for (int i = 0; i < Hs->npan; i++) {
             float a = i * 1.57f + G->t * (Hs->heat > 0 ? 1.5f : 0);
-            food_art(Hs->pan[i], 160 + cosf(a) * 18, 132 + sinf(a) * 14, 2.2f);
+            food_art(Hs->pan[i], 160 + cosf(a) * 18, 140 + sinf(a) * 14, 2.2f);
         }
         rect(60, 196, 200, 10, 0x1B1426, 1);   // heat
         rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
-        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, "A take it   START leave"); }
+        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, Hs->np > 1 ? "A take one each   START leave" : "A take it   START leave"); }
         else {
             txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[0]]].name);
-            hint(14, Hs->npan ? "< > choose   A add   B stir   START leave" : "< > choose   A add to the pan   START leave");
+            hint(14, Hs->npan ? "Stick choose   A add   B stir   START leave" : "Stick choose   A add to the pan   START leave");
         }
     }
     if (Hs->mode == HM_LETTER) {   // a big letter to read

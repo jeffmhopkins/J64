@@ -722,17 +722,15 @@ function houseScene(from) {
       const ING = HOUSEART.COOK_INGR;
       for (const [i, p] of S.ps.entries()) {
         const sl = p.m.slot;
-        if (hit(sl, 'left') && S.cpick[i] > 0) { S.cpick[i]--; SND.fx.select(); }
-        if (hit(sl, 'right') && S.cpick[i] < ING.length - 1) { S.cpick[i]++; SND.fx.select(); }
-        if (S.dish) { if (hit(sl, 'a')) { p.hold = S.dish; S.msg = { text: S.dishName + '!', t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
+        if (hit(sl, 'left') && S.cpick[i] % 6 > 0) { S.cpick[i]--; SND.fx.select(); }
+        if (hit(sl, 'right') && S.cpick[i] % 6 < 5) { S.cpick[i]++; SND.fx.select(); }
+        if ((hit(sl, 'up') || hit(sl, 'down')) && !S.dish) { S.cpick[i] = (S.cpick[i] + 6) % ING.length; SND.fx.select(); }   // the other shelf
+        if (S.dish) { if (hit(sl, 'a')) { for (const q of S.ps) q.hold = S.dish; S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
         if (hit(sl, 'a') && S.pan.length < 4) { S.pan.push(ING[S.cpick[i]]); SND.fx.hop(); }
         if (hit(sl, 'b') && S.pan.length) {
           S.heat += 9; SND.fx.hover(); for (let k = 0; k < 2; k++) puff(150 + Math.random() * 20, 120, 1, 'rgba(255,255,255,0.63)');
           if (S.heat >= 100) {
-            S.heat = 100; const has = f => S.pan.includes(f);
-            if (has(9)) { S.dish = 14; S.dishName = has(2) ? 'Cheesy omelette' : has(11) ? 'Mushroom omelette' : has(10) ? 'Tomato omelette' : 'Omelette'; }
-            else if (has(12)) { S.dish = 16; S.dishName = has(2) && has(10) ? 'Pizza toastie' : has(2) ? 'Cheese toastie' : 'Toast'; }
-            else { S.dish = 15; S.dishName = has(10) ? 'Tomato soup' : has(11) ? 'Mushroom soup' : has(3) ? 'Carrot soup' : 'Cheese soup'; }
+            S.heat = 100; [S.dish, S.dishName] = HOUSEART.cookDish(S.pan);
             SND.fx.gear(); sparks(160, 140, 12, '#ffd23f');
           }
         }
@@ -839,20 +837,20 @@ function houseScene(from) {
     if (S.mode === 'cook') {   // the stove: a shelf of ingredients, the pan, the heat bar
       const ING = HOUSEART.COOK_INGR;
       g.fillStyle = 'rgba(15,10,25,0.55)'; g.fillRect(0, 0, W, H);
-      g.fillStyle = '#8a5a3c'; g.fillRect(30, 24, 260, 50); g.fillStyle = '#c98a4b'; g.fillRect(34, 28, 252, 42);
+      g.fillStyle = '#8a5a3c'; g.fillRect(30, 22, 260, 66); g.fillStyle = '#c98a4b'; g.fillRect(34, 26, 252, 27); g.fillRect(34, 57, 252, 27);   // two shelves of six
       ING.forEach((f, k) => {
-        const fx = 56 + k * 42, fy = 49;
-        S.ps.forEach((p, j) => { if (S.cpick[j] === k && !S.dish) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 17 + j * 3, 0, P * 2); g.stroke(); } });
-        foodArt(f, fx, fy, 2.4);
+        const fx = 56 + (k % 6) * 42, fy = 39 + Math.floor(k / 6) * 31;
+        S.ps.forEach((p, j) => { if (S.cpick[j] === k && !S.dish) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 13 + j * 3, 0, P * 2); g.stroke(); } });
+        foodArt(f, fx, fy, 2.0);
       });
       g.fillStyle = '#3a3f4a'; g.fillRect(50, 150, 220, 80); g.fillStyle = '#5a5e6a'; g.fillRect(56, 156, 208, 6);
       K.circ(160, 160, 34, S.heat > 0 && !S.dish ? '#ff8a3d' : '#2b2833');
-      K.circ(160, 132, 50, '#5a5e6a'); K.circ(160, 132, 44, '#2b2833'); g.fillStyle = '#3a2618'; g.fillRect(206, 128, 60, 8);
-      if (S.dish) foodArt(S.dish - 1, 160, 132, 6);
-      else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 132 + Math.sin(a) * 14, 2.2); });
+      K.circ(160, 140, 46, '#5a5e6a'); K.circ(160, 140, 40, '#2b2833'); g.fillStyle = '#3a2618'; g.fillRect(202, 136, 62, 8);
+      if (S.dish) foodArt(S.dish - 1, 160, 140, 6);
+      else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 140 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
-      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint('A take it   START leave', 226); }
-      else { text(HOUSEART.FOODS[ING[S.cpick[0]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? '< > choose   A add   B stir   START leave' : '< > choose   A add to the pan   START leave', 14); }
+      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each   START leave' : 'A take it   START leave', 226); }
+      else { text(HOUSEART.FOODS[ING[S.cpick[0]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? 'Stick choose   A add   B stir   START leave' : 'Stick choose   A add to the pan   START leave', 14); }
     }
     if (S.mode === 'letter') {   // a big letter to read
       const L = HOUSEART.LETTERS[(S.letter + HOUSEART.LETTERS.length - 1) % HOUSEART.LETTERS.length];
@@ -1172,7 +1170,7 @@ function aquaScene(house) {
 // ---- the garage: a go-kart race round an oval, seen from above. A goes, B brakes and reverses,
 // the stick steers. Three laps; with two players the first one home wins.
 function carsScene(house) {
-  const R = HOUSEART.RACE, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
+  const R = HOUSEART.RACE, S = { song: 'race', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
   const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; S.pickTrack = true; };
   S.track = 0;
   reset();
