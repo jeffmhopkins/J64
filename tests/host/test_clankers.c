@@ -918,6 +918,19 @@ static void walk_to(ck_game *G, float x) {
     for (int i = 0; i < 2000 && fabsf(G->house.ps[0].x - x) > 4; i++) ck_game_step(G, G->house.ps[0].x < x ? CK_RIGHT : CK_LEFT, 0);
     hold(G, 20, 0, 0);
 }
+// The race view: your car's row stays put, the far road holds more distance than a true camera,
+// and a row and its depth turn back into each other.
+static void test_race_view(void) {
+    EXPECT_EQ_INT((int)roundf(ck_race_row(CK_RACE_CAR_Z) * 10), (int)roundf(CK_RACE_ZC / CK_RACE_CAR_Z * 10));
+    for (float z = 30; z < CK_RACE_FAR; z *= 1.7f) {
+        EXPECT_EQ_INT(fabsf(ck_race_depth(ck_race_row(z)) - z) < z * 0.001f, 1);
+        EXPECT_EQ_INT(ck_race_row(z) > CK_RACE_ZC / z, 1);   // further down the screen than a true camera puts it: in view for longer
+    }
+    EXPECT_EQ_INT(ck_race_row(CK_RACE_FAR) > 4, 1);   // the far end is still a few rows below the horizon
+    // something big enough to read (scale 0.4) gets more than twice the time a true camera gives it
+    float px = CK_RACE_PX0 / (CK_H - CK_RACE_HZ), seen = ck_race_depth(0.4f / px), trueSeen = CK_RACE_ZC * px / 0.4f;
+    EXPECT_EQ_INT(seen - CK_RACE_CAR_Z > 2 * (trueSeen - CK_RACE_CAR_Z), 1);
+}
 static void test_house(void) {
     ck_game *G = load_game();
     if (!G) return;
@@ -1665,6 +1678,7 @@ void test_clankers(void) {
     test_shop();
     test_bubble_gun();
     test_drop_player2();
+    test_race_view();
     test_house();
     test_slots();
 }

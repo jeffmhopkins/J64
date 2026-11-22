@@ -1803,10 +1803,10 @@ static void race_thing(int track, int kind, float x, float y, float s, float t) 
 // where something at depth zr ahead of the camera and x across sits on the screen, and its scale
 static bool race_project(int track, float a, float camx, float cx, float vw, float zr, float x, float *sx, float *sy, float *s) {
     if (zr < 4) return false;
-    float ppu = CK_RACE_ZC / zr / (H - CK_RACE_HZ) * CK_RACE_PX0 * vw / 320;
-    float dz = fmaxf(0, zr - CK_RACE_CAR_Z);
+    float row = ck_race_row(zr), ppu = row / (H - CK_RACE_HZ) * CK_RACE_PX0 * vw / 320;
+    float dz = fmaxf(0, CK_RACE_ZC / row - CK_RACE_CAR_Z);   // bends curve the road as a true camera would show that row
     *s = ppu;
-    *sy = CK_RACE_HZ + CK_RACE_ZC / zr;
+    *sy = CK_RACE_HZ + row;
     *sx = cx + (x + 0.5f * CK_RACE_BEND * ck_race_curve(track, a + dz / 2) * dz * dz - camx) * ppu;
     return true;
 }
@@ -1825,9 +1825,10 @@ static void race_view(const ck_game *G, int track, float x0, float vw, const ck_
     }
     // the ground and road, strip by strip from the bottom up
     for (int y = H - 2; y >= CK_RACE_HZ; y -= 2) {
-        float zr = CK_RACE_ZC / (y + 1 - CK_RACE_HZ), z = cam + zr, sx = cx, sy = 0, s = 1;
+        float zr = ck_race_depth(y + 1 - CK_RACE_HZ), z = cam + zr, sx = cx, sy = 0, s = 1;
         race_project(track, a, camx, cx, vw, zr, 0, &sx, &sy, &s);
-        bool band = (int)(z / 32) & 1;
+        // far strips cover many bands: show them plain so they don't flicker
+        bool band = ck_race_depth(y - 1 - CK_RACE_HZ) - zr < 24 && ((int)(z / 32) & 1);
         float hw = CK_RACE_ROAD * s, kw = 7 * s;
         rect(x0, y, vw, 2, band ? T->ground : shade(T->ground, 0.9f), 1);
         rect(sx - hw - kw, y, kw, 2, band ? T->kerbA : T->kerbB, 1);
@@ -1846,25 +1847,25 @@ static void race_view(const ck_game *G, int track, float x0, float vw, const ck_
         float od, ox, w, h; int kind;
         ck_race_obst(track, i, Hs->clock, &od, &ox, &kind, &w, &h);
         float zr = od - cam;
-        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, ox, 0, kind, 0, 0, false };
+        if (zr > 6 && zr < CK_RACE_FAR) list[n++] = (race_spr){ zr, ox, 0, kind, 0, 0, false };
     }
     for (int i = 0; i < CK_RACE_PADS; i++) {
         float pd, px; int kind;
         ck_race_pad(track, i, &pd, &px, &kind);
         float zr = pd - cam;
-        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, px, 1, kind, 0, 0, false };
+        if (zr > 6 && zr < CK_RACE_FAR) list[n++] = (race_spr){ zr, px, 1, kind, 0, 0, false };
     }
     for (int i = 0; i < Hs->np; i++) {
         const ck_hhero *o = &Hs->gs[i];
         if (o == me) continue;
         float zr = o->a - cam;
         int col = skin_col(G, o->slot);
-        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, col < CK_NCOLS ? ck_cols[col] : 0xE6E6F0, o->lean, o->boost > 0 };
+        if (zr > 6 && zr < CK_RACE_FAR) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, col < CK_NCOLS ? ck_cols[col] : 0xE6E6F0, o->lean, o->boost > 0 };
     }
     for (int b = 0; b < Hs->nbots; b++) {   // the computer cars
         const ck_hhero *o = &Hs->bot[b];
         float zr = o->a - cam;
-        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, ck_race_bot_col[b], o->lean, o->boost > 0 };
+        if (zr > 6 && zr < CK_RACE_FAR) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, ck_race_bot_col[b], o->lean, o->boost > 0 };
     }
     for (int i = 1; i < n; i++) for (int j = i; j > 0 && list[j].zr > list[j - 1].zr; j--) { race_spr t = list[j]; list[j] = list[j - 1]; list[j - 1] = t; }
     for (int i = 0; i < n; i++) {

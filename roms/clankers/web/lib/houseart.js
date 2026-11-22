@@ -206,7 +206,9 @@ const HOUSEART = (() => {
   // ---- the garage race from behind the car: the road runs to a horizon and bends; strips of road
   // from the bottom up, things shrinking with distance. Boxes and circles only, so the N64
   // (race_view in draw.c) draws the same picture.
-  const RACE = { len: 9600, obst: 36, lane: 40, road: 64, edge: 84, pads: 14, HZ: 96, ZC: 2880, CAR_Z: 26, PX0: 2.66, BEND: 0.0026 };
+  const RACE = { len: 9600, obst: 36, lane: 40, road: 64, edge: 84, pads: 14, HZ: 96, ZC: 2880, CAR_Z: 26, PX0: 2.66, BEND: 0.0026, SQUASH: 0.6, FAR: 3000 };
+  // the view squashed toward the horizon (ck_race_row, ck_race_depth)
+  const raceRow = zr => RACE.ZC / RACE.CAR_Z * Math.pow(RACE.CAR_Z / zr, RACE.SQUASH), raceDepth = r => RACE.CAR_Z * Math.pow(RACE.ZC / RACE.CAR_Z / r, 1 / RACE.SQUASH);
   // four tracks (ck_tracks in ck_house.c): the obstacle kinds behave the same and only look different
   const TRACKS = [
     { name: 'Green Hills', ground: 0x5DBB63, deco: 0x3F9D4E, road: 0x5A5E6A, kerbA: 0xE04F4F, kerbB: 0xFFFFFF, line: 0xFFF6D8, sky: 0x8FD3FF, hills: 0x3F9D4E, amp: 0.8 },
@@ -275,8 +277,8 @@ const HOUSEART = (() => {
   // where depth zr ahead of the camera and x across lands on the screen (race_project)
   function raceProject(track, a, camx, cx, vw, zr, x) {
     if (zr < 4) return null;
-    const s = RACE.ZC / zr / (240 - RACE.HZ) * RACE.PX0 * vw / 320, dz = Math.max(0, zr - RACE.CAR_Z);
-    return { s, y: RACE.HZ + RACE.ZC / zr, x: cx + (x + 0.5 * RACE.BEND * raceCurve(track, a + dz / 2) * dz * dz - camx) * s };
+    const row = raceRow(zr), s = row / (240 - RACE.HZ) * RACE.PX0 * vw / 320, dz = Math.max(0, RACE.ZC / row - RACE.CAR_Z);
+    return { s, y: RACE.HZ + row, x: cx + (x + 0.5 * RACE.BEND * raceCurve(track, a + dz / 2) * dz * dz - camx) * s };
   }
   // one player's view; me is their car { d, x, sky }, others are the other cars { d, x, jz, hex, lean, boost }
   function raceView(g, track, x0, vw, me, others, clock, t) {
@@ -286,7 +288,7 @@ const HOUSEART = (() => {
     else for (let k = 0; k < 3; k++) dot(g, x0 + fmod(k * 70 + 20 - me.sky * 0.15, vw + 40) - 20, 22 + k * 9, 9, 0xFFFFFF, 0.8);
     for (let k = 0; k < 8; k++) { const r = 18 + (k * 7) % 14; dot(g, x0 + fmod(k * 61 - me.sky, vw + 80) - 40, RACE.HZ + r * 0.35, r, T.hills); }
     for (let y = 238; y >= RACE.HZ; y -= 2) {
-      const zr = RACE.ZC / (y + 1 - RACE.HZ), z = cam + zr, p = raceProject(track, a, camx, cx, vw, zr, 0), band = Math.floor(z / 32) & 1;
+      const zr = raceDepth(y + 1 - RACE.HZ), z = cam + zr, p = raceProject(track, a, camx, cx, vw, zr, 0), band = raceDepth(y - 1 - RACE.HZ) - zr < 24 && Math.floor(z / 32) & 1;
       const hw = RACE.road * p.s, kw = 7 * p.s;
       box(g, x0, y, vw, 2, band ? T.ground : shade(T.ground, 0.9));
       box(g, p.x - hw - kw, y, kw, 2, band ? T.kerbA : T.kerbB); box(g, p.x + hw, y, kw, 2, band ? T.kerbA : T.kerbB);
@@ -297,9 +299,9 @@ const HOUSEART = (() => {
       }
     }
     const list = [];
-    for (let i = 0; i < RACE.obst; i++) { const o = raceObst(track, i, clock), zr = o.d - cam; if (zr > 6 && zr < 1600) list.push({ zr, x: o.x, what: 0, kind: o.kind, i }); }
-    for (let i = 0; i < RACE.pads; i++) { const o = racePad(track, i), zr = o.d - cam; if (zr > 6 && zr < 1600) list.push({ zr, x: o.x, what: 1, kind: o.kind, i }); }
-    for (const o of others) { const zr = o.d - cam; if (zr > 6 && zr < 1600) list.push({ zr, x: o.x, what: 2, o }); }
+    for (let i = 0; i < RACE.obst; i++) { const o = raceObst(track, i, clock), zr = o.d - cam; if (zr > 6 && zr < RACE.FAR) list.push({ zr, x: o.x, what: 0, kind: o.kind, i }); }
+    for (let i = 0; i < RACE.pads; i++) { const o = racePad(track, i), zr = o.d - cam; if (zr > 6 && zr < RACE.FAR) list.push({ zr, x: o.x, what: 1, kind: o.kind, i }); }
+    for (const o of others) { const zr = o.d - cam; if (zr > 6 && zr < RACE.FAR) list.push({ zr, x: o.x, what: 2, o }); }
     list.sort((p, q) => q.zr - p.zr);
     for (const r of list) {
       const p = raceProject(track, a, camx, cx, vw, r.zr, r.x);

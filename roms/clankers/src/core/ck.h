@@ -477,13 +477,18 @@ extern const uint32_t ck_race_bot_col[CK_RACE_CARS - 1];
 #define CK_RACE_EDGE 84           // how far from the middle a car can go
 #define CK_RACE_PADS 14           // boost pads and ramps along the road
 enum { PAD_BOOST, PAD_RAMP };
-// the view: the horizon's height, the depth scale (a row r px below the horizon is CK_RACE_ZC / r
-// ahead of the camera), how far ahead of the camera your car sits, and px per unit across at the
-// bottom of a 320 px wide view
+// the view: the horizon's height, the depth scale, how far ahead of the camera your car sits, and
+// px per unit across at the bottom of a 320 px wide view. The view is squashed toward the horizon
+// (ck_race_row): the far road holds more distance than a true camera would show, so things come
+// into sight sooner and drift slowly down the top of the screen before they rush past your car.
 #define CK_RACE_HZ 96
 #define CK_RACE_ZC 2880.0f
 #define CK_RACE_CAR_Z 26.0f
 #define CK_RACE_PX0 2.66f
+#define CK_RACE_SQUASH 0.6f       // 1 is a true camera; less holds more road near the horizon
+#define CK_RACE_FAR 3000.0f       // how far ahead things are drawn
+float ck_race_row(float zr);      // px below the horizon of something zr ahead of the camera
+float ck_race_depth(float row);   // and back: how far ahead a row below the horizon is
 #define CK_RACE_BEND 0.0026f      // how far a bend carries the road sideways in the distance
 // The kinds work the same on every track and only look different: a small thing, a big block, a
 // slippery patch, and something that moves (cars and moon rovers drive on, tumbleweeds and
