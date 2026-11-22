@@ -412,7 +412,7 @@ static void aqua_start(ck_game *G) {
     }
     for (int i = 0; i < CK_AQUA_SHRIMP; i++) {
         ck_shrimp *s = &H->shrimp[i];
-        s->x = 20 + hrng() * (CK_AQUA_BEACH_X - 70); s->y = CK_AQUA_SEABED - 2; s->vx = s->vy = 0; s->face = hrng() < 0.5f ? -1 : 1; s->rest = (int)(hrng() * 200);
+        s->x = 20 + hrng() * (CK_AQUA_BEACH_X - 70); s->y = CK_AQUA_SEABED - 2; s->vx = s->vy = 0; s->face = hrng() < 0.5f ? -1 : 1; s->rest = (int)(hrng() * 200); s->held = 0; s->spin = 0;
     }
     for (int i = 0; i < CK_AQUA_CRABS; i++) { H->crabs[i] = (ck_crab){ .x = CK_AQUA_BEACH_X + 14 + i * 22, .vx = (i % 2 ? -1 : 1) * 0.5f }; }
     H->nfood = 0;
@@ -445,11 +445,21 @@ static void aqua_update(ck_game *G) {
             p->vy = ck_clampf((p->vy + dy * 0.14f) * 0.95f + 0.01f, -2.4f, 2);
             if (HIT(G, s, CK_A)) { p->vy -= 1.6f; ck_sfx(G, SFX_FLAP); for (int k = 0; k < 3; k++) bubble(G, p->x + (ck_rand(G) - 0.5f) * 6, p->y - 26, (ck_rand(G) - 0.5f), -0.8f, 2, 30); }
         }
-        // B: by a chest, open it; by a crab on the beach, poke it; anywhere else in the water, sprinkle fish food
-        int chest = -1, crab = -1;
+        // B: throw the shrimp in your hand; by a chest, open it; by a crab on the beach, poke it; by a
+        // shrimp, pick it up; anywhere else in the water, sprinkle fish food
+        int chest = -1, crab = -1, shrimp = -1, mine = -1;
+        for (int k = 0; k < CK_AQUA_SHRIMP; k++) {
+            const ck_shrimp *sh = &H->shrimp[k];
+            if (sh->held == i + 1) mine = k;
+            else if (!sh->held && !p->land && fabsf(sh->x - p->x) < 18 && fabsf(sh->y - p->y) < 24) shrimp = k;
+        }
         for (int k = 0; k < CK_AQUA_CHESTS; k++) if (fabsf(p->x - ck_aqua_chest_x[k]) < 26 && p->y > CK_AQUA_SEABED - 40) chest = k;
         for (int k = 0; k < CK_AQUA_CRABS; k++) if (p->land && fabsf(p->x - H->crabs[k].x) < 24) crab = k;
-        if (HIT(G, s, CK_B) && chest >= 0) {
+        if (HIT(G, s, CK_B) && mine >= 0) {   // throw it the way you face; it tumbles through the water
+            ck_shrimp *sh = &H->shrimp[mine];
+            sh->held = 0; sh->vx = p->face * 3.4f + p->vx; sh->vy = -1.2f + p->vy * 0.5f; sh->spin = 60; sh->face = p->face;
+            ck_sfx(G, SFX_WHOOSH);
+        } else if (HIT(G, s, CK_B) && chest >= 0) {
             if (H->chestT[chest] <= 0) {
                 H->chestT[chest] = 240;
                 ck_sfx(G, SFX_OPEN);
@@ -465,6 +475,9 @@ static void aqua_update(ck_game *G) {
         } else if (HIT(G, s, CK_B) && crab >= 0) {
             ck_crab *c = &H->crabs[crab];
             if (c->y == 0) { c->vy = -3.2f; c->snap = 40; c->run = 90; c->wait = 0; c->vx = (c->x > p->x ? 1 : -1) * 1.8f; ck_sfx(G, SFX_BOING); }
+        } else if (HIT(G, s, CK_B) && shrimp >= 0) {
+            H->shrimp[shrimp].held = i + 1;
+            ck_sfx(G, SFX_GRAB);
         } else if (HIT(G, s, CK_B) && !p->land) {
             ck_sfx(G, SFX_POP);
             for (int k = 0; k < 3 && H->nfood < CK_AQUA_FOOD; k++)
@@ -537,17 +550,36 @@ static void aqua_update(ck_game *G) {
     }
     for (int i = 0; i < CK_AQUA_SHRIMP; i++) {
         ck_shrimp *s = &H->shrimp[i];
+        if (s->held) {   // in a hero's hand, wriggling
+            const ck_hhero *p = &H->gs[s->held - 1];
+            if (s->held > H->np || p->land) { s->held = 0; continue; }   // climbing out lets it go
+            s->x = p->x + p->face * 10; s->y = p->y - 14; s->face = p->face; s->vx = s->vy = 0;
+            continue;
+        }
+        if (s->spin > 0) {   // thrown: tumbling along, booping any fish it meets
+            s->spin--;
+            if (s->spin % 6 == 0) s->face = -s->face;
+            for (int k = 0; k < CK_AQUA_FISH; k++) {
+                ck_fish *f = &H->fish[k];
+                if (f->happy > 0 || hypotf(f->x - s->x, f->y - s->y) > 12) continue;
+                f->happy = 40; f->scare = 40; f->vx = (s->vx > 0 ? 1 : -1) * 1.6f;
+                ck_sfx(G, SFX_BOING);
+                bubble(G, f->x, f->y - 6, 0, -0.8f, 3, 50);
+            }
+        }
         bool scared = false;
         for (int k = 0; k < H->np; k++) if (!H->gs[k].land && fabsf(H->gs[k].x - s->x) < 24 && H->gs[k].y > CK_AQUA_SEABED - 40) scared = true;
-        if (s->y >= CK_AQUA_SEABED - 2 && (scared || --s->rest <= 0)) {
+        if (s->y >= CK_AQUA_SEABED - 2 && s->spin <= 0 && (scared || --s->rest <= 0)) {
             s->face = scared ? (H->gs[0].x > s->x ? -1 : 1) : (ck_rand(G) < 0.5f ? -1 : 1);
             s->vx = s->face * 1.2f; s->vy = -1.6f; s->rest = 120 + (int)(ck_rand(G) * 160);
         }
         s->vy += 0.05f;
-        s->x = ck_clampf(s->x + s->vx, 12, CK_AQUA_BEACH_X - 40);
+        s->x += s->vx;
+        if (s->x < 12 || s->x > CK_AQUA_BEACH_X - 40) { s->x = ck_clampf(s->x, 12, CK_AQUA_BEACH_X - 40); s->vx = -s->vx * 0.5f; }   // bounce off the glass
         s->y += s->vy;
         s->vx *= 0.98f;
-        if (s->y >= CK_AQUA_SEABED - 2) { s->y = CK_AQUA_SEABED - 2; s->vy = 0; s->vx = 0; }
+        if (s->y < CK_AQUA_TOP + 8) { s->y = CK_AQUA_TOP + 8; s->vy = 0; }
+        if (s->y >= CK_AQUA_SEABED - 2) { s->y = CK_AQUA_SEABED - 2; s->vy = 0; s->vx = 0; s->spin = 0; }
     }
     for (int i = 0; i < CK_AQUA_CRABS; i++) {
         ck_crab *c = &H->crabs[i];
@@ -569,17 +601,25 @@ static void aqua_update(ck_game *G) {
 }
 
 // ---------------------------------------------------------------------------- the garage race
-void ck_race_obst(int i, float clock, float *d, float *x, int *kind, float *w, float *h) {
+const ck_racetrack ck_tracks[CK_RACE_TRACKS] = {
+    { "Green Hills", 0x5DBB63, 0x3F9D4E, 0x5A5E6A, 0xE04F4F, 0xFFFFFF, 0xFFF6D8 },
+    { "Desert Dash", 0xE8C77A, 0x6FAF4F, 0xA0805A, 0xFF8A3D, 0xFFF6D8, 0xFFE8B0 },
+    { "Snowy Pass", 0xEEF6FF, 0x3F7D5E, 0x7D8CA3, 0x3A6FC0, 0xFFFFFF, 0xFFFFFF },
+    { "Moon Run", 0x2B2840, 0x8F8AA8, 0x5A566E, 0xFFD23F, 0x3A3650, 0xC9C4E0 },
+};
+void ck_race_obst(int track, int i, float clock, float *d, float *x, int *kind, float *w, float *h) {
     static const int kinds[5] = { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CONE, OBST_CAR };
     *kind = kinds[i % 5];
     if (i < 8 && *kind == OBST_OIL) *kind = OBST_CRATE;   // the start is easy: no oil or slow cars yet
     if (i < 16 && *kind == OBST_CAR) *kind = OBST_CONE;
     // the gaps shrink from about 260 px to 80 px over the first 48, then stay at 80
     float t = i < 48 ? i / 48.0f : 1;
-    *d = 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (*kind == OBST_CAR ? clock * 60 : 0);   // slow cars drive at 1 px a frame
+    bool across = track == TRACK_DESERT || track == TRACK_SNOW;   // tumbleweeds and penguins wander across
+    *d = 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (*kind == OBST_CAR && !across ? clock * 60 : 0);   // cars drive at 1 px a frame
     *x = ((i * 7 + i / 4) % 3 - 1) * CK_RACE_LANE;
-    *w = *kind == OBST_OIL ? 20 : *kind == OBST_CAR ? 18 : *kind == OBST_CRATE ? 18 : 12;
-    *h = *kind == OBST_OIL ? 14 : *kind == OBST_CAR ? 28 : *kind == OBST_CRATE ? 18 : 12;
+    if (*kind == OBST_CAR && across) *x = sinf(clock * (track == TRACK_SNOW ? 0.9f : 1.4f) + i) * 44;
+    *w = *kind == OBST_OIL ? 20 : *kind == OBST_CAR ? (across ? 14 : 18) : *kind == OBST_CRATE ? 18 : 12;
+    *h = *kind == OBST_OIL ? 14 : *kind == OBST_CAR ? (across ? 14 : 28) : *kind == OBST_CRATE ? 18 : 12;
 }
 static void cars_reset(ck_game *G) {
     ck_house *H = &G->house;
@@ -589,13 +629,20 @@ static void cars_reset(ck_game *G) {
         memset(c, 0, sizeof *c);
         c->slot = slot; c->face = 1;
     }
-    H->count = 3; H->win = -1; H->endT = 0; H->clock = 0;
+    H->count = 3; H->win = -1; H->endT = 0; H->clock = 0; H->pickTrack = true;
 }
 static void cars_start(ck_game *G) { game_heroes(G); cars_reset(G); ck_go(G, SC_CARS); }
+// Before each race: left and right pick the track, A starts the countdown.
 static void cars_update(ck_game *G) {
     ck_house *H = &G->house;
     ck_step_parts(G);
     if (ANYHIT(G, CK_START)) { back_to_house(G); return; }
+    if (H->pickTrack) {
+        int d = (ANYHIT(G, CK_RIGHT) ? 1 : 0) - (ANYHIT(G, CK_LEFT) ? 1 : 0);
+        if (d) { H->track = (H->track + d + CK_RACE_TRACKS) % CK_RACE_TRACKS; ck_sfx(G, SFX_SELECT); }
+        if (ANYHIT(G, CK_A)) { H->pickTrack = false; ck_sfx(G, SFX_CONFIRM); }
+        return;
+    }
     if (H->count > 0) {
         int was = (int)ceilf(H->count);
         H->count -= 1.0f / 60;
@@ -605,7 +652,7 @@ static void cars_update(ck_game *G) {
     bool all = true;
     for (int i = 0; i < H->np; i++) if (H->gs[i].laps == 0) all = false;
     if (H->win >= 0) {   // the others get 4 seconds to finish too
-        if ((H->endT += 1.0f / 60) > 4) { cars_reset(G); return; }
+        if ((H->endT += 1.0f / 60) > 4) { H->track = (H->track + 1) % CK_RACE_TRACKS; cars_reset(G); return; }   // on to the next track
         if (all) return;
     }
     H->clock += 1.0f / 60;
@@ -621,7 +668,7 @@ static void cars_update(ck_game *G) {
         c->a += c->s;
         for (int k = 0; k < CK_RACE_OBST; k++) {
             float od, ox, w, h; int kind;
-            ck_race_obst(k, H->clock, &od, &ox, &kind, &w, &h);
+            ck_race_obst(H->track, k, H->clock, &od, &ox, &kind, &w, &h);
             if (c->hit & (1ull << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;
             c->hit |= 1ull << k;
             if (kind == OBST_OIL) { c->rep = 40; c->s *= 0.6f; ck_sfx(G, SFX_SLIDE); }

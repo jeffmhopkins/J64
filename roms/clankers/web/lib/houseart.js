@@ -159,38 +159,68 @@ const HOUSEART = (() => {
   // ---- the garage race, top down: the road scrolls down, three lanes, things to dodge. Boxes and
   // circles only, so the N64 (draw_cars) draws the same picture.
   const RACE = { len: 9600, obst: 64, lane: 40, edge: 52, carY: 190 };
-  const raceObst = (i, clock) => {
+  // four tracks (ck_tracks in ck_house.c): the obstacle kinds behave the same and only look different
+  const TRACKS = [
+    { name: 'Green Hills', ground: 0x5DBB63, deco: 0x3F9D4E, road: 0x5A5E6A, kerbA: 0xE04F4F, kerbB: 0xFFFFFF, line: 0xFFF6D8 },
+    { name: 'Desert Dash', ground: 0xE8C77A, deco: 0x6FAF4F, road: 0xA0805A, kerbA: 0xFF8A3D, kerbB: 0xFFF6D8, line: 0xFFE8B0 },
+    { name: 'Snowy Pass', ground: 0xEEF6FF, deco: 0x3F7D5E, road: 0x7D8CA3, kerbA: 0x3A6FC0, kerbB: 0xFFFFFF, line: 0xFFFFFF },
+    { name: 'Moon Run', ground: 0x2B2840, deco: 0x8F8AA8, road: 0x5A566E, kerbA: 0xFFD23F, kerbB: 0x3A3650, line: 0xC9C4E0 },
+  ];
+  const raceObst = (track, i, clock) => {
     let kind = ['cone', 'crate', 'oil', 'cone', 'car'][i % 5];
     if (i < 8 && kind === 'oil') kind = 'crate';   // the start is easy: no oil or slow cars yet
     if (i < 16 && kind === 'car') kind = 'cone';
     const t = Math.min(1, i / 48);   // the gaps shrink from about 260 px to 80 px, as on the N64
-    return { d: 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (kind === 'car' ? clock * 60 : 0), x: ((i * 7 + Math.floor(i / 4)) % 3 - 1) * RACE.lane, kind,
-             w: kind === 'oil' ? 20 : kind === 'car' ? 18 : kind === 'crate' ? 18 : 12, h: kind === 'oil' ? 14 : kind === 'car' ? 28 : kind === 'crate' ? 18 : 12 };
+    const across = track === 1 || track === 2;   // tumbleweeds and penguins wander across the road
+    let x = ((i * 7 + Math.floor(i / 4)) % 3 - 1) * RACE.lane;
+    if (kind === 'car' && across) x = Math.sin(clock * (track === 2 ? 0.9 : 1.4) + i) * 44;
+    return { d: 360 + i * 80 + 4400 * (1 - (1 - t) * (1 - t)) + (kind === 'car' && !across ? clock * 60 : 0), x, kind,
+             w: kind === 'oil' ? 20 : kind === 'car' ? (across ? 14 : 18) : kind === 'crate' ? 18 : 12, h: kind === 'oil' ? 14 : kind === 'car' ? (across ? 14 : 28) : kind === 'crate' ? 18 : 12 };
   };
   const box = (g, x, y, w, h, c, a = 1) => { g.globalAlpha = a; g.fillStyle = typeof c === 'number' ? hx(c) : c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };
   const dot = (g, x, y, r, c, a = 1) => { g.globalAlpha = a; g.fillStyle = hx(c); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; };
+  const ring = (g, x, y, r, c) => { g.strokeStyle = hx(c); g.lineWidth = 2; g.beginPath(); g.arc(x, y, r - 1, 0, Math.PI * 2); g.stroke(); };
   const fmod = (a, b) => ((a % b) + b) % b;
   function carTop(g, x, y, hex) {
     for (let k = 0; k < 4; k++) box(g, x + (k % 2 ? 7 : -10), y + (k < 2 ? -11 : 5), 3, 7, 0x1B1426);
     box(g, x - 8, y - 14, 16, 28, hex); box(g, x - 6, y - 7, 12, 5, 0xBFF0FF); box(g, x - 6, y + 6, 12, 3, 0x000000, 0.25);
     box(g, x - 7, y - 15, 3, 2, 0xFFE066); box(g, x + 4, y - 15, 3, 2, 0xFFE066);
   }
-  function raceView(g, x0, vw, dist, clock) {
-    const cx = x0 + vw / 2;
-    box(g, x0, 0, vw, 240, 0x5DBB63);
-    for (let k = 0; k < 8; k++) { const y = fmod(k * 60 + dist, 480) - 120; dot(g, x0 + 8 + (k % 2) * 4, y, 7, 0x3F9D4E); dot(g, x0 + vw - 10 - (k % 3) * 3, y + 30, 7, 0x3F9D4E); }
-    box(g, cx - 64, 0, 128, 240, 0x5A5E6A);
-    for (let y = fmod(dist, 24) - 24; y < 240; y += 24) { box(g, cx - 66, y, 4, 12, 0xE04F4F); box(g, cx - 66, y + 12, 4, 12, 0xFFFFFF); box(g, cx + 62, y, 4, 12, 0xE04F4F); box(g, cx + 62, y + 12, 4, 12, 0xFFFFFF); }
-    for (let y = fmod(dist, 40) - 40; y < 240; y += 40) { box(g, cx - 21, y, 2, 20, 0xFFF6D8); box(g, cx + 19, y, 2, 20, 0xFFF6D8); }
+  // one obstacle in its track's look (race_thing in draw.c)
+  function raceThing(g, track, kind, x, y, t) {
+    const k = track * 4 + ['cone', 'crate', 'oil', 'car'].indexOf(kind);
+    switch (k) {
+      case 0: dot(g, x, y, 6, 0xFF8A3D); dot(g, x, y, 2.5, 0xFFFFFF); break;
+      case 1: box(g, x - 9, y - 9, 18, 18, 0x8A5A3C); box(g, x - 7, y - 7, 14, 14, 0xC98A4B); box(g, x - 1, y - 7, 2, 14, 0x8A5A3C); break;
+      case 2: dot(g, x, y, 10, 0x1B1426, 0.85); dot(g, x + 3, y - 2, 3, 0x5A4F78); break;
+      case 3: carTop(g, x, y, 0x9AA1B0); break;
+      case 4: dot(g, x, y, 6, 0x4F9A43); dot(g, x - 5, y - 3, 3, 0x6FAF4F); dot(g, x + 5, y + 2, 3, 0x6FAF4F); dot(g, x, y, 2, 0xFF8FC7); break;   // cactus
+      case 5: dot(g, x, y, 10, 0x8C7A66); dot(g, x - 3, y - 3, 5, 0xB09C84); break;   // boulder
+      case 6: dot(g, x, y, 11, 0xC9A35A); dot(g, x, y, 6, 0xB08A45); break;   // sand pit
+      case 7: ring(g, x, y, 7, 0x9C7A4A); dot(g, x + Math.cos(t * 6) * 3, y + Math.sin(t * 6) * 3, 2.5, 0x8A6A3C); dot(g, x - Math.cos(t * 6) * 3, y - Math.sin(t * 6) * 3, 2.5, 0xB08A55); break;   // tumbleweed
+      case 8: dot(g, x, y + 2, 7, 0xFFFFFF); dot(g, x, y - 6, 4.5, 0xFFFFFF); dot(g, x + 3, y - 6, 1.5, 0xFF8A3D); break;   // snowman
+      case 9: box(g, x - 9, y - 9, 18, 18, 0x7FC4E6); box(g, x - 7, y - 7, 14, 14, 0xBFE8FF); box(g, x - 5, y - 5, 4, 4, 0xFFFFFF); break;   // ice block
+      case 10: dot(g, x, y, 11, 0xA8DCF5, 0.95); dot(g, x - 3, y - 3, 3, 0xFFFFFF); break;   // ice patch
+      case 11: dot(g, x, y, 7, 0x1B1426); dot(g, x, y + 1, 4, 0xFFFFFF); dot(g, x, y - 5, 1.8, 0xFF8A3D); break;   // penguin
+      case 12: dot(g, x, y, 6, 0xA9A4BC); dot(g, x + 2, y + 1, 2, 0x6E6A80); break;   // moon rock
+      case 13: box(g, x - 9, y - 9, 18, 18, 0xC0C4D0); box(g, x - 9, y - 2, 18, 4, 0xFFD23F); box(g, x - 6, y - 7, 4, 3, 0x5AD1FF); break;   // supply pod
+      case 14: dot(g, x, y, 11, 0x8F8AA8); dot(g, x + 1, y + 1, 8, 0x3A3650); break;   // crater
+      default: carTop(g, x, y, 0xE6E6F0); dot(g, x, y, 3, 0xFF5A5A); break;   // moon rover
+    }
+  }
+  function raceView(g, track, x0, vw, dist, clock) {
+    const T = TRACKS[track], cx = x0 + vw / 2, r = track === 3 ? 4 : 7;
+    box(g, x0, 0, vw, 240, T.ground);
+    for (let k = 0; k < 8; k++) { const y = fmod(k * 60 + dist, 480) - 120; dot(g, x0 + 8 + (k % 2) * 4, y, r, T.deco); dot(g, x0 + vw - 10 - (k % 3) * 3, y + 30, r, T.deco); }
+    box(g, cx - 64, 0, 128, 240, T.road);
+    for (let y = fmod(dist, 24) - 24; y < 240; y += 24) { box(g, cx - 66, y, 4, 12, T.kerbA); box(g, cx - 66, y + 12, 4, 12, T.kerbB); box(g, cx + 62, y, 4, 12, T.kerbA); box(g, cx + 62, y + 12, 4, 12, T.kerbB); }
+    for (let y = fmod(dist, 40) - 40; y < 240; y += 40) { box(g, cx - 21, y, 2, 20, T.line); box(g, cx + 19, y, 2, 20, T.line); }
     const fy = RACE.carY - (RACE.len - dist);
     if (fy > -10 && fy < 250) for (let r = 0; r < 2; r++) for (let k = 0; k < 16; k++) box(g, cx - 64 + k * 8, fy - 8 + r * 4, 8, 4, (k + r) % 2 ? 0xFFFFFF : 0x1B1426);
     for (let i = 0; i < RACE.obst; i++) {
-      const o = raceObst(i, clock), x = cx + o.x, y = RACE.carY - (o.d - dist);
+      const o = raceObst(track, i, clock), y = RACE.carY - (o.d - dist);
       if (y < -30 || y > 270) continue;
-      if (o.kind === 'cone') { dot(g, x, y, 6, 0xFF8A3D); dot(g, x, y, 2.5, 0xFFFFFF); }
-      else if (o.kind === 'crate') { box(g, x - 9, y - 9, 18, 18, 0x8A5A3C); box(g, x - 7, y - 7, 14, 14, 0xC98A4B); box(g, x - 1, y - 7, 2, 14, 0x8A5A3C); }
-      else if (o.kind === 'oil') { dot(g, x, y, 10, 0x1B1426, 0.85); dot(g, x + 3, y - 2, 3, 0x5A4F78); }
-      else carTop(g, x, y, 0x9AA1B0);
+      raceThing(g, track, o.kind, cx + o.x, y, clock + i);
     }
   }
   // ---- the piano keyboard for the music game: 2 octaves from C4, 14 white keys
@@ -252,5 +282,5 @@ const HOUSEART = (() => {
   const CHESTS = [119, 439];
   const FRIDGE_FOODS = 9;
   const COOK_INGR = [9, 10, 2, 11, 3, 12];   // egg, tomato, cheese, mushroom, carrot, bread (ck_cook_ingr)   // the aquarium's treasure chests (ck_aqua_chest_x)
-  return { FOODS, FRIDGE_FOODS, COOK_INGR, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, RACE, raceObst, raceView, carTop, KEYS, hx };
+  return { FOODS, FRIDGE_FOODS, COOK_INGR, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, RACE, TRACKS, raceObst, raceView, carTop, KEYS, hx };
 })();

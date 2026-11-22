@@ -1045,10 +1045,14 @@ function aquaScene(house) {
         p.vx = clamp((p.vx + dx * 0.14) * 0.95, -2, 2); p.vy = clamp((p.vy + dy * 0.14) * 0.95 + 0.01, -2.4, 2);
         if (hit(sl, 'a')) { p.vy -= 1.6; SND.fx.flap(); puff(p.x, p.y - 26, 3, 'rgba(220,250,255,0.9)'); }
       }
-      // B: by a chest, open it; by a crab on the beach, poke it; anywhere else in the water, sprinkle fish food
+      // B: throw the shrimp in your hand; by a chest, open it; by a crab on the beach, poke it; by a
+      // shrimp, pick it up; anywhere else in the water, sprinkle fish food
+      const mine = S.shrimp.find(sh => sh.held === p);
+      const shrimp = S.shrimp.find(sh => !sh.held && !p.land && Math.abs(sh.x - p.x) < 18 && Math.abs(sh.y - p.y) < 24);
       const chest = HOUSEART.CHESTS.findIndex(cx => Math.abs(p.x - cx) < 26 && p.y > A.SEABED - 40);
       const crab = S.crabs.find(c => p.land && Math.abs(p.x - c.x) < 24);
-      if (hit(sl, 'b') && chest >= 0) {
+      if (hit(sl, 'b') && mine) { mine.held = null; mine.vx = p.face * 3.4 + p.vx; mine.vy = -1.2 + p.vy * 0.5; mine.spin = 60; mine.face = p.face; SND.fx.whoosh(); }
+      else if (hit(sl, 'b') && chest >= 0) {
         if (S.chestT[chest] <= 0) {
           S.chestT[chest] = 240; SND.fx.open();
           for (let k = 0; k < 8; k++) particles.push({ x: HOUSEART.CHESTS[chest] + (Math.random() - 0.5) * 14, y: A.SEABED - 14, vx: (Math.random() - 0.5) * 0.6, vy: -0.6 - Math.random(), life: 90, max: 90, r: 2 + Math.random() * 2, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
@@ -1056,7 +1060,8 @@ function aquaScene(house) {
         }
       } else if (hit(sl, 'b') && crab) {
         if (crab.y === 0) { crab.vy = -3.2; crab.snap = 40; crab.run = 90; crab.wait = 0; crab.vx = (crab.x > p.x ? 1 : -1) * 1.8; SND.fx.boing(); }
-      } else if (hit(sl, 'b') && !p.land) { SND.fx.pop(); for (let k = 0; k < 3 && S.food.length < 12; k++) S.food.push({ x: p.x + p.face * (8 + k * 4), y: p.y - 20 + k * 2, life: 600 }); }
+      } else if (hit(sl, 'b') && shrimp) { shrimp.held = p; SND.fx.grab(); }
+      else if (hit(sl, 'b') && !p.land) { SND.fx.pop(); for (let k = 0; k < 3 && S.food.length < 12; k++) S.food.push({ x: p.x + p.face * (8 + k * 4), y: p.y - 20 + k * 2, life: 600 }); }
       p.x = clamp(p.x + p.vx, 10, A.W - 10); p.y += p.vy;
       const fl = floorAt(p.x);
       p.ground = false; if (p.y >= fl) { p.y = fl; p.vy = 0; p.ground = true; }
@@ -1099,10 +1104,25 @@ function aquaScene(house) {
       f.y = clamp(f.y, A.WATER_TOP + 14, A.SEABED - 14);
     }
     for (const s of S.shrimp) {
+      if (s.held) {   // in a hero's hand, wriggling; climbing out lets it go
+        const p = s.held;
+        if (p.land || !S.ps.includes(p)) { s.held = null; continue; }
+        s.x = p.x + p.face * 10; s.y = p.y - 14; s.face = p.face; s.vx = s.vy = 0; continue;
+      }
+      if (s.spin > 0) {   // thrown: tumbling along, booping any fish it meets
+        s.spin--; if (s.spin % 6 === 0) s.face = -s.face;
+        for (const f of S.fish) {
+          if (f.happy > 0 || Math.hypot(f.x - s.x, f.y - s.y) > 12) continue;
+          f.happy = 40; f.scare = 40; f.vx = Math.sign(s.vx || 1) * 1.6; SND.fx.boing();
+          particles.push({ x: f.x, y: f.y - 6, vx: 0, vy: -0.8, life: 50, max: 50, r: 3, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
+        }
+      }
       const scared = S.ps.some(p => !p.land && Math.abs(p.x - s.x) < 24 && p.y > A.SEABED - 40);
-      if (s.y >= A.SEABED - 2 && (scared || --s.rest <= 0)) { s.face = scared ? (S.ps[0].x > s.x ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1); s.vx = s.face * 1.2; s.vy = -1.6; s.rest = 120 + Math.floor(Math.random() * 160); }
-      s.vy += 0.05; s.x = clamp(s.x + s.vx, 12, A.BEACH_X - 40); s.y += s.vy; s.vx *= 0.98;
-      if (s.y >= A.SEABED - 2) { s.y = A.SEABED - 2; s.vy = 0; s.vx = 0; }
+      if (s.y >= A.SEABED - 2 && !(s.spin > 0) && (scared || --s.rest <= 0)) { s.face = scared ? (S.ps[0].x > s.x ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1); s.vx = s.face * 1.2; s.vy = -1.6; s.rest = 120 + Math.floor(Math.random() * 160); }
+      s.vy += 0.05; s.x += s.vx; s.y += s.vy; s.vx *= 0.98;
+      if (s.x < 12 || s.x > A.BEACH_X - 40) { s.x = clamp(s.x, 12, A.BEACH_X - 40); s.vx = -s.vx * 0.5; }   // bounce off the glass
+      if (s.y < A.WATER_TOP + 8) { s.y = A.WATER_TOP + 8; s.vy = 0; }
+      if (s.y >= A.SEABED - 2) { s.y = A.SEABED - 2; s.vy = 0; s.vx = 0; s.spin = 0; }
     }
     for (const c of S.crabs) {
       const close = S.ps.some(p => p.land && Math.abs(p.x - c.x) < 22);
@@ -1140,7 +1160,7 @@ function aquaScene(house) {
     }
     g.restore();
     drawParticles(S.cam);
-    hint('Stick swim   A up   B feed, open, poke   START leave', 14);
+    hint('Stick swim   A up   B feed, grab, throw   START leave', 14);
   };
   return S;
 }
@@ -1149,14 +1169,21 @@ function aquaScene(house) {
 // the stick steers. Three laps; with two players the first one home wins.
 function carsScene(house) {
   const R = HOUSEART.RACE, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
-  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
+  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; S.pickTrack = true; };
+  S.track = 0;
   reset();
   S.update = function () {
     S.t += 1 / 60; stepParticles();
     if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
+    if (S.pickTrack) {   // left and right pick the track, A starts the countdown
+      const d = (anyHit('right') ? 1 : 0) - (anyHit('left') ? 1 : 0), n = HOUSEART.TRACKS.length;
+      if (d) { S.track = (S.track + d + n) % n; SND.fx.select(); }
+      if (anyHit('a')) { S.pickTrack = false; SND.fx.confirm(); }
+      return;
+    }
     if (S.count > 0) { const was = Math.ceil(S.count); S.count -= 1 / 60; if (Math.ceil(S.count) !== was) SND.fx[S.count <= 0 ? 'confirm' : 'tick'](); return; }
     if (S.win >= 0) {   // the others get 4 seconds to finish too
-      if ((S.endT += 1 / 60) > 4) { reset(); return; }
+      if ((S.endT += 1 / 60) > 4) { S.track = (S.track + 1) % HOUSEART.TRACKS.length; reset(); return; }   // on to the next track
       if (S.cars.every(c => c.done)) return;
     }
     S.clock += 1 / 60;
@@ -1171,7 +1198,7 @@ function carsScene(house) {
       if (c.done) c.s = Math.max(c.s * 0.97, 0.5);   // past the line: coast
       c.d += c.s;
       for (let k = 0; k < R.obst; k++) {
-        const o = HOUSEART.raceObst(k, S.clock);
+        const o = HOUSEART.raceObst(S.track, k, S.clock);
         if (c.hit.has(k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
         c.hit.add(k);
         if (o.kind === 'oil') { c.spin = 40; c.s *= 0.6; SND.fx.slide(); } else { c.spin = 50; c.s = 0.6; SND.fx.clank(); }
@@ -1185,7 +1212,7 @@ function carsScene(house) {
     S.cars.forEach((c, i) => {
       const x0 = i * vw;
       g.save(); g.beginPath(); g.rect(x0, 0, vw, H); g.clip();
-      HOUSEART.raceView(g, x0, vw, c.d, S.clock);
+      HOUSEART.raceView(g, S.track, x0, vw, c.d, S.clock);
       HOUSEART.carTop(g, x0 + vw / 2 + c.x + (c.spin > 0 ? Math.sin(c.spin * 0.6) * 4 : 0), R.carY, c.m.hex);
       g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(x0 + vw - 12, 20, 5, 150);
       g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(x0 + vw - 13, 166 - 146 * Math.min(1, c.d / R.len), 7, 4);
@@ -1195,6 +1222,13 @@ function carsScene(house) {
     if (n > 1) { g.fillStyle = '#1b1426'; g.fillRect(W / 2 - 1, 0, 2, H); }
     drawParticles(0);
     if (n === 1) { panel(W / 2 - 34, 4, 68, 16); text(clock(Math.round(S.clock * 60)), W / 2, 15, 8, '#fff6d8', 'center', null); }
+    if (S.pickTrack) {
+      rimBanner(HOUSEART.TRACKS[S.track].name, 14, 78, 34);
+      text('<', W / 2 - 92, 100, 8, '#fff6d8'); text('>', W / 2 + 92, 100, 8, '#fff6d8');
+      hint('Track ' + (S.track + 1) + ' of ' + HOUSEART.TRACKS.length, 124);
+      hint('< > pick a track   A race!   START leave', H - 12);
+      return;
+    }
     if (S.count > 0) rimBanner(String(Math.ceil(S.count)), 20, 100, 34);
     else if (S.win < 0 && S.clock < 0.8) rimBanner('GO!', 20, 100, 34, '#49d17a', '#49d17a');
     if (S.win >= 0) rimBanner(n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)), 14, 98, 30);

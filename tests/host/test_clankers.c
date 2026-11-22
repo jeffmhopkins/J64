@@ -1034,6 +1034,19 @@ static void test_house(void) {
     hold(G, 300, 0, 0);
     press(G, CK_B, 0);
     EXPECT_EQ_INT(G->prog.bolts, bolts0 + 5);
+    // a shrimp: B picks it up, it rides in your hand, and B throws it the way you face
+    G->house.gs[0].x = 280; G->house.gs[0].y = CK_AQUA_SEABED; G->house.gs[0].face = 1;
+    G->house.shrimp[0].x = 284; G->house.shrimp[0].y = CK_AQUA_SEABED - 2; G->house.shrimp[0].spin = 0;
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->house.shrimp[0].held, 1);
+    hold(G, 30, CK_UP, 0);
+    EXPECT_EQ_INT(G->house.shrimp[0].y < CK_AQUA_SEABED - 20, 1);
+    float sx = G->house.shrimp[0].x;
+    press(G, CK_B, 0);
+    EXPECT_EQ_INT(G->house.shrimp[0].held, 0);
+    EXPECT_EQ_INT(G->house.shrimp[0].spin > 0, 1);
+    hold(G, 20, 0, 0);
+    EXPECT_EQ_INT(G->house.shrimp[0].x > sx + 20, 1);
     // the tank scrolls: the beach is three screens along
     hold(G, 700, CK_RIGHT | CK_UP, 0);
     hold(G, 100, CK_RIGHT, 0);
@@ -1055,33 +1068,45 @@ static void test_house(void) {
     walk_to(G, ck_spots[SPOT_CARS].x);
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_CARS);
-    hold(G, 200, 0, 0);   // the countdown
-    EXPECT_EQ_INT(G->house.count <= 0, 1);
-    // a scripted driver steers into a lane that is clear ahead
-    for (int i = 0; i < 60 * 120 && G->house.win < 0; i++) {
-        const ck_hhero *c = &G->house.gs[0];
-        bool blocked[3] = { false, false, false };
-        for (int k = 0; k < CK_RACE_OBST; k++) {
-            float od, ox, w, h; int kind;
-            ck_race_obst(k, G->house.clock, &od, &ox, &kind, &w, &h);
-            if (od - c->a > -30 && od - c->a < 140) blocked[(int)lroundf(ox / CK_RACE_LANE) + 1] = true;
+    EXPECT_EQ_INT(G->house.pickTrack, 1);   // pick a track first: right then left comes back to Green Hills
+    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->house.track, TRACK_DESERT);
+    press(G, CK_LEFT, 0); EXPECT_EQ_INT(G->house.track, TRACK_HILLS);
+    // a scripted driver steers into a lane that is clear ahead, on every track in turn
+    float good = 0;
+    for (int tr = 0; tr < CK_RACE_TRACKS; tr++) {
+        EXPECT_EQ_INT(G->house.track, tr);
+        EXPECT_EQ_INT(G->house.pickTrack, 1);
+        press(G, CK_A, 0);
+        hold(G, 200, 0, 0);   // the countdown
+        EXPECT_EQ_INT(G->house.count <= 0, 1);
+        for (int i = 0; i < 60 * 120 && G->house.win < 0; i++) {
+            const ck_hhero *c = &G->house.gs[0];
+            bool blocked[3] = { false, false, false };
+            for (int k = 0; k < CK_RACE_OBST; k++) {
+                float od, ox, w, h; int kind;
+                ck_race_obst(G->house.track, k, G->house.clock, &od, &ox, &kind, &w, &h);
+                if (od - c->a > -30 && od - c->a < 140)
+                    for (int l = 0; l < 3; l++) if (fabsf(ox - (l - 1) * CK_RACE_LANE) < w / 2 + 14) blocked[l] = true;
+            }
+            int lane = (int)lroundf(c->x / CK_RACE_LANE) + 1, best = lane;
+            for (int dl = 0; dl <= 2 && blocked[best]; dl++)
+                for (int sgn = -1; sgn <= 1; sgn += 2) { int l = lane + sgn * dl; if (l >= 0 && l < 3 && !blocked[l]) { best = l; break; } }
+            float tx = (best - 1) * CK_RACE_LANE;
+            ck_game_step(G, tx > c->x + 3 ? CK_RIGHT : tx < c->x - 3 ? CK_LEFT : 0, 0);
         }
-        int lane = (int)lroundf(c->x / CK_RACE_LANE) + 1, best = lane;
-        for (int dl = 0; dl <= 2 && blocked[best]; dl++)
-            for (int sgn = -1; sgn <= 1; sgn += 2) { int l = lane + sgn * dl; if (l >= 0 && l < 3 && !blocked[l]) { best = l; break; } }
-        float tx = (best - 1) * CK_RACE_LANE;
-        ck_game_step(G, tx > c->x + 3 ? CK_RIGHT : tx < c->x - 3 ? CK_LEFT : 0, 0);
+        EXPECT_EQ_INT(G->house.win, 0);
+        int bumps = 0;
+        for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
+        if (bumps > 8) printf("  track %d: the scripted driver bumped %d times\n", tr, bumps);
+        EXPECT_EQ_INT(bumps <= 8, 1);
+        if (tr == 0) good = G->house.gs[0].best;
+        hold(G, 60 * 5, 0, 0);   // then the next track comes up
     }
-    EXPECT_EQ_INT(G->house.win, 0);
-    int bumps = 0;
-    for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
-    EXPECT_EQ_INT(bumps <= 4, 1);
-    float good = G->house.gs[0].best;
     // a driver who never steers bumps into everything in the middle lane and is slower
-    hold(G, 60 * 5, 0, 0);
-    EXPECT_EQ_INT(G->house.win, -1);
+    EXPECT_EQ_INT(G->house.track, TRACK_HILLS);
+    press(G, CK_A, 0);
     for (int i = 0; i < 60 * 240 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
-    bumps = 0;
+    int bumps = 0;
     for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
     EXPECT_EQ_INT(bumps >= 6, 1);
     EXPECT_EQ_INT(G->house.gs[0].best > good + 3, 1);

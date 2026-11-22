@@ -1613,7 +1613,7 @@ static void draw_aqua(const ck_game *G) {
         }
     }
     particles(G, cam);
-    hint(14, "Stick swim   A up   B feed, open, poke   START leave");
+    hint(14, "Stick swim   A up   B feed, grab, throw   START leave");
 }
 
 // The garage race, top down: a half of the screen per player, boxes and circles only (raceView
@@ -1625,32 +1625,63 @@ static void car_top(float x, float y, uint32_t hex) {
     rect(x - 6, y + 6, 12, 3, 0x000000, 0.25f);
     rect(x - 7, y - 15, 3, 2, 0xFFE066, 1); rect(x + 4, y - 15, 3, 2, 0xFFE066, 1);
 }
-static void race_view(float x0, float vw, float dist, float clock) {
+// one obstacle in a track's look: the kinds behave the same on every track
+static void race_thing(int track, int kind, float x, float y, float t) {
+    switch (track * 4 + kind) {
+    case TRACK_HILLS * 4 + OBST_CONE: shape(SPR_DOT, x, y, 6, 0xFF8A3D, 1); shape(SPR_DOT, x, y, 2.5f, 0xFFFFFF, 1); break;
+    case TRACK_HILLS * 4 + OBST_CRATE: rect(x - 9, y - 9, 18, 18, 0x8A5A3C, 1); rect(x - 7, y - 7, 14, 14, 0xC98A4B, 1); rect(x - 1, y - 7, 2, 14, 0x8A5A3C, 1); break;
+    case TRACK_HILLS * 4 + OBST_OIL: shape(SPR_DOT, x, y, 10, 0x1B1426, 0.85f); shape(SPR_DOT, x + 3, y - 2, 3, 0x5A4F78, 1); break;
+    case TRACK_HILLS * 4 + OBST_CAR: car_top(x, y, 0x9AA1B0); break;
+    case TRACK_DESERT * 4 + OBST_CONE:   // a cactus
+        shape(SPR_DOT, x, y, 6, 0x4F9A43, 1); shape(SPR_DOT, x - 5, y - 3, 3, 0x6FAF4F, 1); shape(SPR_DOT, x + 5, y + 2, 3, 0x6FAF4F, 1); shape(SPR_DOT, x, y, 2, 0xFF8FC7, 1); break;
+    case TRACK_DESERT * 4 + OBST_CRATE:   // a boulder
+        shape(SPR_DOT, x, y, 10, 0x8C7A66, 1); shape(SPR_DOT, x - 3, y - 3, 5, 0xB09C84, 1); break;
+    case TRACK_DESERT * 4 + OBST_OIL:   // a sand pit
+        shape(SPR_DOT, x, y, 11, 0xC9A35A, 1); shape(SPR_DOT, x, y, 6, 0xB08A45, 1); break;
+    case TRACK_DESERT * 4 + OBST_CAR:   // a tumbleweed rolling across
+        shape(SPR_RING, x, y, 7, 0x9C7A4A, 1); shape(SPR_DOT, x + cosf(t * 6) * 3, y + sinf(t * 6) * 3, 2.5f, 0x8A6A3C, 1); shape(SPR_DOT, x - cosf(t * 6) * 3, y - sinf(t * 6) * 3, 2.5f, 0xB08A55, 1); break;
+    case TRACK_SNOW * 4 + OBST_CONE:   // a snowman
+        shape(SPR_DOT, x, y + 2, 7, 0xFFFFFF, 1); shape(SPR_DOT, x, y - 6, 4.5f, 0xFFFFFF, 1); shape(SPR_DOT, x + 3, y - 6, 1.5f, 0xFF8A3D, 1); break;
+    case TRACK_SNOW * 4 + OBST_CRATE:   // a block of ice
+        rect(x - 9, y - 9, 18, 18, 0x7FC4E6, 1); rect(x - 7, y - 7, 14, 14, 0xBFE8FF, 1); rect(x - 5, y - 5, 4, 4, 0xFFFFFF, 1); break;
+    case TRACK_SNOW * 4 + OBST_OIL:   // an ice patch
+        shape(SPR_DOT, x, y, 11, 0xA8DCF5, 0.95f); shape(SPR_DOT, x - 3, y - 3, 3, 0xFFFFFF, 1); break;
+    case TRACK_SNOW * 4 + OBST_CAR:   // a penguin waddling across
+        shape(SPR_DOT, x, y, 7, 0x1B1426, 1); shape(SPR_DOT, x, y + 1, 4, 0xFFFFFF, 1); shape(SPR_DOT, x, y - 5, 1.8f, 0xFF8A3D, 1); break;
+    case TRACK_MOON * 4 + OBST_CONE:   // a moon rock
+        shape(SPR_DOT, x, y, 6, 0xA9A4BC, 1); shape(SPR_DOT, x + 2, y + 1, 2, 0x6E6A80, 1); break;
+    case TRACK_MOON * 4 + OBST_CRATE:   // a supply pod
+        rect(x - 9, y - 9, 18, 18, 0xC0C4D0, 1); rect(x - 9, y - 2, 18, 4, 0xFFD23F, 1); rect(x - 6, y - 7, 4, 3, 0x5AD1FF, 1); break;
+    case TRACK_MOON * 4 + OBST_OIL:   // a crater
+        shape(SPR_DOT, x, y, 11, 0x8F8AA8, 1); shape(SPR_DOT, x + 1, y + 1, 8, 0x3A3650, 1); break;
+    default: car_top(x, y, 0xE6E6F0); shape(SPR_DOT, x, y, 3, 0xFF5A5A, 1); break;   // a moon rover
+    }
+}
+static void race_view(int track, float x0, float vw, float dist, float clock) {
+    const ck_racetrack *T = &ck_tracks[track];
     float cx = x0 + vw / 2;
-    rect(x0, 0, vw, H, 0x5DBB63, 1);
-    for (int k = 0; k < 8; k++) {   // bushes on the verges, scrolling down
+    rect(x0, 0, vw, H, T->ground, 1);
+    for (int k = 0; k < 8; k++) {   // bushes, cacti, pines or craters on the verges, scrolling down
         float y = fmodf(k * 60 + dist, 480) - 120;
-        shape(SPR_DOT, x0 + 8 + (k % 2) * 4, y, 7, 0x3F9D4E, 1);
-        shape(SPR_DOT, x0 + vw - 10 - (k % 3) * 3, y + 30, 7, 0x3F9D4E, 1);
+        float r = track == TRACK_MOON ? 4 : 7;
+        shape(SPR_DOT, x0 + 8 + (k % 2) * 4, y, r, T->deco, 1);
+        shape(SPR_DOT, x0 + vw - 10 - (k % 3) * 3, y + 30, r, T->deco, 1);
     }
-    rect(cx - 64, 0, 128, H, 0x5A5E6A, 1);
+    rect(cx - 64, 0, 128, H, T->road, 1);
     for (float y = fmodf(dist, 24) - 24; y < H; y += 24) {
-        rect(cx - 66, y, 4, 12, 0xE04F4F, 1); rect(cx - 66, y + 12, 4, 12, 0xFFFFFF, 1);
-        rect(cx + 62, y, 4, 12, 0xE04F4F, 1); rect(cx + 62, y + 12, 4, 12, 0xFFFFFF, 1);
+        rect(cx - 66, y, 4, 12, T->kerbA, 1); rect(cx - 66, y + 12, 4, 12, T->kerbB, 1);
+        rect(cx + 62, y, 4, 12, T->kerbA, 1); rect(cx + 62, y + 12, 4, 12, T->kerbB, 1);
     }
-    for (float y = fmodf(dist, 40) - 40; y < H; y += 40) { rect(cx - 21, y, 2, 20, 0xFFF6D8, 1); rect(cx + 19, y, 2, 20, 0xFFF6D8, 1); }
+    for (float y = fmodf(dist, 40) - 40; y < H; y += 40) { rect(cx - 21, y, 2, 20, T->line, 1); rect(cx + 19, y, 2, 20, T->line, 1); }
     float fy = CK_RACE_CAR_Y - (CK_RACE_LEN - dist);
     if (fy > -10 && fy < H + 10)
         for (int r = 0; r < 2; r++) for (int k = 0; k < 16; k++) rect(cx - 64 + k * 8, fy - 8 + r * 4, 8, 4, (k + r) % 2 ? 0xFFFFFF : 0x1B1426, 1);
     for (int i = 0; i < CK_RACE_OBST; i++) {
         float od, ox, w, h; int kind;
-        ck_race_obst(i, clock, &od, &ox, &kind, &w, &h);
-        float x = cx + ox, y = CK_RACE_CAR_Y - (od - dist);
+        ck_race_obst(track, i, clock, &od, &ox, &kind, &w, &h);
+        float y = CK_RACE_CAR_Y - (od - dist);
         if (y < -30 || y > H + 30) continue;
-        if (kind == OBST_CONE) { shape(SPR_DOT, x, y, 6, 0xFF8A3D, 1); shape(SPR_DOT, x, y, 2.5f, 0xFFFFFF, 1); }
-        else if (kind == OBST_CRATE) { rect(x - 9, y - 9, 18, 18, 0x8A5A3C, 1); rect(x - 7, y - 7, 14, 14, 0xC98A4B, 1); rect(x - 1, y - 7, 2, 14, 0x8A5A3C, 1); }
-        else if (kind == OBST_OIL) { shape(SPR_DOT, x, y, 10, 0x1B1426, 0.85f); shape(SPR_DOT, x + 3, y - 2, 3, 0x5A4F78, 1); }
-        else car_top(x, y, 0x9AA1B0);
+        race_thing(track, kind, cx + ox, y, clock + i);
     }
 }
 static void draw_cars(const ck_game *G) {
@@ -1662,7 +1693,7 @@ static void draw_cars(const ck_game *G) {
         const ck_hhero *k = &Hs->gs[i];
         float x0 = i * vw;
         rdpq_set_scissor(x0, 0, x0 + vw, H);
-        race_view(x0, vw, k->a, Hs->clock);
+        race_view(Hs->track, x0, vw, k->a, Hs->clock);
         int col = skin_col(G, k->slot);
         uint32_t hex;
         if (col < CK_NCOLS) hex = ck_cols[col];
@@ -1677,6 +1708,15 @@ static void draw_cars(const ck_game *G) {
     if (n > 1) rect(W / 2 - 1, 0, 2, H, 0x1B1426, 1);
     particles(G, 0);
     if (n == 1) { dark_panel(W / 2 - 34, 4, 68, 16); txt(F_SMALL, ST_PLAIN, W / 2, 15, ALIGN_CENTER, "%s", clock_str((int)(Hs->clock * 60), c)); }
+    if (Hs->pickTrack) {   // choosing the track
+        banner(F_BIG, ST_YELLOW, 0xFFD23F, 78, 200, 34, 101, ck_tracks[Hs->track].name);
+        txt(F_SMALL, ST_PLAIN, W / 2 - 92, 100, ALIGN_CENTER, "<");
+        txt(F_SMALL, ST_PLAIN, W / 2 + 92, 100, ALIGN_CENTER, ">");
+        snprintf(s, sizeof s, "Track %d of %d", Hs->track + 1, CK_RACE_TRACKS);
+        hint(124, s);
+        hint(H - 12, "< > pick a track   A race!   START leave");
+        return;
+    }
     if (Hs->count > 0) { snprintf(s, sizeof s, "%d", (int)ceilf(Hs->count)); banner(F_HUGE, ST_YELLOW, 0xFFD23F, 100, 60, 34, 126, s); }
     else if (Hs->win < 0 && Hs->clock < 0.8f) banner(F_HUGE, ST_GREEN, 0x49D17A, 100, 80, 34, 126, "GO!");
     if (Hs->win >= 0) {

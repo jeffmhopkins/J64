@@ -442,9 +442,16 @@ extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 #define CK_RACE_LANE 40           // the lanes are at -40, 0 and 40 from the road's middle
 #define CK_RACE_EDGE 52           // how far from the middle a car can go
 #define CK_RACE_CAR_Y 190         // where your car sits on the screen
+// The kinds work the same on every track and only look different: a small thing, a big block, a
+// slippery patch, and something that moves (cars and moon rovers drive on, tumbleweeds and
+// penguins wander across the road).
 enum { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CAR };
-// obstacle i: how far along the road (at race time `clock`: slow cars drive on), across, its kind and size
-void ck_race_obst(int i, float clock, float *d, float *x, int *kind, float *w, float *h);
+#define CK_RACE_TRACKS 4
+enum { TRACK_HILLS, TRACK_DESERT, TRACK_SNOW, TRACK_MOON };
+typedef struct { const char *name; uint32_t ground, deco, road, kerbA, kerbB, line; } ck_racetrack;
+extern const ck_racetrack ck_tracks[CK_RACE_TRACKS];
+// obstacle i on a track: how far along the road (at race time `clock`: movers move), across, its kind and size
+void ck_race_obst(int track, int i, float clock, float *d, float *x, int *kind, float *w, float *h);
 // the piano: two octaves from middle C, 14 white keys
 #define CK_KEYS_X 20
 #define CK_KEYS_Y 150
@@ -476,7 +483,7 @@ typedef struct {
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
 typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`
 typedef struct { float x, y; int life; } ck_flake;
-typedef struct { float x, y, vx, vy; int face, rest; } ck_shrimp;
+typedef struct { float x, y, vx, vy; int face, rest, held, spin; } ck_shrimp;   // held: in hero held - 1's hand; spin: frames tumbling after a throw
 typedef struct { float x, vx, y, vy; int snap, wait, run; } ck_crab;   // y: a jump when poked; run: frames of running away
 typedef struct { float x, y; int life; uint32_t col; } ck_note_fx;
 enum { HM_WALK, HM_SLOTS, HM_SLEEP, HM_FRIDGE, HM_LETTER, HM_COOK };
@@ -521,6 +528,8 @@ typedef struct {
     float gcam;                // the camera in a game that scrolls (the aquarium)
     float count, endT, clock;  // cars: the countdown, the time since the winner got home, the race clock
     int win;                   // cars: the winner's index, or -1
+    int track;                 // cars: which track (TRACK_*)
+    bool pickTrack;            // cars: choosing the track before the countdown
     uint8_t lit[CK_KEYS_N];    // piano: frames a key stays lit
     ck_note_fx notes[16];
     int nnotes;
