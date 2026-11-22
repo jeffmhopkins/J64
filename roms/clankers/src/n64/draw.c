@@ -1806,7 +1806,7 @@ static void race_view(const ck_game *G, int track, float x0, float vw, const ck_
     }
     // the ground and road, strip by strip from the bottom up
     for (int y = H - 2; y >= CK_RACE_HZ; y -= 2) {
-        float zr = CK_RACE_ZC / (y + 1 - CK_RACE_HZ), z = cam + zr, sx, sy, s;
+        float zr = CK_RACE_ZC / (y + 1 - CK_RACE_HZ), z = cam + zr, sx = cx, sy = 0, s = 1;
         race_project(track, a, camx, cx, vw, zr, 0, &sx, &sy, &s);
         bool band = (int)(z / 32) & 1;
         float hw = CK_RACE_ROAD * s, kw = 7 * s;
@@ -1845,10 +1845,10 @@ static void race_view(const ck_game *G, int track, float x0, float vw, const ck_
     for (int i = 1; i < n; i++) for (int j = i; j > 0 && list[j].zr > list[j - 1].zr; j--) { race_spr t = list[j]; list[j] = list[j - 1]; list[j - 1] = t; }
     for (int i = 0; i < n; i++) {
         const race_spr *r = &list[i];
-        float sx, sy, s;
+        float sx = 0, sy = 0, s = 0;
         if (!race_project(track, a, camx, cx, vw, r->zr, r->x, &sx, &sy, &s) || s * 20 < 1.5f) continue;
         if (r->what == 1) {   // pads lie flat: as tall as their 30 units of road look from here
-            float sx2, sy2, s2;
+            float sx2 = 0, sy2 = sy, s2 = 0;
             race_project(track, a, camx, cx, vw, r->zr + 30, r->x, &sx2, &sy2, &s2);
             float h = fmaxf(1, sy - sy2);
             if (r->kind == PAD_BOOST) {
@@ -1877,7 +1877,7 @@ static void draw_cars(const ck_game *G) {
         uint32_t hex;
         if (col < CK_NCOLS) hex = ck_cols[col];
         else { color_t rc = rainbow_col(G->t * 0.8f, 255); hex = (uint32_t)rc.r << 16 | (uint32_t)rc.g << 8 | rc.b; }
-        float wob = k->rep > 0 ? sinf(k->rep * 0.6f) * 4 : 0, sx, sy, sc;
+        float wob = k->rep > 0 ? sinf(k->rep * 0.6f) * 4 : 0, sx = 0, sy = 0, sc = 1;
         race_project(Hs->track, k->a, k->x * 0.7f, x0 + vw / 2, vw, CK_RACE_CAR_Z, k->x, &sx, &sy, &sc);
         if (k->jz > 0) rect(sx - 11 * sc, sy - 1.5f * sc, 22 * sc, 3 * sc, 0x000000, 0.3f);   // the shadow stays on the road
         car_back(sx + wob, sy - k->jz * sc, sc, hex, k->lean, k->boost > 0, G->t);

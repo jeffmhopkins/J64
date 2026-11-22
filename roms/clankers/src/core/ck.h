@@ -646,7 +646,7 @@ typedef struct {
     float cam;
     int mode, pick;
     float sleepT;
-    char msg[32];
+    char msg[48];
     int msgT;
     uint8_t mural[CK_MURAL_W * CK_MURAL_H];
     ck_fish fish[CK_AQUA_FISH];
