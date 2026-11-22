@@ -678,7 +678,7 @@ static void run_reset(ck_jetrun *J) {
     J->lives = CK_RUN_LIVES;
     J->nextX = 360; J->lastGy = 110;
     for (int i = 0; i < CK_RUN_COLS; i++) J->col[i].x = -1000;
-    for (int i = 0; i < 2; i++) { J->ps[i].y = 80 + i * 50; J->ps[i].on = true; }
+    for (int i = 0; i < 2; i++) { J->ps[i].x = CK_RUN_X; J->ps[i].y = 80 + i * 50; }
 }
 void ck_run_start(ck_game *G) { ck_house_game_heroes(G); run_reset(&G->house.run); ck_go(G, SC_JETRUN); }
 static void run_over(ck_game *G, ck_jetrun *J) {
@@ -698,9 +698,14 @@ void ck_run_update(ck_game *G) {
         if (J->stateT > 60 && ANYHIT(G, CK_A)) { run_reset(J); ck_sfx(G, SFX_CONFIRM); }
         return;
     }
-    if (J->state == RUN_READY) {
-        for (int i = 0; i < H->np; i++) J->ps[i].y = 80 + i * 50 + sinf(J->t * 3 + i) * 4;
-        if (ANYHIT(G, CK_A) || ANYHIT(G, CK_UP)) { J->state = RUN_PLAY; J->stateT = 0; J->stageT = 150; ck_sfx(G, SFX_CONFIRM); }
+    if (J->state == RUN_READY) {   // each player joins with A; the last one has a countdown to make up their mind
+        int n = 0;
+        for (int i = 0; i < H->np; i++) {
+            J->ps[i].y = 80 + i * 50 + sinf(J->t * 3 + i) * 4;
+            if (HIT(G, H->gs[i].slot, CK_A) && !J->ps[i].on) { J->ps[i].on = true; ck_sfx(G, SFX_SELECT); if (!J->readyT) J->readyT = CK_RUN_WAIT; }
+            n += J->ps[i].on;
+        }
+        if (n && (n == H->np || --J->readyT <= 0)) { J->state = RUN_PLAY; J->stateT = 0; J->stageT = 150; ck_sfx(G, SFX_CONFIRM); }
         return;
     }
     // the stage: the scenery changes, it all gets quicker, and a lost life comes back every other stage
@@ -716,12 +721,14 @@ void ck_run_update(ck_game *G) {
     while (J->nextX < J->scroll + CK_W + 40) { float was = J->nextX; run_spawn(G, J); if (J->nextX == was) break; }
     for (int i = 0; i < H->np; i++) {
         __typeof__(J->ps[0]) *p = &J->ps[i];
+        if (!p->on) continue;
         int s = H->gs[i].slot;
         bool up = HELD(G, s, CK_UP) || HELD(G, s, CK_A), dn = HELD(G, s, CK_DOWN);
         p->vy += (((dn ? 1 : 0) - (up ? 1 : 0)) * 2.1f - p->vy) * 0.2f;
         p->y = ck_clampf(p->y + p->vy, 14, CK_RUN_FLOOR - CK_RUN_HH);
+        p->x = ck_clampf(p->x + dir_x(G, s) * 1.8f, 16, 240);
         if (p->inv > 0) p->inv--;
-        float hx = J->scroll + CK_RUN_X - CK_RUN_HW / 2;
+        float hx = J->scroll + p->x - CK_RUN_HW / 2;
         for (int k = 0; k < CK_RUN_COLS && p->inv <= 0; k++) {
             const ck_runcol *c = &J->col[k];
             if (hx + CK_RUN_HW < c->x + 3 || hx > c->x + CK_RUN_W - 3) continue;
@@ -743,9 +750,11 @@ void ck_run_update(ck_game *G) {
         }
         if (((int)(J->t * 60) + i) % 3 == 0) ck_puff(G, hx - 2, p->y + CK_RUN_HH - 2, 1, 0xFFC878, 230);
     }
+    float back = 999;   // a gate counts once the hindmost hero is past it
+    for (int i = 0; i < H->np; i++) if (J->ps[i].on) back = ck_minf(back, J->ps[i].x);
     for (int k = 0; k < CK_RUN_COLS; k++) {   // a gate passed
         ck_runcol *c = &J->col[k];
-        if (c->passed || c->x + CK_RUN_W > J->scroll + CK_RUN_X - CK_RUN_HW / 2) continue;
+        if (c->passed || c->x + CK_RUN_W > J->scroll + back - CK_RUN_HW / 2) continue;
         c->passed = true; J->gates++; J->score += 10;
         ck_sfx(G, SFX_TICK);
     }

@@ -2371,11 +2371,11 @@ static void draw_jetrun(const ck_game *G) {
     particles(G, sc);
     for (int i = 0; i < Hs->np; i++) {
         const __typeof__(J->ps[0]) *p = &J->ps[i];
-        if (J->state == RUN_OVER) continue;
+        if (J->state == RUN_OVER || (J->state == RUN_PLAY && !p->on)) continue;
         if (p->inv > 0 && (p->inv / 4) % 2 == 0) continue;
         int slot = Hs->gs[i].slot, hero = G->prog.hero[slot], skin = skin_col(G, slot);
         int jf = 29 + (int)(t * 14) % 2;
-        float fx = CK_RUN_X, fy = p->y + CK_RUN_HH + 4;
+        float fx = p->x, fy = p->y + CK_RUN_HH + 4;
         blit_o(hero_sprite(hero, skin), jf, fx, fy, skin_o((bopt){ 0 }, skin, t + i));
         hero_acc(wear_of(G, slot), hero, jf, fx, fy, 1, false, t);
     }
@@ -2399,10 +2399,16 @@ static void draw_jetrun(const ck_game *G) {
         if (k < J->lives) rect(x + 1.5f, 7.5f, 9, 5, 0x49D17A, 1);
     }
     if (J->state == RUN_READY) {
-        banner(F_BIG, ST_YELLOW, 0xFFD23F, 70, 170, 34, 93, "JET RUN");
-        hint(124, "Up or A fly up   Down go down");
-        hint(142, "Press A to take off");
-        hint(H - 6, "START leave");
+        banner(F_BIG, ST_YELLOW, 0xFFD23F, 50, 170, 34, 73, "JET RUN");
+        hint(102, "Up or A fly up   Down go down   Left and right too");
+        for (int i = 0; i < Hs->np; i++) {
+            float cx = Hs->np == 1 ? W / 2 : i ? 230 : 90;
+            dark_panel(cx - 56, 120, 112, 40);
+            txt(F_MED, Hs->gs[i].slot ? ST_BLUE : ST_YELLOW, cx, 137, ALIGN_CENTER, "P%d", Hs->gs[i].slot + 1);
+            txt(F_SMALL, J->ps[i].on ? ST_GREEN : ST_CREAM, cx, 153, ALIGN_CENTER, "%s", J->ps[i].on ? "READY!" : "A to fly");
+        }
+        if (Hs->np == 2 && J->readyT > 0) { snprintf(s, sizeof s, "Taking off in %d...", J->readyT / 60 + 1); hint(180, s); }
+        hint(H - 6, "A join   START leave");
     } else if (J->state == RUN_OVER) game_over(J->score, J->best);
 }
 

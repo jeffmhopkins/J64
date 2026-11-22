@@ -625,7 +625,7 @@ function runScene(house) {
   const level = () => Math.min(S.stage, 8);
   const gapY = c => c.gy + c.amp * Math.sin(S.t * 1.6 + c.ph);
   const reset = () => Object.assign(S, { state: 'ready', stateT: 0, scroll: 0, speed: 0, t: 0, nextX: 360, lastGy: 110, lives: R.LIVES, score: 0, bolts: 0, gates: 0, stage: 0, stageT: 0, shake: 0,
-    col: [...Array(R.COLS)].map(() => ({ x: -1000 })), bolt: [...Array(R.BOLTS)].map(() => ({ on: false, x: 0, y: 0 })), ps: [0, 1].map(i => ({ y: 80 + i * 50, vy: 0, inv: 0 })) });
+    col: [...Array(R.COLS)].map(() => ({ x: -1000 })), bolt: [...Array(R.BOLTS)].map(() => ({ on: false, x: 0, y: 0 })), ps: [0, 1].map(i => ({ x: R.X, y: 80 + i * 50, vy: 0, inv: 0, on: false })), readyT: 0 });
   reset();
   const spawn = () => {
     const c = S.col.find(c => c.x < S.scroll - 60); if (!c) return;
@@ -652,8 +652,13 @@ function runScene(house) {
     S.t += 1 / 60; S.stateT++; if (S.shake > 0) S.shake--;
     if (S.state === 'over') { if (S.stateT > 60 && anyHit('a')) { reset(); SND.fx.confirm(); } return; }
     if (S.state === 'ready') {
-      house.ps.forEach((h, i) => { S.ps[i].y = 80 + i * 50 + Math.sin(S.t * 3 + i) * 4; });
-      if (anyHit('a') || anyHit('up')) { S.state = 'play'; S.stateT = 0; S.stageT = 150; SND.fx.confirm(); }
+      let n = 0;   // each player joins with A; the last one has a countdown to make up their mind
+      house.ps.forEach((h, i) => {
+        const p = S.ps[i]; p.y = 80 + i * 50 + Math.sin(S.t * 3 + i) * 4;
+        if (hit(h.m.slot, 'a') && !p.on) { p.on = true; SND.fx.select(); if (!S.readyT) S.readyT = 180; }
+        n += p.on ? 1 : 0;
+      });
+      if (n && (n === house.ps.length || --S.readyT <= 0)) { S.state = 'play'; S.stateT = 0; S.stageT = 150; SND.fx.confirm(); }
       return;
     }
     const stage = Math.floor(S.scroll / R.STAGE);
@@ -664,10 +669,12 @@ function runScene(house) {
     while (S.nextX < S.scroll + W + 40) { const was = S.nextX; spawn(); if (S.nextX === was) break; }
     for (const [i, h] of house.ps.entries()) {
       const p = S.ps[i], sl = h.m.slot, up = held(sl, 'up') || held(sl, 'a'), dn = held(sl, 'down');
+      if (!p.on) continue;
       p.vy += (((dn ? 1 : 0) - (up ? 1 : 0)) * 2.1 - p.vy) * 0.2;
       p.y = clamp(p.y + p.vy, 14, R.FLOOR - R.HH);
+      p.x = clamp(p.x + ((held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0)) * 1.8, 16, 240);
       if (p.inv > 0) p.inv--;
-      const hx = S.scroll + R.X - R.HW / 2;
+      const hx = S.scroll + p.x - R.HW / 2;
       for (const c of S.col) {
         if (p.inv > 0) break;
         if (hx + R.HW < c.x + 3 || hx > c.x + R.W - 3) continue;
@@ -684,7 +691,8 @@ function runScene(house) {
       }
       if ((Math.round(S.t * 60) + i) % 3 === 0) particles.push({ x: hx - 2, y: p.y + R.HH - 2, vx: -0.6, vy: 0.8, life: 16, max: 16, r: 1.5, col: 'rgba(255,200,120,0.9)', kind: 'puff' });
     }
-    for (const c of S.col) if (!c.passed && c.x > -999 && c.x + R.W <= S.scroll + R.X - R.HW / 2) { c.passed = true; S.gates++; S.score += 10; SND.fx.tick(); }
+    const back = Math.min(...house.ps.map((h, i) => S.ps[i].on ? S.ps[i].x : 999));   // a gate counts once the hindmost hero is past it
+    for (const c of S.col) if (!c.passed && c.x > -999 && c.x + R.W <= S.scroll + back - R.HW / 2) { c.passed = true; S.gates++; S.score += 10; SND.fx.tick(); }
   };
   const sky = (top, bot) => { for (let k = 0; k < 12; k++) aBox(0, k * 18, W, 18, runMix(top, bot, k / 11)); };
   function bg(th, sc, t) {
@@ -777,8 +785,8 @@ function runScene(house) {
     if (S.speed > 2.2 && S.state === 'play') for (let k = 0; k < 10; k++) { const lx = ((k * 97 - S.scroll * 3 + 4000) % 360) - 20; aBox(lx, 20 + runHash(k) * 180, 24 + (k % 3) * 10, 1.5, 0xFFFFFF, 0.25); }
     drawParticles(sc);
     if (S.state !== 'over') house.ps.forEach((h, i) => {
-      const p = S.ps[i]; if (p.inv > 0 && Math.floor(p.inv / 4) % 2 === 0) return;
-      const m = h.m, fx = R.X, fy = p.y + R.HH + 4, tt = t + i;
+      const p = S.ps[i]; if ((S.state === 'play' && !p.on) || (p.inv > 0 && Math.floor(p.inv / 4) % 2 === 0)) return;
+      const m = h.m, fx = p.x, fy = p.y + R.HH + 4, tt = t + i;
       if (m.hero === 'robot') { K.rr(fx - 9, fy - 22, 6, 11, 2, '#9aa1b0'); K.flame(fx - 6, fy - 10, 30, 14, tt); K.robotSide(fx, fy, 0.074, m.hex, Object.assign(K.pose('robot', 'jet', tt), { dir: 1, rot: 0.15, acc: m.acc })); }
       else { K.rr(fx - 10, fy - 22, 7, 11, 2, '#9aa1b0'); K.flame(fx - 6.5, fy - 10, 30, 14, tt); K.ostrichSide(fx, fy, 0.071, m.hex, Object.assign(K.pose('ostrich', 'jump', tt), { dir: 1, rot: 0.2, acc: m.acc })); }
     });
@@ -790,7 +798,17 @@ function runScene(house) {
     panel(4, 4, 62, 15); K.nut(13, 11.5, 4, t, '#ffd23f'); text('×' + S.bolts, 20, 16, 9, '#fff6d8', 'left', null);
     text('SCORE ' + S.score, W / 2, 12, 8, '#ffd23f'); text('BEST ' + S.best, W / 2, 22, 7, '#49d17a');
     for (let k = 0; k < R.LIVES; k++) { const x = W - 18 - k * 16; aBox(x, 6, 12, 8, 0x1B1426); aBox(x + 12, 8, 2, 4, 0x1B1426); if (k < S.lives) aBox(x + 1.5, 7.5, 9, 5, 0x49D17A); }
-    if (S.state === 'ready') { rimBanner('JET RUN', 14, 70, 34); hint('▲ or A fly up   ▼ go down', 124); hint('Press A to take off', 142); hint('START leave', H - 6); }
+    if (S.state === 'ready') {
+      rimBanner('JET RUN', 14, 50, 34); hint('▲ or A fly up   ▼ go down   ◀ ▶ too', 102);
+      house.ps.forEach((h, i) => {
+        const cx = house.ps.length === 1 ? W / 2 : i ? 230 : 90;
+        panel(cx - 56, 120, 112, 40);
+        text('P' + (h.m.slot + 1), cx, 137, 10, h.m.slot ? '#8fd3ff' : '#ffd23f');
+        text(S.ps[i].on ? 'READY!' : 'A to fly', cx, 153, 8, S.ps[i].on ? '#49d17a' : '#fff6d8');
+      });
+      if (house.ps.length === 2 && S.readyT > 0) hint('Taking off in ' + (Math.floor(S.readyT / 60) + 1) + '...', 180);
+      hint('A join   START leave', H - 6);
+    }
     else if (S.state === 'over') gameOver(S.score, S.best);
   };
   return S;

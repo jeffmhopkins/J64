@@ -1560,8 +1560,17 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->song, SONG_JETRUN);
     ck_jetrun *Jr = &G->house.run;
     EXPECT_EQ_INT(Jr->state, RUN_READY);
-    press(G, CK_A, 0);
+    press(G, CK_A, 0);   // only player 1 joins: player 2 gets a countdown, then player 1 flies alone
+    EXPECT_EQ_INT(Jr->state, RUN_READY);
+    EXPECT_EQ_INT(Jr->ps[0].on, 1);
+    hold(G, CK_RUN_WAIT, 0, 0);
     EXPECT_EQ_INT(Jr->state, RUN_PLAY);
+    EXPECT_EQ_INT(Jr->ps[1].on, 0);
+    float jx0 = Jr->ps[0].x;   // left and right move across the screen
+    hold(G, 20, CK_RIGHT, 0);
+    EXPECT_EQ_INT(Jr->ps[0].x > jx0 + 30, 1);
+    hold(G, 20, CK_LEFT, 0);
+    EXPECT_EQ_INT(fabsf(Jr->ps[0].x - jx0) < 1, 1);
     float jy0 = Jr->ps[0].y;
     hold(G, 20, CK_UP, 0);
     EXPECT_EQ_INT(Jr->ps[0].y < jy0 - 20, 1);
@@ -1626,6 +1635,9 @@ static void test_house(void) {
     press(G, CK_A, 0);
     EXPECT_EQ_INT(Jr->state, RUN_READY);
     EXPECT_EQ_INT(Jr->lives, CK_RUN_LIVES);
+    press(G, CK_A, 0); press(G, 0, CK_A);   // both join: off straight away
+    EXPECT_EQ_INT(Jr->state, RUN_PLAY);
+    EXPECT_EQ_INT(Jr->ps[0].on && Jr->ps[1].on, 1);
     press(G, CK_START, 0);
     // the pond: cast, wait for a bite, hook it with A, reel it in
     walk_to(G, ck_spots[SPOT_POND].x);

@@ -600,13 +600,15 @@ typedef struct {
 } ck_blaster;
 void ck_bug_at(const ck_blaster *B, int k, float *x, float *y);
 // ---- the arcade's fourth cabinet (SC_JETRUN): Jet Run, the long version of the jetpack zones.
-// Fly with the jetpack as in a zone (up or A rises, down sinks, letting go hovers) through gaps in
-// pipes that go on and on; every CK_RUN_STAGE_LEN the scenery changes and it all gets quicker and
+// Fly with the jetpack as in a zone (up or A rises, down sinks, letting go hovers, left and right
+// move across) through gaps in pipes that go on and on. Each player presses A to join; once one has,
+// the others have a short countdown to join too (as in Bolt Ball); every CK_RUN_STAGE_LEN the scenery changes and it all gets quicker and
 // tighter. A bump costs one of the team's lives; bolts and gates passed score.
 #define CK_RUN_COLS 6
 #define CK_RUN_BOLTS 18
 #define CK_RUN_FLOOR 214          // the ground's top
-#define CK_RUN_X 64               // where the heroes fly, across the screen
+#define CK_RUN_X 64               // where the heroes start, across the screen
+#define CK_RUN_WAIT 180           // frames the others get to join once one player is ready
 #define CK_RUN_HW 12              // a hero's box
 #define CK_RUN_HH 20
 #define CK_RUN_W 28               // a pipe's width
@@ -623,7 +625,8 @@ typedef struct {
     ck_runcol col[CK_RUN_COLS];
     ck_runbolt bolt[CK_RUN_BOLTS];
     float nextX, lastGy;      // where the next column goes, and the last one's gap
-    struct { float y, vy; int inv; bool on; } ps[2];
+    struct { float x, y, vy; int inv; bool on; } ps[2];   // on: this player joined in
+    int readyT;
     int lives, score, best, bolts, gates, stage, stageT, shake;
 } ck_jetrun;
 extern const char *const ck_run_stage_names[CK_RUN_THEMES];
