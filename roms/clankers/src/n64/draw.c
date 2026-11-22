@@ -238,6 +238,7 @@ static void line(float x0, float y0, float x1, float y1, float w, uint32_t hex, 
              fabsf(dx) < 0.01f ? w : len, fabsf(dy) < 0.01f ? w : len, hex, alpha);
         return;
     }
+    if (w < 2) w = 2;   // a rotated line thinner than this drops out in places on the RDP
     mode_tex();
     rdpq_set_prim_color(hexc(hex, (int)(alpha * 255)));
     rdpq_sprite_blit(sp(SPR_PX), x0, y0, &(rdpq_blitparms_t){ .cx = 0, .cy = 2, .scale_x = len / 4, .scale_y = w / 4, .theta = -atan2f(dy, dx) });
@@ -1508,7 +1509,7 @@ static void draw_house(const ck_game *G) {
         rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
         if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, Hs->np > 1 ? "A take one each   START leave" : "A take it   START leave"); }
         else {
-            txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[0]]].name);
+            txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[Hs->last]]].name);
             hint(14, Hs->npan ? "Stick choose   A add   B stir   START leave" : "Stick choose   A add to the pan   START leave");
         }
     }
@@ -1573,7 +1574,7 @@ static void draw_paint(const ck_game *G) {
         shape(SPR_DOT, bx, by, br, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : p->col == CK_MURAL_CLEAR ? 0xE04F4F : 0xFFF6E6, 1);
     }
     particles(G, 0);
-    bool st = Hs->gs[0].stick;
+    bool st = Hs->gs[Hs->last].stick;   // the hint follows whoever pressed last
     hint(11, st ? "A stick   B brush   L R colour   C next sticker   START leave" : "A paint   B sticker   L R colour   C size   START leave");
 }
 
@@ -1909,7 +1910,7 @@ static void draw_cars(const ck_game *G) {
         else snprintf(s, sizeof s, "FINISHED  %s", clock_str((int)(Hs->gs[0].best * 60), c));
         banner(F_BIG, ST_YELLOW, 0xFFD23F, 98, 120, 30, 119, s);
     }
-    hint(H - 12, "Stick steer   A faster   B brake   START leave");
+    hint(H - 12, "Stick steer   A gas   B brake   START leave");
 }
 
 // ---------------------------------------------------------------------------- the arcade and the pond
@@ -1933,43 +1934,76 @@ static void hazard(float x0, float y0, float x1, float y1, float w, int n) {
         line(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a, x0 + (x1 - x0) * b, y0 + (y1 - y0) * b, w, k % 2 ? 0x1B1426 : 0xFFD23F, 1);
     }
 }
-// The Clank-O-Matic: a riveted steel table with gear bumpers, bolt targets and a robot face whose
-// eyes light up with the bolts.
+// The Clank-O-Matic: a tall riveted steel table with gear bumpers, bolt lanes, a spinner, a bank of
+// drop targets, a saucer and a robot face whose eyes light up with the bolts. The table is drawn at
+// CK_PIN_ZOOM and scrolled by P->cam, so everything goes through PX and PY.
+static float pin_cam;
+static float PX(float x) { return CK_PIN_OX + x * CK_PIN_ZOOM; }
+static float PY(float y) { return (y - pin_cam) * CK_PIN_ZOOM; }
+#define PZ(v) ((v) * CK_PIN_ZOOM)
+static void pin_line(float x0, float y0, float x1, float y1, float w, uint32_t hex) { line(PX(x0), PY(y0), PX(x1), PY(y1), PZ(w), hex, 1); }
+static void pin_dot(float x, float y, float r, uint32_t hex, float a) { shape(SPR_DOT, PX(x), PY(y), PZ(r), hex, a); }
+static void pin_rect(float x, float y, float w, float h, uint32_t hex) { rect(PX(x), PY(y), PZ(w), PZ(h), hex, 1); }
+static void pin_hazard(float x0, float y0, float x1, float y1, float w, int n) { hazard(PX(x0), PY(y0), PX(x1), PY(y1), PZ(w), n); }
+static const char *pin_msg(int m) {
+    return m == PINMSG_BONUS ? "BONUS!" : m == PINMSG_LOCK ? "BALL LOCKED" : m == PINMSG_MULTI ? "MULTIBALL!" : m == PINMSG_DOUBLE ? "DOUBLE SCORE!" : "";
+}
 static void draw_pinball(const ck_game *G) {
     const ck_pinball *P = &G->house.pin;
     int lit = (P->lit & 1) + (P->lit >> 1 & 1) + (P->lit >> 2 & 1);
     bool party = P->litT > 0 && (P->litT / 6) % 2;
+    pin_cam = P->cam;
     rect(0, 0, W, H, 0x2B2240, 1);
     for (int k = 0; k < 24; k++) shape(SPR_DOT, (k * 53) % 320, (k * 37) % 240, 1, 0x5A4F78, 1);
-    txt(F_SMALL, ST_YELLOW, W / 2, 12, ALIGN_CENTER, "CLANK-O-MATIC");
-    rect(70, 16, 180, H - 16, 0x34404F, 1);   // the steel plate, its seams and rivets
-    for (int y = 56; y < H; y += 40) rect(70, y, 180, 1, 0x283240, 1);
-    for (int x = 115; x < 232; x += 45) rect(x, 16, 1, H - 16, 0x283240, 1);
-    for (int y = 56; y < H; y += 40) for (int x = 115; x < 232; x += 45) shape(SPR_DOT, x, y, 1.5f, 0x6A7888, 1);
+    pin_rect(10, 10, 220, CK_PIN_H - 10, 0x34404F);   // the steel plate, its seams and rivets
+    for (int y = 50; y < CK_PIN_H; y += 50) pin_rect(10, y, 220, 1, 0x283240);
+    for (int x = 66; x < 212; x += 56) pin_rect(x, 10, 1, CK_PIN_H - 10, 0x283240);
+    for (int y = 50; y < CK_PIN_H; y += 50) for (int x = 66; x < 212; x += 56) pin_dot(x, y, 1.5f, 0x6A7888, 1);
+    pin_rect(10, 10, 24, 240, 0x2C3644);   // the left orbit's lane
     // the robot face painted on the table
-    rect(136, 146, 48, 36, 0x4A5666, 1);
-    rect(139, 149, 42, 30, 0x3E4856, 1);
-    rect(159, 136, 2, 10, 0x8F8AA8, 1);
-    shape(SPR_DOT, 160, 135, 3, party ? 0xFFD23F : 0xE04F4F, 1);
+    pin_rect(87, 262, 48, 36, 0x4A5666);
+    pin_rect(90, 265, 42, 30, 0x3E4856);
+    pin_rect(110, 252, 2, 10, 0x8F8AA8);
+    pin_dot(111, 251, 3, party ? 0xFFD23F : 0xE04F4F, 1);
     for (int e = 0; e < 2; e++) {
-        bool on = party || lit > e;
-        shape(SPR_DOT, 150 + e * 20, 159, 5.5f, 0x1B2A3A, 1);
-        if (on) shape(SPR_DOT, 150 + e * 20, 159, 4, 0x5AD1FF, 1);
+        pin_dot(101 + e * 20, 275, 5.5f, 0x1B2A3A, 1);
+        if (party || lit > e) pin_dot(101 + e * 20, 275, 4, 0x5AD1FF, 1);
     }
-    rect(147, 168, 26, 6, 0x1B1426, 1);   // the mouth grille glows when all three bolts are lit
-    for (int k = 0; k < 5; k++) rect(149 + k * 5, 169, 2, 4, party || lit >= 3 ? 0xFFD23F : 0x6A7888, 1);
-    hazard(70, 236, 232, 236, 6, 18);   // the drain
-    rect(236, 226, 10, 6, 0xE04F4F, 1);   // the plunger
-    rect(239, 232, 4, 8, 0x8F8AA8, 1);
-    for (int k = 0; k < CK_PIN_WALLS - 2; k++) { const ck_seg *w = &ck_pin_walls[k]; line(w->x0, w->y0, w->x1, w->y1, 3, 0xC9C4E0, 1); }
-    for (int k = CK_PIN_WALLS - 2; k < CK_PIN_WALLS; k++) { const ck_seg *w = &ck_pin_walls[k]; hazard(w->x0, w->y0, w->x1, w->y1, 4, 7); }
-    line(ck_pin_gate.x0, ck_pin_gate.y0, ck_pin_gate.x1, ck_pin_gate.y1, 2, 0xFFD23F, 1);
-    for (int k = 0; k < CK_PIN_LIGHTS; k++) {   // bolt targets
+    pin_rect(98, 284, 26, 6, 0x1B1426);   // the mouth grille glows when all three bolts are lit
+    for (int k = 0; k < 5; k++) pin_rect(100 + k * 5, 285, 2, 4, party || lit >= 3 ? 0xFFD23F : 0x6A7888);
+    // DOUBLE lamp under the drop targets, LOCK lamps by the saucer
+    pin_dot(190, 224, 4, P->x2T > 0 && (P->x2T / 8) % 2 ? 0xFF8A3D : 0x5A3A2A, 1);
+    for (int k = 0; k < 2; k++) pin_dot(140 + k * 20, 196, 3, (P->locks % 2) > k ? 0x5AD1FF : 0x2A3A4A, 1);
+    pin_hazard(10, CK_PIN_DRAIN - 4, 212, CK_PIN_DRAIN - 4, 6, 18);   // the drain
+    pin_rect(215, 436, 12, 6, 0xE04F4F);   // the plunger
+    pin_rect(219, 442, 4, 10, 0x8F8AA8);
+    for (int k = 0; k < CK_PIN_WALLS - 2; k++) { const ck_seg *w = &ck_pin_walls[k]; pin_line(w->x0, w->y0, w->x1, w->y1, 3, 0xC9C4E0); }
+    for (int k = CK_PIN_WALLS - 2; k < CK_PIN_WALLS; k++) { const ck_seg *w = &ck_pin_walls[k]; pin_hazard(w->x0, w->y0, w->x1, w->y1, 4, 7); }
+    pin_line(ck_pin_gate.x0, ck_pin_gate.y0, ck_pin_gate.x1, ck_pin_gate.y1, 2, 0xFFD23F);
+    for (int k = 0; k < CK_PIN_SLINGS; k++) {   // slingshots flash red when they kick
+        const ck_seg *w = &ck_pin_slings[k];
+        pin_line(w->x0, w->y0, w->x1, w->y1, 4, P->sling[k] > 0 ? 0xFFFFFF : 0xE04F4F);
+    }
+    for (int k = 0; k < CK_PIN_DROPS; k++) {   // drop targets: orange plates, flat when down
+        const ck_seg *w = &ck_pin_drops[k];
+        bool down = P->drops & (1 << k);
+        if (down) pin_line(w->x0, w->y0 + 2, w->x1, w->y1 - 2, 1.5f, 0x5A3A2A);
+        else { pin_line(w->x0, w->y0, w->x1, w->y1, 5, P->dropT > 0 ? 0xFFFFFF : 0xFF8A3D); pin_line(w->x0 + 1.5f, w->y0 + 3, w->x1 + 1.5f, w->y1 - 3, 1.5f, 0xFFD23F); }
+    }
+    {   // the spinner: a flap that turns over as it spins
+        const ck_seg *w = &ck_pin_spinner;
+        float c = cosf(P->spinA * 6.2832f), h = 4 * fabsf(c) + 1;
+        pin_rect(w->x0, w->y0 - 0.5f, w->x1 - w->x0, 1, 0x8F8AA8);
+        pin_rect(w->x0 + 3, w->y0 - h / 2, w->x1 - w->x0 - 6, h, c > 0 ? 0x5AD1FF : 0x2E8FB8);
+    }
+    pin_dot(ck_pin_saucer[0], ck_pin_saucer[1], 8, 0x1B1426, 1);   // the saucer
+    shape(SPR_RING, PX(ck_pin_saucer[0]), PY(ck_pin_saucer[1]), PZ(8), 0x8F8AA8, 1);
+    for (int k = 0; k < CK_PIN_LIGHTS; k++) {   // bolt targets in the rollover lanes
         bool on = (P->lit & (1 << k)) || party;
         float x = ck_pin_lights[k][0], y = ck_pin_lights[k][1];
-        shape(SPR_DOT, x, y, 7, 0x1B1426, 1);
-        shape(SPR_RING, x, y, 7, on ? 0xFFD23F : 0x6A7888, 1);
-        blit_o(SPR_BOLT, 0, x, y, (bopt){ .sx = 1.1f, .sy = 1.1f, .rot = on ? G->t * 3 : 0, .tinted = !on, .tint = RGBA32(90, 90, 110, 255) });
+        pin_dot(x, y, 7, 0x1B1426, 1);
+        shape(SPR_RING, PX(x), PY(y), PZ(7), on ? 0xFFD23F : 0x6A7888, 1);
+        blit_o(SPR_BOLT, 0, PX(x), PY(y), (bopt){ .sx = PZ(1.1f), .sy = PZ(1.1f), .rot = on ? G->t * 3 : 0, .tinted = !on, .tint = RGBA32(90, 90, 110, 255) });
     }
     static const uint32_t bcol[CK_PIN_BUMPS] = { 0xFF5A5A, 0x5AD1FF, 0xC28BFF, 0x49D17A, 0x49D17A };
     for (int k = 0; k < CK_PIN_BUMPS; k++) {
@@ -1977,37 +2011,44 @@ static void draw_pinball(const ck_game *G) {
         bool hit = P->flash[k] > 0;
         float r = b->r + (hit ? 2 : 0);
         if (b->r > 8) {   // big bumpers are gears that spin when hit
-            if (hit) shape(SPR_DOT, b->x, b->y, r + 3, 0xFFFFFF, 0.6f);
-            blit_o(SPR_GEAR, 0, b->x, b->y, (bopt){ .sx = r / 9, .sy = r / 9, .rot = (k % 2 ? -1 : 1) * G->t * (hit ? 6 : 0.8f) });
-            shape(SPR_DOT, b->x, b->y, r * 0.45f, 0x1B1426, 1);
-            shape(SPR_DOT, b->x, b->y, r * 0.3f, hit ? 0xFFFFFF : bcol[k], 1);
+            if (hit) pin_dot(b->x, b->y, r + 3, 0xFFFFFF, 0.6f);
+            blit_o(SPR_GEAR, 0, PX(b->x), PY(b->y), (bopt){ .sx = PZ(r / 9), .sy = PZ(r / 9), .rot = (k % 2 ? -1 : 1) * G->t * (hit ? 6 : 0.8f) });
+            pin_dot(b->x, b->y, r * 0.45f, 0x1B1426, 1);
+            pin_dot(b->x, b->y, r * 0.3f, hit ? 0xFFFFFF : bcol[k], 1);
         } else {   // small ones are rubber tyres
-            shape(SPR_DOT, b->x, b->y, r, hit ? 0xFFFFFF : 0x25222C, 1);
-            shape(SPR_DOT, b->x, b->y, r * 0.55f, 0x3C3846, 1);
-            shape(SPR_DOT, b->x, b->y, r * 0.28f, bcol[k], 1);
+            pin_dot(b->x, b->y, r, hit ? 0xFFFFFF : 0x25222C, 1);
+            pin_dot(b->x, b->y, r * 0.55f, 0x3C3846, 1);
+            pin_dot(b->x, b->y, r * 0.28f, bcol[k], 1);
         }
     }
-    for (int s = 0; s < 2; s++) {   // the flippers are robot arms
+    for (int s = 0; s < CK_PIN_FLIPS; s++) {   // the flippers are robot arms
         float x0, y0, x1, y1;
         ck_pin_flipper(s, P->flip[s], &x0, &y0, &x1, &y1);
-        line(x0, y0, x1, y1, 7, 0x8F8AA8, 1);
-        line(x0, y0, x1, y1, 3, 0xC9C4E0, 1);
-        shape(SPR_DOT, x1, y1, 3.5f, 0xFF8A3D, 1);
-        shape(SPR_DOT, x0, y0, 4.5f, 0x5A5E6A, 1);
-        shape(SPR_DOT, x0, y0, 2, 0xFFD23F, 1);
+        pin_line(x0, y0, x1, y1, 7, 0x8F8AA8);
+        pin_line(x0, y0, x1, y1, 3, 0xC9C4E0);
+        pin_dot(x1, y1, 3.5f, 0xFF8A3D, 1);
+        pin_dot(x0, y0, 4.5f, 0x5A5E6A, 1);
+        pin_dot(x0, y0, 2, 0xFFD23F, 1);
     }
-    if (!P->over || P->balls > 0) {
-        shape(SPR_DOT, P->x, P->y, CK_PIN_R, 0xE6E6F0, 1);
-        shape(SPR_DOT, P->x - 1.2f, P->y - 1.2f, 1.4f, 0xFFFFFF, 1);
+    bool lane = false;
+    for (int i = 0; i < CK_PIN_MULTI; i++) {
+        const ck_pball *b = &P->ball[i];
+        if (!b->on) continue;
+        lane |= ck_pin_in_lane(b);
+        pin_dot(b->x, b->y, CK_PIN_R, 0xE6E6F0, 1);
+        pin_dot(b->x - 1.2f, b->y - 1.2f, 1.4f, 0xFFFFFF, 1);
     }
     particles(G, 0);
-    score_box(6, 20, "SCORE", P->score, ST_YELLOW);
-    score_box(6, 56, "BALLS", P->balls, ST_CREAM);
-    score_box(256, 20, "BEST", P->best, ST_GREEN);
-    if (P->litT > 0) banner(F_MED, ST_YELLOW, 0xFFD23F, 120, 100, 22, 135, "BONUS!");
+    txt(F_SMALL, ST_YELLOW, 32, 12, ALIGN_CENTER, "CLANK-O");
+    txt(F_SMALL, ST_YELLOW, 32, 22, ALIGN_CENTER, "MATIC");
+    score_box(3, 30, "SCORE", P->score, ST_YELLOW);
+    score_box(3, 66, "BALLS", P->balls, ST_CREAM);
+    score_box(259, 30, "BEST", P->best, ST_GREEN);
+    if (P->x2T > 0) txt(F_SMALL, ST_YELLOW, 288, 80, ALIGN_CENTER, "x2 %d", P->x2T / 60 + 1);
+    if (P->msgT > 0) banner(F_MED, ST_YELLOW, 0xFFD23F, 100, 150, 22, 115, pin_msg(P->msg));
     if (P->over) { game_over(P->score, P->best); return; }
-    if (P->x > 232 && P->y > 218) hint(H - 12, "A launch!   START leave");
-    else hint(H - 12, "B left flipper   A right flipper   START leave");
+    if (lane) hint(H - 12, "A launch!   START leave");
+    else hint(H - 12, "B left flippers   A right flippers   START leave");
 }
 
 static void bug(int row, float x, float y, int frame) {
@@ -2096,17 +2137,18 @@ static void draw_fish(const ck_game *G) {
         ck_rod_tip(i, &tx, &ty);
         if (R->state == ROD_CHARGE) { tx -= R->power * 30; ty -= R->power * 6; }   // swung back
         house_hero(G, slot, hx, 98, R->state == ROD_GOT ? HP_CHEER : HP_IDLE, t + i * 0.7f, 1);
-        line(hx + 6, 78, tx, ty, 2, 0x8A5A3C, 1);
+        line(hx + 6, 78, tx, ty, 4, 0x4A2E1C, 1);   // the rod, thick enough to read on a TV
+        line(hx + 6, 78, tx, ty, 2, 0xB07A4C, 1);
         if (R->state == ROD_CHARGE) {
             dark_panel(hx - 14, 30 + i * 8, 30, 7);
             rect(hx - 13, 31 + i * 8, 28 * R->power, 5, R->power > 0.8f ? 0xFF5A5A : 0xFFD23F, 1);
         }
-        if (R->state == ROD_FLY) line(tx, ty, R->x, R->y, 1, 0xFFF6D8, 0.9f);
+        if (R->state == ROD_FLY) line(tx, ty, R->x, R->y, 2, 0xFFF6D8, 1);
         if (R->state == ROD_WAIT || R->state == ROD_BITE || R->state == ROD_REEL) {
             float dip = R->state == ROD_BITE ? 4 + sinf(t * 30) * 2 : (R->fish >= 0 && R->t < 6) ? 2 : sinf(t * 3) * 0.8f;
             float by = CK_POND_TOP - 2 + dip;
-            line(tx, ty, R->x, by, 1, 0xFFF6D8, 0.9f);
-            line(R->x, by, R->x, R->y, 1, 0xFFF6D8, 0.6f);
+            line(tx, ty, R->x, by, 2, 0xFFF6D8, 1);
+            line(R->x, by, R->x, R->y, 2, 0xFFF6D8, 0.7f);
             shape(SPR_DOT, R->x, by, 3, 0xFFFFFF, 1); shape(SPR_DOT, R->x, by - 1.5f, 2, 0xFF5A5A, 1);
             shape(SPR_RING, R->x, R->y, 2.5f, 0xC9C4E0, 1);
             if (R->state == ROD_BITE) banner(F_BIG, ST_YELLOW, 0xFF5A5A, by - 40, 30, 26, by - 21, "!");
@@ -2130,7 +2172,7 @@ static void draw_fish(const ck_game *G) {
     particles(G, 0);
     snprintf(s, sizeof s, "Caught %d", Pd->caught);
     dark_panel(W - 74, 4, 70, 16); txt(F_SMALL, ST_CREAM, W - 39, 15, ALIGN_CENTER, "%s", s);
-    const ck_rod *R0 = &Pd->rod[0];
+    const ck_rod *R0 = &Pd->rod[G->house.last];   // the help follows whoever pressed last
     const char *help = R0->state == ROD_CHARGE ? "Let go of A to cast!" : R0->state == ROD_WAIT ? "^ v hook depth   B reel in   START leave"
                      : R0->state == ROD_BITE ? "A bite! Press A!" : R0->state == ROD_REEL ? "Hold A to reel   let go when it goes red"
                      : "Hold A, let go to cast   START leave";

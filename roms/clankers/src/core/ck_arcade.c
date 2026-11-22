@@ -12,42 +12,65 @@ static int dir_y(const ck_game *G, int s) { return (HELD(G, s, CK_DOWN) ? 1 : 0)
 static bool any_held(const ck_game *G, uint16_t b) { return HELD(G, 0, b) || HELD(G, 1, b); }
 
 // ---------------------------------------------------------------------------- pinball
-// The table: walls round the top, a launch lane down the right, two guides into the flippers.
+// The table: walls round the top, an orbit up the left, a launch lane down the right, slingshots
+// and two guides into the flippers. The last two walls are the guides.
 const ck_seg ck_pin_walls[CK_PIN_WALLS] = {
-    { 70, 168, 70, 44 }, { 70, 44, 98, 16 }, { 98, 16, 222, 16 }, { 222, 16, 250, 44 },
-    { 250, 44, 250, 232 }, { 232, 232, 250, 232 }, { 232, 232, 232, 76 },
-    { 70, 168, 128, 206 }, { 232, 168, 192, 206 },
+    { 10, 352, 10, 60 }, { 10, 60, 24, 28 }, { 24, 28, 52, 10 }, { 52, 10, 182, 10 }, { 182, 10, 212, 24 },
+    { 212, 24, 230, 50 }, { 230, 50, 230, 440 }, { 212, 440, 230, 440 }, { 212, 440, 212, 96 },
+    { 34, 250, 34, 84 },                        // the left orbit's inner wall
+    { 95, 18, 95, 40 }, { 127, 18, 127, 40 },   // between the rollover lanes
+    { 30, 316, 30, 346 }, { 30, 346, 58, 362 }, { 192, 316, 192, 346 }, { 192, 346, 164, 362 },   // the slingshots' backs
+    { 194, 262, 212, 252 },                     // the upper flipper's bracket
+    { 10, 352, 76, 398 }, { 212, 352, 146, 398 },
 };
 const ck_bump ck_pin_bumps[CK_PIN_BUMPS] = {
-    { 124, 72, 11, 100 }, { 196, 72, 11, 100 }, { 160, 104, 11, 100 }, { 96, 136, 6, 50 }, { 206, 136, 6, 50 },
+    { 82, 84, 11, 100 }, { 140, 84, 11, 100 }, { 111, 118, 11, 100 }, { 60, 160, 6, 50 }, { 168, 132, 6, 50 },
 };
-const ck_seg ck_pin_gate = { 250, 58, 232, 76 };
-const float ck_pin_lights[CK_PIN_LIGHTS][2] = { { 122, 32 }, { 160, 32 }, { 198, 32 } };
-const float ck_pin_pivot[2][2] = { { 128, 206 }, { 192, 206 } };
+const ck_seg ck_pin_gate = { 230, 74, 212, 96 };
+const ck_seg ck_pin_spinner = { 10, 150, 34, 150 };
+const ck_seg ck_pin_slings[CK_PIN_SLINGS] = { { 30, 316, 58, 362 }, { 192, 316, 164, 362 } };
+const ck_seg ck_pin_drops[CK_PIN_DROPS] = { { 205, 150, 205, 162 }, { 205, 166, 205, 178 }, { 205, 182, 205, 194 }, { 205, 198, 205, 210 } };
+const float ck_pin_lights[CK_PIN_LIGHTS][2] = { { 80, 30 }, { 111, 30 }, { 142, 30 } };
+const float ck_pin_saucer[2] = { 150, 176 };
+const ck_flipdef ck_pin_flips[CK_PIN_FLIPS] = { { 78, 400, 27, 0 }, { 144, 400, 27, 1 }, { 194, 262, 22, 1 } };
 #define FLIP_REST 0.5f
 #define FLIP_UP (-0.45f)
-#define LANE_X 241
-#define LANE_Y 227
+#define LANE_X 221
+#define LANE_Y 434
+#define GRAV 0.12f
+#define MAXV 10.0f
 
-void ck_pin_flipper(int side, float a, float *x0, float *y0, float *x1, float *y1) {
-    *x0 = ck_pin_pivot[side][0]; *y0 = ck_pin_pivot[side][1];
-    *x1 = *x0 + (side ? -1 : 1) * cosf(a) * CK_PIN_FLIP_LEN;
-    *y1 = *y0 + sinf(a) * CK_PIN_FLIP_LEN;
+void ck_pin_flipper(int k, float a, float *x0, float *y0, float *x1, float *y1) {
+    const ck_flipdef *f = &ck_pin_flips[k];
+    *x0 = f->x; *y0 = f->y;
+    *x1 = *x0 + (f->side ? -1 : 1) * cosf(a) * f->len;
+    *y1 = *y0 + sinf(a) * f->len;
 }
-static void pin_new_ball(ck_pinball *P) { P->x = LANE_X; P->y = LANE_Y; P->vx = P->vy = 0; }
+static void pin_new_ball(ck_pinball *P) {
+    memset(P->ball, 0, sizeof P->ball);
+    P->ball[0] = (ck_pball){ LANE_X, LANE_Y, 0, 0, true, 0 };
+}
 static void pin_reset(ck_pinball *P) {
     int best = P->best;
     memset(P, 0, sizeof *P);
     P->best = best;
     P->balls = CK_PIN_BALLS;
-    P->flip[0] = P->flip[1] = FLIP_REST;
+    for (int k = 0; k < CK_PIN_FLIPS; k++) P->flip[k] = FLIP_REST;
+    P->cam = CK_PIN_H - CK_PIN_VIEW;
     pin_new_ball(P);
 }
 void ck_pin_start(ck_game *G) { ck_house_game_heroes(G); pin_reset(&G->house.pin); ck_go(G, SC_PINBALL); }
+// a spot on the table on the screen, for sparks and confetti
+static float pin_sx(float x) { return CK_PIN_OX + x * CK_PIN_ZOOM; }
+static float pin_sy(const ck_pinball *P, float y) { return (y - P->cam) * CK_PIN_ZOOM; }
+static void pin_add(ck_pinball *P, int n) { P->score += P->x2T > 0 ? n * 2 : n; }
+static void pin_say(ck_pinball *P, int msg) { P->msg = msg; P->msgT = 90; }
+static int pin_live(const ck_pinball *P) { int n = 0; for (int i = 0; i < CK_PIN_MULTI; i++) n += P->ball[i].on; return n; }
+bool ck_pin_in_lane(const ck_pball *b) { return b->on && b->x > 212 && b->y > LANE_Y - 9 && fabsf(b->vy) < 1; }
 
 // Push the ball out of a fat line from a to b and bounce it. A flipper's line turns about its
 // pivot at w radians a frame (side picks the way it turns), which flicks the ball.
-static bool pin_seg(ck_pinball *P, float ax, float ay, float bx, float by, float rr, float e, int side, float w) {
+static bool pin_seg(ck_pball *P, float ax, float ay, float bx, float by, float rr, float e, int side, float w) {
     float dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
     float t = len2 > 0 ? ck_clampf(((P->x - ax) * dx + (P->y - ay) * dy) / len2, 0, 1) : 0;
     float cx = ax + dx * t, cy = ay + dy * t, nx = P->x - cx, ny = P->y - cy, d = sqrtf(nx * nx + ny * ny);
@@ -65,6 +88,66 @@ static bool pin_seg(ck_pinball *P, float ax, float ay, float bx, float by, float
     return true;
 }
 
+// one ball's quarter step against everything on the table
+static void pin_ball(ck_game *G, ck_pinball *P, ck_pball *b, const float *was, int sub) {
+    float py = b->y;
+    b->vy += GRAV / 4;
+    b->x += b->vx / 4; b->y += b->vy / 4;
+    for (int k = 0; k < CK_PIN_WALLS; k++) {
+        const ck_seg *w = &ck_pin_walls[k];
+        pin_seg(b, w->x0, w->y0, w->x1, w->y1, 1, 0.5f, 0, 0);
+    }
+    // the lane's gate only lets the ball out: falling onto it, it rolls off onto the table
+    if (b->vy > 0) pin_seg(b, ck_pin_gate.x0, ck_pin_gate.y0, ck_pin_gate.x1, ck_pin_gate.y1, 1, 0.4f, 0, 0);
+    for (int s = 0; s < CK_PIN_FLIPS; s++) {
+        float a = was[s] + P->flipW[s] * (sub + 1) / 4, x0, y0, x1, y1;
+        ck_pin_flipper(s, a, &x0, &y0, &x1, &y1);
+        pin_seg(b, x0, y0, x1, y1, 3, 0.3f, ck_pin_flips[s].side, P->flipW[s]);
+    }
+    // slingshots kick the ball back out
+    for (int k = 0; k < CK_PIN_SLINGS; k++) {
+        const ck_seg *w = &ck_pin_slings[k];
+        float vx = b->vx, vy = b->vy;
+        if (!pin_seg(b, w->x0, w->y0, w->x1, w->y1, 1, 0.5f, 0, 0)) continue;
+        float nx = w->y1 - w->y0, ny = w->x0 - w->x1, l = sqrtf(nx * nx + ny * ny);
+        nx /= l; ny /= l;
+        if (k == 1) { nx = -nx; ny = -ny; }
+        if (P->sling[k] < 6 && (vx * nx + vy * ny) < -0.5f) {
+            b->vx += nx * 3.2f; b->vy += ny * 3.2f;
+            pin_add(P, 10); P->sling[k] = 10; ck_sfx(G, SFX_KICK);
+        }
+    }
+    // drop targets go down when hit; drop the whole bank for double scoring
+    for (int k = 0; k < CK_PIN_DROPS; k++) {
+        if (P->drops & (1 << k)) continue;
+        const ck_seg *w = &ck_pin_drops[k];
+        if (!pin_seg(b, w->x0, w->y0, w->x1, w->y1, 2, 0.5f, 0, 0)) continue;
+        P->drops |= 1 << k; pin_add(P, 200); ck_sfx(G, SFX_CRATE);
+        ck_sparks(G, pin_sx(w->x0), pin_sy(P, (w->y0 + w->y1) / 2), 4, 0xFF8A3D);
+        if (P->drops == (1 << CK_PIN_DROPS) - 1) {
+            pin_add(P, 1500); P->x2T = 60 * 20; P->dropT = 60; pin_say(P, PINMSG_DOUBLE); ck_sfx(G, SFX_POWER);
+        }
+    }
+    for (int k = 0; k < CK_PIN_BUMPS; k++) {
+        const ck_bump *u = &ck_pin_bumps[k];
+        float nx = b->x - u->x, ny = b->y - u->y, d = sqrtf(nx * nx + ny * ny);
+        if (d >= u->r + CK_PIN_R || d < 0.0001f) continue;
+        nx /= d; ny /= d;
+        b->x = u->x + nx * (u->r + CK_PIN_R); b->y = u->y + ny * (u->r + CK_PIN_R);
+        float vn = b->vx * nx + b->vy * ny;
+        if (vn < 0) { b->vx -= 2 * vn * nx; b->vy -= 2 * vn * ny; }
+        float kick = u->score >= 100 ? 2.6f : 1.8f;   // bumpers kick the ball away
+        b->vx += nx * kick; b->vy += ny * kick;
+        if (P->flash[k] < 8) { pin_add(P, u->score); ck_sfx(G, u->score >= 100 ? SFX_BOING : SFX_HOP); ck_sparks(G, pin_sx(u->x + nx * u->r), pin_sy(P, u->y + ny * u->r), 4, 0xFFD23F); }
+        P->flash[k] = 12;
+    }
+    // the spinner: going through it spins it, faster the faster the ball goes
+    const ck_seg *sp = &ck_pin_spinner;
+    if (b->x > sp->x0 && b->x < sp->x1 && (py - sp->y0) * (b->y - sp->y0) <= 0 && py != b->y) P->spin = ck_minf(P->spin + fabsf(b->vy) * 0.08f, 1.2f);
+    float v = sqrtf(b->vx * b->vx + b->vy * b->vy);
+    if (v > MAXV) { b->vx *= MAXV / v; b->vy *= MAXV / v; }
+}
+
 void ck_pin_update(ck_game *G) {
     ck_pinball *P = &G->house.pin;
     ck_step_parts(G);
@@ -73,65 +156,79 @@ void ck_pin_update(ck_game *G) {
         if (++P->overT > 60 && ANYHIT(G, CK_A)) { pin_reset(P); ck_sfx(G, SFX_CONFIRM); }
         return;
     }
-    // the flippers
+    // the flippers: left flips the left one, right the right one and the upper one
     bool hold[2] = { any_held(G, CK_LEFT | CK_B | CK_L), any_held(G, CK_RIGHT | CK_A | CK_R) };
-    float was[2];
-    for (int s = 0; s < 2; s++) {
+    float was[CK_PIN_FLIPS];
+    for (int s = 0; s < CK_PIN_FLIPS; s++) {
+        bool h = hold[ck_pin_flips[s].side];
         was[s] = P->flip[s];
-        if (hold[s]) P->flip[s] = ck_maxf(FLIP_UP, P->flip[s] - 0.32f);
+        if (h) P->flip[s] = ck_maxf(FLIP_UP, P->flip[s] - 0.32f);
         else P->flip[s] = ck_minf(FLIP_REST, P->flip[s] + 0.18f);
-        if (hold[s] && was[s] == FLIP_REST) ck_sfx(G, SFX_CLANK);
+        if (h && was[s] == FLIP_REST && s < 2) ck_sfx(G, SFX_CLANK);
         P->flipW[s] = P->flip[s] - was[s];
     }
     // the launch lane: A fires a waiting ball up the lane
-    if (P->x > 232 && P->y > 218 && fabsf(P->vy) < 1 && ANYHIT(G, CK_A)) {
-        P->vy = -8.6f - ck_rand(G) * 0.4f;
-        ck_sfx(G, SFX_SPRING);
-    }
-    for (int sub = 0; sub < 4; sub++) {
-        P->vy += 0.14f / 4;
-        P->x += P->vx / 4; P->y += P->vy / 4;
-        for (int k = 0; k < CK_PIN_WALLS; k++) {
-            const ck_seg *w = &ck_pin_walls[k];
-            pin_seg(P, w->x0, w->y0, w->x1, w->y1, 1, 0.5f, 0, 0);
+    for (int i = 0; i < CK_PIN_MULTI; i++)
+        if (ck_pin_in_lane(&P->ball[i]) && ANYHIT(G, CK_A)) {
+            P->ball[i].vy = -10.0f - ck_rand(G) * 0.4f;
+            ck_sfx(G, SFX_SPRING);
         }
-        // the lane's gate only lets the ball out: falling onto it, it rolls off onto the table
-        if (P->vy > 0) pin_seg(P, ck_pin_gate.x0, ck_pin_gate.y0, ck_pin_gate.x1, ck_pin_gate.y1, 1, 0.4f, 0, 0);
-        for (int s = 0; s < 2; s++) {
-            float a = was[s] + P->flipW[s] * (sub + 1) / 4, x0, y0, x1, y1;
-            ck_pin_flipper(s, a, &x0, &y0, &x1, &y1);
-            pin_seg(P, x0, y0, x1, y1, 3, 0.3f, s, P->flipW[s]);
+    for (int i = 0; i < CK_PIN_MULTI; i++) {
+        ck_pball *b = &P->ball[i];
+        if (!b->on) continue;
+        if (b->held > 0) {   // sitting in the saucer
+            if (--b->held == 0) { b->vx = -2.4f + ck_rand(G); b->vy = -4.2f; b->y -= 8; ck_sfx(G, SFX_BLOW); }
+            continue;
         }
-        for (int k = 0; k < CK_PIN_BUMPS; k++) {
-            const ck_bump *b = &ck_pin_bumps[k];
-            float nx = P->x - b->x, ny = P->y - b->y, d = sqrtf(nx * nx + ny * ny);
-            if (d >= b->r + CK_PIN_R || d < 0.0001f) continue;
-            nx /= d; ny /= d;
-            P->x = b->x + nx * (b->r + CK_PIN_R); P->y = b->y + ny * (b->r + CK_PIN_R);
-            float vn = P->vx * nx + P->vy * ny;
-            if (vn < 0) { P->vx -= 2 * vn * nx; P->vy -= 2 * vn * ny; }
-            float kick = b->score >= 100 ? 2.6f : 1.8f;   // bumpers kick the ball away
-            P->vx += nx * kick; P->vy += ny * kick;
-            if (P->flash[k] < 8) { P->score += b->score; ck_sfx(G, b->score >= 100 ? SFX_BOING : SFX_HOP); ck_sparks(G, b->x + nx * b->r, b->y + ny * b->r, 4, 0xFFD23F); }
-            P->flash[k] = 12;
+        for (int sub = 0; sub < 4; sub++) pin_ball(G, P, b, was, sub);
+        // the saucer catches a slow ball; every second catch starts multiball
+        float dx = b->x - ck_pin_saucer[0], dy = b->y - ck_pin_saucer[1];
+        if (dx * dx + dy * dy < 36 && b->vx * b->vx + b->vy * b->vy < 30) {
+            b->x = ck_pin_saucer[0]; b->y = ck_pin_saucer[1]; b->vx = b->vy = 0; b->held = 50;
+            pin_add(P, 500); ck_sfx(G, SFX_GRAB);
+            if (pin_live(P) == 1 && ++P->locks % 2 == 0) {
+                for (int j = 0; j < CK_PIN_MULTI; j++) {
+                    if (P->ball[j].on) continue;
+                    P->ball[j] = (ck_pball){ ck_pin_saucer[0], ck_pin_saucer[1] - 8, j == 1 ? 2.2f : -1.0f, -5.0f, true, 0 };
+                }
+                pin_say(P, PINMSG_MULTI); ck_sfx(G, SFX_FLAG); ck_confetti(G, pin_sx(ck_pin_saucer[0]), pin_sy(P, ck_pin_saucer[1]), 30);
+            } else if (pin_live(P) == 1) pin_say(P, PINMSG_LOCK);
         }
-        float sp = sqrtf(P->vx * P->vx + P->vy * P->vy);
-        if (sp > 9) { P->vx *= 9 / sp; P->vy *= 9 / sp; }
+        // down the middle: that ball is lost
+        if (b->y > CK_PIN_DRAIN) {
+            b->on = false;
+            if (pin_live(P) > 0) continue;
+            ck_sfx(G, SFX_OUCH);
+            if (--P->balls <= 0) { P->over = true; P->overT = 0; if (P->score > P->best) P->best = P->score; }
+            else pin_new_ball(P);
+        }
     }
     for (int k = 0; k < CK_PIN_BUMPS; k++) if (P->flash[k] > 0) P->flash[k]--;
+    for (int k = 0; k < CK_PIN_SLINGS; k++) if (P->sling[k] > 0) P->sling[k]--;
+    // the spinner scores each turn it makes
+    if (P->spin > 0.01f) {
+        int turns = (int)(P->spinA + P->spin) - (int)P->spinA;
+        P->spinA += P->spin; P->spin *= 0.97f;
+        if (turns > 0) { pin_add(P, 25 * turns); ck_sfx(G, SFX_TICK); }
+    } else P->spin = 0;
+    if (P->dropT > 0 && --P->dropT == 0) P->drops = 0;   // the bank pops back up
+    if (P->x2T > 0) P->x2T--;
+    if (P->msgT > 0) P->msgT--;
     // the lights along the top: light all three for a bonus
-    for (int k = 0; k < CK_PIN_LIGHTS; k++) {
-        if (P->lit & (1 << k) || hypotf(P->x - ck_pin_lights[k][0], P->y - ck_pin_lights[k][1]) > 8) continue;
-        P->lit |= 1 << k; P->score += 250; ck_sfx(G, SFX_STAR1);
-        if (P->lit == (1 << CK_PIN_LIGHTS) - 1) { P->score += 1000; P->lit = 0; P->litT = 90; ck_sfx(G, SFX_FLAG); ck_confetti(G, 160, 30, 30); }
+    for (int i = 0; i < CK_PIN_MULTI; i++) {
+        const ck_pball *b = &P->ball[i];
+        if (!b->on) continue;
+        for (int k = 0; k < CK_PIN_LIGHTS; k++) {
+            if (P->lit & (1 << k) || hypotf(b->x - ck_pin_lights[k][0], b->y - ck_pin_lights[k][1]) > 8) continue;
+            P->lit |= 1 << k; pin_add(P, 250); ck_sfx(G, SFX_STAR1);
+            if (P->lit == (1 << CK_PIN_LIGHTS) - 1) { pin_add(P, 1000); P->lit = 0; P->litT = 90; pin_say(P, PINMSG_BONUS); ck_sfx(G, SFX_FLAG); ck_confetti(G, 160, 30, 30); }
+        }
     }
     if (P->litT > 0) P->litT--;
-    // down the middle: that ball is lost
-    if (P->y > 250) {
-        ck_sfx(G, SFX_OUCH);
-        if (--P->balls <= 0) { P->over = true; P->overT = 0; if (P->score > P->best) P->best = P->score; }
-        else pin_new_ball(P);
-    }
+    // the view follows the lowest ball
+    float low = -1;
+    for (int i = 0; i < CK_PIN_MULTI; i++) if (P->ball[i].on) low = ck_maxf(low, P->ball[i].y);
+    if (low >= 0) P->cam += (ck_clampf(low - 170, 0, CK_PIN_H - CK_PIN_VIEW) - P->cam) * 0.12f;
 }
 
 // ---------------------------------------------------------------------------- Bug Blaster

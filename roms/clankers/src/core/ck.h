@@ -506,29 +506,56 @@ void ck_piano_key(int i, float *x, bool *black);
 enum { DRUM_DRUM, DRUM_CYMBAL, DRUM_HANDS };
 typedef struct { const char *name, *button; uint16_t btn; int kind; float x, y, r; uint32_t col; } ck_drum;
 extern const ck_drum ck_drums[CK_DRUMS];   // semitone 0..23: the key's middle and colour
-// ---- the arcade room's pinball table (SC_PINBALL): one table, both players share the flippers.
-// B or L flips the left flipper, A or R the right; A also fires a ball waiting in the launch lane.
+// ---- the arcade room's pinball table (SC_PINBALL): one tall table, both players share the flippers.
+// B or L flips the left flippers, A or R the right ones; A also fires a ball waiting in the launch lane.
+// The table is CK_PIN_W x CK_PIN_H in its own units, drawn at CK_PIN_ZOOM and scrolled to follow the
+// ball. On it: three rollover lanes at the top, three gear bumpers and two tyres, a spinner up the
+// left orbit, a bank of four drop targets, a saucer that locks balls for multiball, slingshots over
+// the inlanes, and a third flipper up the right side.
+#define CK_PIN_W 240
+#define CK_PIN_H 452
+#define CK_PIN_ZOOM 0.8f
+#define CK_PIN_VIEW 300           // table units that fit on the screen
+#define CK_PIN_OX 64              // the screen x of the table's left edge
 #define CK_PIN_R 4                // the ball's radius
-#define CK_PIN_WALLS 9
+#define CK_PIN_WALLS 19
 #define CK_PIN_BUMPS 5
 #define CK_PIN_LIGHTS 3
-#define CK_PIN_FLIP_LEN 27
+#define CK_PIN_DROPS 4
+#define CK_PIN_FLIPS 3            // left, right, and the upper one on the right
+#define CK_PIN_SLINGS 2
 #define CK_PIN_BALLS 3
+#define CK_PIN_MULTI 3            // balls on the table at once in multiball
+#define CK_PIN_DRAIN 452
 typedef struct { float x0, y0, x1, y1; } ck_seg;
 typedef struct { float x, y, r; int score; } ck_bump;
+typedef struct { float x, y, len; int side; } ck_flipdef;   // side 0 points right, 1 left
+enum { PINMSG_NONE, PINMSG_BONUS, PINMSG_LOCK, PINMSG_MULTI, PINMSG_DOUBLE, PINMSG_SPIN };
 extern const ck_seg ck_pin_walls[CK_PIN_WALLS];
 extern const ck_bump ck_pin_bumps[CK_PIN_BUMPS];
 extern const ck_seg ck_pin_gate;   // over the launch lane's top: the ball only goes out through it
+extern const ck_seg ck_pin_spinner;   // across the left orbit
+extern const ck_seg ck_pin_slings[CK_PIN_SLINGS];   // the kicking faces over the inlanes
+extern const ck_seg ck_pin_drops[CK_PIN_DROPS];
 extern const float ck_pin_lights[CK_PIN_LIGHTS][2];
-extern const float ck_pin_pivot[2][2];
-// flipper side 0 (left) or 1 (right) at angle a: from its pivot to its tip
-void ck_pin_flipper(int side, float a, float *x0, float *y0, float *x1, float *y1);
+extern const float ck_pin_saucer[2];
+extern const ck_flipdef ck_pin_flips[CK_PIN_FLIPS];
+// flipper k at angle a: from its pivot to its tip
+void ck_pin_flipper(int k, float a, float *x0, float *y0, float *x1, float *y1);
+typedef struct { float x, y, vx, vy; bool on; int held; } ck_pball;   // held: frames left in the saucer
+bool ck_pin_in_lane(const ck_pball *b);   // a ball waiting in the launch lane
 typedef struct {
-    float x, y, vx, vy;        // the ball
-    float flip[2], flipW[2];   // each flipper's angle and how far it turned this frame
+    ck_pball ball[CK_PIN_MULTI];
+    float flip[CK_PIN_FLIPS], flipW[CK_PIN_FLIPS];   // each flipper's angle and how far it turned this frame
     int balls, score, best;
     int flash[CK_PIN_BUMPS];   // frames a bumper stays lit after a hit
+    int sling[CK_PIN_SLINGS];
     int lit, litT;             // the top lights that are lit (bits); litT: the all-lit flash
+    int drops, dropT;          // the drop targets that are down (bits); dropT: the bank's reset flash
+    float spin, spinA;         // the spinner's speed and angle
+    int locks, x2T;            // balls locked in the saucer; frames of double scoring left
+    int msg, msgT;             // the banner on show
+    float cam;                 // the table's scroll, in table units
     bool over;
     int overT;
 } ck_pinball;
@@ -641,6 +668,7 @@ typedef struct {
     ck_hhero ps[2];            // in the house
     ck_hhero gs[2];            // in the game you went into
     int np;
+    int last;                  // the player (0 or 1) who last pressed something: the labels follow them
     ck_hbaby babies[CK_HOUSE_BABIES];
     int nbabies;
     float cam;

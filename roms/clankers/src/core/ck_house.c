@@ -829,17 +829,19 @@ static void cars_update(ck_game *G) {
         ck_hhero *c = &H->gs[i];
         int s = c->slot, steer = dir_x(G, s);
         bool air = c->jz > 0;
-        float want = HELD(G, s, CK_UP) || HELD(G, s, CK_A) ? 3.6f : HELD(G, s, CK_DOWN) || HELD(G, s, CK_B) ? 1.5f : 3.0f;
+        // the car only goes while you hold the gas (A or up); let go and it rolls to a stop, B or down brakes
+        bool gas = HELD(G, s, CK_UP) || HELD(G, s, CK_A), brake = HELD(G, s, CK_DOWN) || HELD(G, s, CK_B);
+        float want = gas && !brake ? 3.6f : 0, grip = brake ? 0.08f : gas ? 0.04f : 0.015f;
         if (fabsf(c->x) > CK_RACE_ROAD + 2 && !air) want = ck_minf(want, 1.8f);   // on the grass
-        if (c->boost > 0) { c->boost--; want = 5.0f; }
-        if (c->rep > 0) { c->rep--; want = 1; steer = 0; }
-        c->s += (want - c->s) * 0.04f;
+        if (c->boost > 0) { c->boost--; want = 5.0f; grip = 0.04f; }
+        if (c->rep > 0) { c->rep--; want = ck_minf(want, 1); steer = 0; }
+        c->s += (want - c->s) * grip;
         c->vx += (steer * 2.2f - c->vx) * 0.25f;
         float bend = ck_race_curve(H->track, c->a);
         c->x = ck_clampf(c->x + c->vx - bend * c->s * 0.3f, -CK_RACE_EDGE, CK_RACE_EDGE);   // a bend pushes you to its outside
         c->lean += (ck_clampf(c->vx / 2.2f + bend * 0.5f, -1, 1) - c->lean) * 0.2f;
         c->sky += bend * c->s * 0.25f;
-        if (c->laps) c->s = ck_maxf(c->s * 0.97f, 0.5f);   // past the line: coast
+        if (c->laps) c->s *= 0.97f;   // past the line: roll to a stop
         c->a += c->s;
         if (air || c->jvz > 0) { c->jvz -= 0.14f; c->jz += c->jvz; if (c->jz <= 0) { c->jz = c->jvz = 0; ck_sfx(G, SFX_HOP); } }
         for (int k = 0; k < CK_RACE_PADS; k++) {
@@ -947,6 +949,12 @@ static void piano_update(ck_game *G) {
 }
 
 void ck_house_step(ck_game *G) {
+    ck_house *H = &G->house;
+    for (int i = 0; i < H->np; i++) {
+        int s = G->scene == SC_HOUSE ? H->ps[i].slot : H->gs[i].slot;
+        if (s >= 0 && s < 2 && (G->in.held[s] & ~G->in.prev[s])) H->last = i;
+    }
+    if (H->last >= H->np) H->last = 0;
     switch (G->scene) {
     case SC_HOUSE: ck_house_update(G); break;
     case SC_PAINT: paint_update(G); break;

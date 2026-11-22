@@ -206,10 +206,14 @@ function pollPads() {
       c.a = c.a || bt(0); c.b = c.b || bt(1) || bt(2); c.start = c.start || bt(9); c.c = c.c || bt(3); c.l = c.l || bt(4) || bt(6); c.r = c.r || bt(5) || bt(7);
       if (Object.values(c).some(Boolean)) onFirstInput();
     }
+    if (BTN.some(b => c[b] && !(p.prev && p.prev[b]))) lastSlot = i;   // labels follow whoever pressed last
     p.cur = c;
   });
   latch.clear();
 }
+let lastSlot = 0;
+// the index in a list of heroes of the one whose player pressed something last
+const lastIn = ps => Math.max(0, ps.findIndex(h => h.m.slot === lastSlot));
 const held = (i, b) => !!pads[i].cur[b];
 const hit = (i, b) => !!pads[i].cur[b] && !pads[i].prev[b];
 const anyHit = b => hit(0, b) || hit(1, b);
@@ -850,7 +854,7 @@ function houseScene(from) {
       else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 140 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
       if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each   START leave' : 'A take it   START leave', 226); }
-      else { text(HOUSEART.FOODS[ING[S.cpick[0]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? 'Stick choose   A add   B stir   START leave' : 'Stick choose   A add to the pan   START leave', 14); }
+      else { text(HOUSEART.FOODS[ING[S.cpick[lastIn(S.ps)]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? 'Stick choose   A add   B stir   START leave' : 'Stick choose   A add to the pan   START leave', 14); }
     }
     if (S.mode === 'letter') {   // a big letter to read
       const L = HOUSEART.LETTERS[(S.letter + HOUSEART.LETTERS.length - 1) % HOUSEART.LETTERS.length];
@@ -1066,7 +1070,7 @@ function paintScene(house) {
       const br = 2 + p.size * 2; K.circ(bx, by, br + 1, '#1b1426'); K.circ(bx, by, br, c);   // the tip grows with the brush size (C)
     }
     drawParticles(0);
-    hint(S.ps[0].stick ? 'A stick   B brush   L R colour   C next sticker   START leave' : 'A paint   B sticker   L R colour   C size   START leave', 11);
+    hint(S.ps[lastIn(S.ps)].stick ? 'A stick   B brush   L R colour   C next sticker   START leave' : 'A paint   B sticker   L R colour   C size   START leave', 11);
   };
   return S;
 }
@@ -1247,17 +1251,19 @@ function carsScene(house) {
       const sl = c.m.slot;
       let steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
       const air = c.jz > 0;
-      let want = held(sl, 'up') || held(sl, 'a') ? 3.6 : held(sl, 'down') || held(sl, 'b') ? 1.5 : 3;
+      // the car only goes while you hold the gas (A or up); let go and it rolls to a stop, B or down brakes
+      const gas = held(sl, 'up') || held(sl, 'a'), brake = held(sl, 'down') || held(sl, 'b');
+      let want = gas && !brake ? 3.6 : 0, grip = brake ? 0.08 : gas ? 0.04 : 0.015;
       if (Math.abs(c.x) > R.road + 2 && !air) want = Math.min(want, 1.8);   // on the grass
-      if (c.boost > 0) { c.boost--; want = 5; }
-      if (c.spin > 0) { c.spin--; want = 1; steer = 0; }
-      c.s += (want - c.s) * 0.04;
+      if (c.boost > 0) { c.boost--; want = 5; grip = 0.04; }
+      if (c.spin > 0) { c.spin--; want = Math.min(want, 1); steer = 0; }
+      c.s += (want - c.s) * grip;
       c.vx += (steer * 2.2 - c.vx) * 0.25;
       const bend = HOUSEART.raceCurve(S.track, c.d);
       c.x = clamp(c.x + c.vx - bend * c.s * 0.3, -R.edge, R.edge);   // a bend pushes you to its outside
       c.lean += (clamp(c.vx / 2.2 + bend * 0.5, -1, 1) - c.lean) * 0.2;
       c.sky += bend * c.s * 0.25;
-      if (c.done) c.s = Math.max(c.s * 0.97, 0.5);   // past the line: coast
+      if (c.done) c.s *= 0.97;   // past the line: roll to a stop
       c.d += c.s;
       if (air || c.jvz > 0) { c.jvz -= 0.14; c.jz += c.jvz; if (c.jz <= 0) { c.jz = c.jvz = 0; SND.fx.hop(); } }
       for (let k = 0; k < R.pads; k++) {
@@ -1307,7 +1313,7 @@ function carsScene(house) {
     if (S.count > 0) rimBanner(String(Math.ceil(S.count)), 20, 100, 34);
     else if (S.win < 0 && S.clock < 0.8) rimBanner('GO!', 20, 100, 34, '#49d17a', '#49d17a');
     if (S.win >= 0) rimBanner(n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)), 14, 98, 30);
-    hint('Stick steer   A faster   B brake   START leave', H - 12);
+    hint('Stick steer   A gas   B brake   START leave', H - 12);
   };
   return S;
 }

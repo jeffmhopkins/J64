@@ -9,68 +9,135 @@ const anyHeld = b => held(0, b) || held(1, b);
 function scoreBox(x, y, label, v, col) { panel(x, y, 58, 30); text(label, x + 29, y + 11, 7, '#d9d2e6', 'center', null); text(String(v), x + 29, y + 26, 10, col, 'center', null); }
 function gameOver(score, best) { rimBanner('GAME OVER', 14, 70, 34); hint('Score ' + score + '   Best ' + best, 124); hint('A play again', 142); }
 
-// ---- pinball
+// ---- pinball: a tall table drawn at ZOOM and scrolled to follow the ball
 const PIN = {
-  R: 4, FLIP_LEN: 27, BALLS: 3, REST: 0.5, UP: -0.45, LANE_X: 241, LANE_Y: 227,
-  walls: [[70, 168, 70, 44], [70, 44, 98, 16], [98, 16, 222, 16], [222, 16, 250, 44], [250, 44, 250, 232], [232, 232, 250, 232], [232, 232, 232, 76], [70, 168, 128, 206], [232, 168, 192, 206]],
-  gate: [250, 58, 232, 76],   // over the launch lane: the ball only goes out through it
-  bumps: [[124, 72, 11, 100], [196, 72, 11, 100], [160, 104, 11, 100], [96, 136, 6, 50], [206, 136, 6, 50]],
-  lights: [[122, 32], [160, 32], [198, 32]],
-  pivot: [[128, 206], [192, 206]],
+  W: 240, H: 452, ZOOM: 0.8, VIEW: 300, OX: 64, DRAIN: 452,
+  R: 4, BALLS: 3, MULTI: 3, REST: 0.5, UP: -0.45, LANE_X: 221, LANE_Y: 434, GRAV: 0.12, MAXV: 10,
+  walls: [[10, 352, 10, 60], [10, 60, 24, 28], [24, 28, 52, 10], [52, 10, 182, 10], [182, 10, 212, 24],
+    [212, 24, 230, 50], [230, 50, 230, 440], [212, 440, 230, 440], [212, 440, 212, 96],
+    [34, 250, 34, 84],   // the left orbit's inner wall
+    [95, 18, 95, 40], [127, 18, 127, 40],   // between the rollover lanes
+    [30, 316, 30, 346], [30, 346, 58, 362], [192, 316, 192, 346], [192, 346, 164, 362],   // the slingshots' backs
+    [194, 262, 212, 252],   // the upper flipper's bracket
+    [10, 352, 76, 398], [212, 352, 146, 398]],
+  gate: [230, 74, 212, 96],   // over the launch lane: the ball only goes out through it
+  spinner: [10, 150, 34, 150],
+  slings: [[30, 316, 58, 362], [192, 316, 164, 362]],
+  drops: [[205, 150, 205, 162], [205, 166, 205, 178], [205, 182, 205, 194], [205, 198, 205, 210]],
+  bumps: [[82, 84, 11, 100], [140, 84, 11, 100], [111, 118, 11, 100], [60, 160, 6, 50], [168, 132, 6, 50]],
+  lights: [[80, 30], [111, 30], [142, 30]],
+  saucer: [150, 176],
+  flips: [[78, 400, 27, 0], [144, 400, 27, 1], [194, 262, 22, 1]],   // pivot, length, side (1 points left)
+  MSG: ['', 'BONUS!', 'BALL LOCKED', 'MULTIBALL!', 'DOUBLE SCORE!'],
 };
-const pinFlipper = (side, a) => { const [x0, y0] = PIN.pivot[side]; return [x0, y0, x0 + (side ? -1 : 1) * Math.cos(a) * PIN.FLIP_LEN, y0 + Math.sin(a) * PIN.FLIP_LEN]; };
+const pinFlipper = (k, a) => { const [x0, y0, len, side] = PIN.flips[k]; return [x0, y0, x0 + (side ? -1 : 1) * Math.cos(a) * len, y0 + Math.sin(a) * len]; };
+const pinInLane = b => b.on && b.x > 212 && b.y > PIN.LANE_Y - 9 && Math.abs(b.vy) < 1;
 function pinballScene(house) {
   const S = { song: 'pinball', t: 0, best: 0 };
-  const newBall = () => { S.x = PIN.LANE_X; S.y = PIN.LANE_Y; S.vx = S.vy = 0; };
-  const reset = () => { S.balls = PIN.BALLS; S.score = 0; S.flip = [PIN.REST, PIN.REST]; S.flipW = [0, 0]; S.flash = PIN.bumps.map(() => 0); S.lit = 0; S.litT = 0; S.over = false; S.overT = 0; newBall(); };
+  const sx = x => PIN.OX + x * PIN.ZOOM, sy = y => (y - S.cam) * PIN.ZOOM;   // a table spot on the screen
+  const newBall = () => { S.ball = [0, 1, 2].map(i => ({ x: PIN.LANE_X, y: PIN.LANE_Y, vx: 0, vy: 0, on: i === 0, held: 0 })); };
+  const reset = () => {
+    Object.assign(S, { balls: PIN.BALLS, score: 0, flip: PIN.flips.map(() => PIN.REST), flipW: PIN.flips.map(() => 0), flash: PIN.bumps.map(() => 0), sling: [0, 0],
+      lit: 0, litT: 0, drops: 0, dropT: 0, spin: 0, spinA: 0, locks: 0, x2T: 0, msg: 0, msgT: 0, cam: PIN.H - PIN.VIEW, over: false, overT: 0 });
+    newBall();
+  };
   reset();
+  const add = n => { S.score += S.x2T > 0 ? n * 2 : n; };
+  const say = m => { S.msg = m; S.msgT = 90; };
+  const live = () => S.ball.filter(b => b.on).length;
   // push the ball out of a fat line and bounce it; a flipper turning w radians a frame flicks it
-  function seg(ax, ay, bx, by, rr, e, side, w) {
+  function seg(b, ax, ay, bx, by, rr, e, side, w) {
     const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
-    const t = len2 > 0 ? clamp(((S.x - ax) * dx + (S.y - ay) * dy) / len2, 0, 1) : 0;
-    const cx = ax + dx * t, cy = ay + dy * t; let nx = S.x - cx, ny = S.y - cy; const d = Math.hypot(nx, ny);
-    if (d >= PIN.R + rr || d < 0.0001) return;
-    nx /= d; ny /= d; S.x = cx + nx * (PIN.R + rr); S.y = cy + ny * (PIN.R + rr);
+    const t = len2 > 0 ? clamp(((b.x - ax) * dx + (b.y - ay) * dy) / len2, 0, 1) : 0;
+    const cx = ax + dx * t, cy = ay + dy * t; let nx = b.x - cx, ny = b.y - cy; const d = Math.hypot(nx, ny);
+    if (d >= PIN.R + rr || d < 0.0001) return false;
+    nx /= d; ny /= d; b.x = cx + nx * (PIN.R + rr); b.y = cy + ny * (PIN.R + rr);
     let svx = 0, svy = 0;
     if (w) { const rx = cx - ax, ry = cy - ay; if (side === 0) { svx = -w * ry; svy = w * rx; } else { svx = w * ry; svy = -w * rx; } }
-    const vn = (S.vx - svx) * nx + (S.vy - svy) * ny;
-    if (vn < 0) { S.vx -= (1 + e) * vn * nx; S.vy -= (1 + e) * vn * ny; }
+    const vn = (b.vx - svx) * nx + (b.vy - svy) * ny;
+    if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
+    return true;
+  }
+  function step(b, was, sub) {
+    const py = b.y;
+    b.vy += PIN.GRAV / 4; b.x += b.vx / 4; b.y += b.vy / 4;
+    for (const w of PIN.walls) seg(b, w[0], w[1], w[2], w[3], 1, 0.5, 0, 0);
+    if (b.vy > 0) seg(b, ...PIN.gate, 1, 0.4, 0, 0);
+    for (let s = 0; s < PIN.flips.length; s++) { const [x0, y0, x1, y1] = pinFlipper(s, was[s] + S.flipW[s] * (sub + 1) / 4); seg(b, x0, y0, x1, y1, 3, 0.3, PIN.flips[s][3], S.flipW[s]); }
+    PIN.slings.forEach((w, k) => {   // slingshots kick the ball back out
+      const vx = b.vx, vy = b.vy;
+      if (!seg(b, w[0], w[1], w[2], w[3], 1, 0.5, 0, 0)) return;
+      let nx = w[3] - w[1], ny = w[0] - w[2]; const l = Math.hypot(nx, ny); nx /= l; ny /= l;
+      if (k === 1) { nx = -nx; ny = -ny; }
+      if (S.sling[k] < 6 && vx * nx + vy * ny < -0.5) { b.vx += nx * 3.2; b.vy += ny * 3.2; add(10); S.sling[k] = 10; SND.fx.kick(); }
+    });
+    PIN.drops.forEach((w, k) => {   // drop targets go down when hit; the whole bank gives double scoring
+      if (S.drops & (1 << k) || !seg(b, w[0], w[1], w[2], w[3], 2, 0.5, 0, 0)) return;
+      S.drops |= 1 << k; add(200); SND.fx.crate(); sparks(sx(w[0]), sy((w[1] + w[3]) / 2), 4, '#ff8a3d');
+      if (S.drops === 15) { add(1500); S.x2T = 60 * 20; S.dropT = 60; say(4); SND.fx.power(); }
+    });
+    PIN.bumps.forEach(([bx, by, r, score], k) => {
+      let nx = b.x - bx, ny = b.y - by; const d = Math.hypot(nx, ny);
+      if (d >= r + PIN.R || d < 0.0001) return;
+      nx /= d; ny /= d; b.x = bx + nx * (r + PIN.R); b.y = by + ny * (r + PIN.R);
+      const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 2 * vn * nx; b.vy -= 2 * vn * ny; }
+      const kick = score >= 100 ? 2.6 : 1.8; b.vx += nx * kick; b.vy += ny * kick;
+      if (S.flash[k] < 8) { add(score); (score >= 100 ? SND.fx.boing : SND.fx.hop)(); sparks(sx(bx + nx * r), sy(by + ny * r), 4, '#ffd23f'); }
+      S.flash[k] = 12;
+    });
+    const sp = PIN.spinner;   // going through the spinner spins it, faster the faster the ball goes
+    if (b.x > sp[0] && b.x < sp[2] && (py - sp[1]) * (b.y - sp[1]) <= 0 && py !== b.y) S.spin = Math.min(S.spin + Math.abs(b.vy) * 0.08, 1.2);
+    const v = Math.hypot(b.vx, b.vy); if (v > PIN.MAXV) { b.vx *= PIN.MAXV / v; b.vy *= PIN.MAXV / v; }
   }
   S.update = function () {
     S.t += 1 / 60; stepParticles();
     if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
     if (S.over) { if (++S.overT > 60 && anyHit('a')) { reset(); SND.fx.confirm(); } return; }
     const hold = [anyHeld('left') || anyHeld('b') || anyHeld('l'), anyHeld('right') || anyHeld('a') || anyHeld('r')], was = [...S.flip];
-    for (let s = 0; s < 2; s++) {
-      S.flip[s] = hold[s] ? Math.max(PIN.UP, S.flip[s] - 0.32) : Math.min(PIN.REST, S.flip[s] + 0.18);
-      if (hold[s] && was[s] === PIN.REST) SND.fx.clank();
+    for (let s = 0; s < PIN.flips.length; s++) {
+      const h = hold[PIN.flips[s][3]];
+      S.flip[s] = h ? Math.max(PIN.UP, S.flip[s] - 0.32) : Math.min(PIN.REST, S.flip[s] + 0.18);
+      if (h && was[s] === PIN.REST && s < 2) SND.fx.clank();
       S.flipW[s] = S.flip[s] - was[s];
     }
-    if (S.x > 232 && S.y > 218 && Math.abs(S.vy) < 1 && anyHit('a')) { S.vy = -8.6 - Math.random() * 0.4; SND.fx.spring(); }
-    for (let sub = 0; sub < 4; sub++) {
-      S.vy += 0.14 / 4; S.x += S.vx / 4; S.y += S.vy / 4;
-      for (const w of PIN.walls) seg(w[0], w[1], w[2], w[3], 1, 0.5, 0, 0);
-      if (S.vy > 0) seg(...PIN.gate, 1, 0.4, 0, 0);
-      for (let s = 0; s < 2; s++) { const [x0, y0, x1, y1] = pinFlipper(s, was[s] + S.flipW[s] * (sub + 1) / 4); seg(x0, y0, x1, y1, 3, 0.3, s, S.flipW[s]); }
-      PIN.bumps.forEach(([bx, by, r, score], k) => {
-        let nx = S.x - bx, ny = S.y - by; const d = Math.hypot(nx, ny);
-        if (d >= r + PIN.R || d < 0.0001) return;
-        nx /= d; ny /= d; S.x = bx + nx * (r + PIN.R); S.y = by + ny * (r + PIN.R);
-        const vn = S.vx * nx + S.vy * ny; if (vn < 0) { S.vx -= 2 * vn * nx; S.vy -= 2 * vn * ny; }
-        const kick = score >= 100 ? 2.6 : 1.8; S.vx += nx * kick; S.vy += ny * kick;
-        if (S.flash[k] < 8) { S.score += score; (score >= 100 ? SND.fx.boing : SND.fx.hop)(); sparks(bx + nx * r, by + ny * r, 4, '#ffd23f'); }
-        S.flash[k] = 12;
-      });
-      const sp = Math.hypot(S.vx, S.vy); if (sp > 9) { S.vx *= 9 / sp; S.vy *= 9 / sp; }
+    for (const b of S.ball) if (pinInLane(b) && anyHit('a')) { b.vy = -10 - Math.random() * 0.4; SND.fx.spring(); }
+    for (const b of S.ball) {
+      if (!b.on) continue;
+      if (b.held > 0) { if (--b.held === 0) { b.vx = -2.4 + Math.random(); b.vy = -4.2; b.y -= 8; SND.fx.blow(); } continue; }
+      for (let sub = 0; sub < 4; sub++) step(b, was, sub);
+      // the saucer catches a slow ball; every second catch starts multiball
+      const dx = b.x - PIN.saucer[0], dy = b.y - PIN.saucer[1];
+      if (dx * dx + dy * dy < 36 && b.vx * b.vx + b.vy * b.vy < 30) {
+        Object.assign(b, { x: PIN.saucer[0], y: PIN.saucer[1], vx: 0, vy: 0, held: 50 }); add(500); SND.fx.grab();
+        if (live() === 1 && ++S.locks % 2 === 0) {
+          S.ball.forEach((o, j) => { if (!o.on) Object.assign(o, { x: PIN.saucer[0], y: PIN.saucer[1] - 8, vx: j === 1 ? 2.2 : -1, vy: -5, on: true, held: 0 }); });
+          say(3); SND.fx.flag(); confetti(sx(PIN.saucer[0]), sy(PIN.saucer[1]), 30);
+        } else if (live() === 1) say(2);
+      }
+      if (b.y > PIN.DRAIN) {   // down the middle: that ball is lost
+        b.on = false;
+        if (live() > 0) continue;
+        SND.fx.ouch();
+        if (--S.balls <= 0) { S.over = true; S.overT = 0; S.best = Math.max(S.best, S.score); } else newBall();
+      }
     }
-    S.flash = S.flash.map(f => Math.max(0, f - 1));
-    PIN.lights.forEach(([lx, ly], k) => {
-      if (S.lit & (1 << k) || Math.hypot(S.x - lx, S.y - ly) > 8) return;
-      S.lit |= 1 << k; S.score += 250; SND.fx.star();
-      if (S.lit === 7) { S.score += 1000; S.lit = 0; S.litT = 90; SND.fx.flag(); confetti(160, 30, 30); }
+    S.flash = S.flash.map(f => Math.max(0, f - 1)); S.sling = S.sling.map(f => Math.max(0, f - 1));
+    if (S.spin > 0.01) {   // the spinner scores each turn it makes
+      const turns = Math.floor(S.spinA + S.spin) - Math.floor(S.spinA);
+      S.spinA += S.spin; S.spin *= 0.97;
+      if (turns > 0) { add(25 * turns); SND.fx.tick(); }
+    } else S.spin = 0;
+    if (S.dropT > 0 && --S.dropT === 0) S.drops = 0;   // the bank pops back up
+    if (S.x2T > 0) S.x2T--;
+    if (S.msgT > 0) S.msgT--;
+    for (const b of S.ball) if (b.on) PIN.lights.forEach(([lx, ly], k) => {
+      if (S.lit & (1 << k) || Math.hypot(b.x - lx, b.y - ly) > 8) return;
+      S.lit |= 1 << k; add(250); SND.fx.star();
+      if (S.lit === 7) { add(1000); S.lit = 0; S.litT = 90; say(1); SND.fx.flag(); confetti(160, 30, 30); }
     });
     if (S.litT > 0) S.litT--;
-    if (S.y > 250) { SND.fx.ouch(); if (--S.balls <= 0) { S.over = true; S.overT = 0; S.best = Math.max(S.best, S.score); } else newBall(); }
+    const low = Math.max(-1, ...S.ball.filter(b => b.on).map(b => b.y));   // the view follows the lowest ball
+    if (low >= 0) S.cam += (clamp(low - 170, 0, PIN.H - PIN.VIEW) - S.cam) * 0.12;
   };
   S.draw = function () {
     K.g = g;
@@ -78,20 +145,31 @@ function pinballScene(house) {
     const hazard = (x0, y0, x1, y1, w, n) => { for (let k = 0; k < n; k++) { const a = k / n, b = (k + 1) / n; aLine(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a, x0 + (x1 - x0) * b, y0 + (y1 - y0) * b, w, k % 2 ? 0x1B1426 : 0xFFD23F); } };
     aBox(0, 0, W, H, 0x2B2240);
     for (let k = 0; k < 24; k++) aDot((k * 53) % 320, (k * 37) % 240, 1, 0x5A4F78);
-    text('CLANK-O-MATIC', W / 2, 12, 8, '#ffd23f');
-    aBox(70, 16, 180, H - 16, 0x34404F);   // the steel plate, its seams and rivets
-    for (let y = 56; y < H; y += 40) aBox(70, y, 180, 1, 0x283240);
-    for (let x = 115; x < 232; x += 45) aBox(x, 16, 1, H - 16, 0x283240);
-    for (let y = 56; y < H; y += 40) for (let x = 115; x < 232; x += 45) aDot(x, y, 1.5, 0x6A7888);
-    aBox(136, 146, 48, 36, 0x4A5666); aBox(139, 149, 42, 30, 0x3E4856); aBox(159, 136, 2, 10, 0x8F8AA8);   // the robot face on the table
-    aDot(160, 135, 3, party ? 0xFFD23F : 0xE04F4F);
-    for (let e = 0; e < 2; e++) { aDot(150 + e * 20, 159, 5.5, 0x1B2A3A); if (party || lit > e) aDot(150 + e * 20, 159, 4, 0x5AD1FF); }
-    aBox(147, 168, 26, 6, 0x1B1426); for (let k = 0; k < 5; k++) aBox(149 + k * 5, 169, 2, 4, party || lit >= 3 ? 0xFFD23F : 0x6A7888);
-    hazard(70, 236, 232, 236, 6, 18);   // the drain
-    aBox(236, 226, 10, 6, 0xE04F4F); aBox(239, 232, 4, 8, 0x8F8AA8);   // the plunger
+    g.save(); g.translate(PIN.OX, -S.cam * PIN.ZOOM); g.scale(PIN.ZOOM, PIN.ZOOM);   // table units from here
+    aBox(10, 10, 220, PIN.H - 10, 0x34404F);   // the steel plate, its seams and rivets
+    for (let y = 50; y < PIN.H; y += 50) aBox(10, y, 220, 1, 0x283240);
+    for (let x = 66; x < 212; x += 56) aBox(x, 10, 1, PIN.H - 10, 0x283240);
+    for (let y = 50; y < PIN.H; y += 50) for (let x = 66; x < 212; x += 56) aDot(x, y, 1.5, 0x6A7888);
+    aBox(10, 10, 24, 240, 0x2C3644);   // the left orbit's lane
+    aBox(87, 262, 48, 36, 0x4A5666); aBox(90, 265, 42, 30, 0x3E4856); aBox(110, 252, 2, 10, 0x8F8AA8);   // the robot face on the table
+    aDot(111, 251, 3, party ? 0xFFD23F : 0xE04F4F);
+    for (let e = 0; e < 2; e++) { aDot(101 + e * 20, 275, 5.5, 0x1B2A3A); if (party || lit > e) aDot(101 + e * 20, 275, 4, 0x5AD1FF); }
+    aBox(98, 284, 26, 6, 0x1B1426); for (let k = 0; k < 5; k++) aBox(100 + k * 5, 285, 2, 4, party || lit >= 3 ? 0xFFD23F : 0x6A7888);
+    aDot(190, 224, 4, S.x2T > 0 && Math.floor(S.x2T / 8) % 2 ? 0xFF8A3D : 0x5A3A2A);   // the DOUBLE lamp and the LOCK lamps
+    for (let k = 0; k < 2; k++) aDot(140 + k * 20, 196, 3, S.locks % 2 > k ? 0x5AD1FF : 0x2A3A4A);
+    hazard(10, PIN.DRAIN - 4, 212, PIN.DRAIN - 4, 6, 18);   // the drain
+    aBox(215, 436, 12, 6, 0xE04F4F); aBox(219, 442, 4, 10, 0x8F8AA8);   // the plunger
     PIN.walls.forEach((w, k) => { if (k < PIN.walls.length - 2) aLine(w[0], w[1], w[2], w[3], 3, 0xC9C4E0); else hazard(w[0], w[1], w[2], w[3], 4, 7); });
     aLine(...PIN.gate, 2, 0xFFD23F);
-    PIN.lights.forEach(([x, y], k) => {   // bolt targets
+    PIN.slings.forEach((w, k) => aLine(w[0], w[1], w[2], w[3], 4, S.sling[k] > 0 ? 0xFFFFFF : 0xE04F4F));
+    PIN.drops.forEach((w, k) => {   // drop targets: orange plates, flat when down
+      if (S.drops & (1 << k)) aLine(w[0], w[1] + 2, w[2], w[3] - 2, 1.5, 0x5A3A2A);
+      else { aLine(w[0], w[1], w[2], w[3], 5, S.dropT > 0 ? 0xFFFFFF : 0xFF8A3D); aLine(w[0] + 1.5, w[1] + 3, w[2] + 1.5, w[3] - 3, 1.5, 0xFFD23F); }
+    });
+    { const w = PIN.spinner, c = Math.cos(S.spinA * P * 2), h = 4 * Math.abs(c) + 1;   // the spinner's flap turns over
+      aBox(w[0], w[1] - 0.5, w[2] - w[0], 1, 0x8F8AA8); aBox(w[0] + 3, w[1] - h / 2, w[2] - w[0] - 6, h, c > 0 ? 0x5AD1FF : 0x2E8FB8); }
+    aDot(PIN.saucer[0], PIN.saucer[1], 8, 0x1B1426); aRing(PIN.saucer[0], PIN.saucer[1], 8, 0x8F8AA8);   // the saucer
+    PIN.lights.forEach(([x, y], k) => {   // bolt targets in the rollover lanes
       const on = (S.lit & (1 << k)) || party;
       aDot(x, y, 7, 0x1B1426); aRing(x, y, 7, on ? 0xFFD23F : 0x6A7888); K.nut(x, y, 4.6, on ? S.t * 3 : 0, on ? '#ffd23f' : '#5a5a6e');
     });
@@ -99,23 +177,26 @@ function pinballScene(house) {
     PIN.bumps.forEach(([x, y, r0], k) => {
       const hitB = S.flash[k] > 0, r = r0 + (hitB ? 2 : 0);
       if (r0 > 8) {   // big bumpers are gears that spin when hit
-        S.spin = S.spin || [0, 0, 0, 0, 0]; S.spin[k] += (k % 2 ? -1 : 1) * (hitB ? 0.1 : 0.013);
+        S.spinG = S.spinG || [0, 0, 0, 0, 0]; S.spinG[k] += (k % 2 ? -1 : 1) * (hitB ? 0.1 : 0.013);
         if (hitB) aDot(x, y, r + 3, 0xFFFFFF, 0.6);
-        K.gear(x, y, r * 1.05, 10, S.spin[k], '#ffd854', '#a37d13');
+        K.gear(x, y, r * 1.05, 10, S.spinG[k], '#ffd854', '#a37d13');
         aDot(x, y, r * 0.45, 0x1B1426); aDot(x, y, r * 0.3, hitB ? 0xFFFFFF : bcol[k]);
       } else { aDot(x, y, r, hitB ? 0xFFFFFF : 0x25222C); aDot(x, y, r * 0.55, 0x3C3846); aDot(x, y, r * 0.28, bcol[k]); }   // small ones are tyres
     });
-    for (let s = 0; s < 2; s++) {   // the flippers are robot arms
+    for (let s = 0; s < PIN.flips.length; s++) {   // the flippers are robot arms
       const [x0, y0, x1, y1] = pinFlipper(s, S.flip[s]);
       aLine(x0, y0, x1, y1, 7, 0x8F8AA8); aLine(x0, y0, x1, y1, 3, 0xC9C4E0);
       aDot(x1, y1, 3.5, 0xFF8A3D); aDot(x0, y0, 4.5, 0x5A5E6A); aDot(x0, y0, 2, 0xFFD23F);
     }
-    if (!S.over) { aDot(S.x, S.y, PIN.R, 0xE6E6F0); aDot(S.x - 1.2, S.y - 1.2, 1.4, 0xFFFFFF); }
+    for (const b of S.ball) if (b.on) { aDot(b.x, b.y, PIN.R, 0xE6E6F0); aDot(b.x - 1.2, b.y - 1.2, 1.4, 0xFFFFFF); }
+    g.restore();
     drawParticles(0);
-    scoreBox(6, 20, 'SCORE', S.score, '#ffd23f'); scoreBox(6, 56, 'BALLS', S.balls, '#fff6d8'); scoreBox(256, 20, 'BEST', S.best, '#49d17a');
-    if (S.litT > 0) rimBanner('BONUS!', 10, 120, 22);
+    text('CLANK-O', 32, 12, 8, '#ffd23f', 'center', null); text('MATIC', 32, 22, 8, '#ffd23f', 'center', null);
+    scoreBox(3, 30, 'SCORE', S.score, '#ffd23f'); scoreBox(3, 66, 'BALLS', S.balls, '#fff6d8'); scoreBox(259, 30, 'BEST', S.best, '#49d17a');
+    if (S.x2T > 0) text('x2 ' + (Math.floor(S.x2T / 60) + 1), 288, 80, 8, '#ffd23f', 'center', null);
+    if (S.msgT > 0) rimBanner(PIN.MSG[S.msg], 10, 100, 22);
     if (S.over) { gameOver(S.score, S.best); return; }
-    hint(S.x > 232 && S.y > 218 ? 'A launch!   START leave' : 'B left flipper   A right flipper   START leave', H - 12);
+    hint(S.ball.some(pinInLane) ? 'A launch!   START leave' : 'B left flippers   A right flippers   START leave', H - 12);
   };
   return S;
 }
@@ -357,7 +438,7 @@ function fishScene(house) {
     });
     drawParticles(0);
     panel(W - 74, 4, 70, 16); text('Caught ' + S.caught, W - 39, 15, 8, '#fff6d8', 'center', null);
-    const st = S.rods[0].state;
+    const st = S.rods[lastIn(house.ps)].state;   // the help follows whoever pressed last
     hint(st === 'charge' ? 'Let go of A to cast!' : st === 'wait' ? '^ v hook depth   B reel in   START leave' : st === 'bite' ? 'A bite! Press A!' : st === 'reel' ? 'Hold A to reel   let go when it goes red' : 'Hold A, let go to cast   START leave', H - 6);
   };
   return S;

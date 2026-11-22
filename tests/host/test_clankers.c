@@ -928,6 +928,9 @@ static void test_house(void) {
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
     EXPECT_EQ_INT(G->house.np, 2);
     EXPECT_EQ_INT(G->house.nbabies, 2);
+    // the labels follow whoever pressed something last
+    press(G, 0, CK_C); EXPECT_EQ_INT(G->house.ps[G->house.last].slot, 1);
+    press(G, CK_C, 0); EXPECT_EQ_INT(G->house.ps[G->house.last].slot, 0);
     EXPECT_EQ_INT(G->house.babies[0].hex, G->world.babies[0]);
     // the layout: rooms side by side, every spot inside a room
     for (int r = 1; r < CK_HOUSE_ROOMS; r++) EXPECT_EQ_INT(ck_rooms[r].x0, ck_rooms[r - 1].x1);
@@ -1184,7 +1187,7 @@ static void test_house(void) {
             for (int dl = 0; dl <= 2 && blocked[best]; dl++)
                 for (int sgn = -1; sgn <= 1; sgn += 2) { int l = lane + sgn * dl; if (l >= 0 && l < 3 && !blocked[l]) { best = l; break; } }
             float tx = (best - 1) * CK_RACE_LANE;
-            ck_game_step(G, tx > c->x + 3 ? CK_RIGHT : tx < c->x - 3 ? CK_LEFT : 0, 0);
+            ck_game_step(G, CK_A | (tx > c->x + 3 ? CK_RIGHT : tx < c->x - 3 ? CK_LEFT : 0), 0);
         }
         EXPECT_EQ_INT(G->house.win, 0);
         int bumps = 0;
@@ -1197,7 +1200,20 @@ static void test_house(void) {
     // a driver who never steers drifts wide on the bends, bumps into things and is slower
     EXPECT_EQ_INT(G->house.track, TRACK_HILLS);
     press(G, CK_A, 0);
-    for (int i = 0; i < 60 * 240 && G->house.win < 0; i++) ck_game_step(G, 0, 0);
+    hold(G, 200, 0, 0);   // the countdown
+    // with no gas the car sits still; holding gas gets it going
+    {
+        const ck_hhero *c = &G->house.gs[0];
+        float a0 = c->a;
+        hold(G, 120, 0, 0);
+        EXPECT_EQ_INT(c->a - a0 < 1, 1);
+        hold(G, 120, CK_A, 0);
+        EXPECT_EQ_INT(c->a - a0 > 200, 1);
+        float s = c->s;
+        hold(G, 60, 0, 0);   // let go and it slows down
+        EXPECT_EQ_INT(c->s < s * 0.6f, 1);
+    }
+    for (int i = 0; i < 60 * 240 && G->house.win < 0; i++) ck_game_step(G, CK_A, 0);
     int bumps = 0;
     for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
     if (bumps < 3) printf("  the driver who never steers bumped %d times\n", bumps);
@@ -1220,15 +1236,15 @@ static void test_house(void) {
         ck_race_pad(G->house.track, 0, &pd, &px, &kind);
         EXPECT_EQ_INT(kind, PAD_BOOST);
         c->a = pd - 20; c->x = px; c->s = 3; c->hit = ~0ull;
-        hold(G, 20, 0, 0);
+        hold(G, 20, CK_A, 0);
         EXPECT_EQ_INT(c->boost > 0, 1);
-        hold(G, 40, 0, 0);
+        hold(G, 40, CK_A, 0);
         EXPECT_EQ_INT(c->s > 4, 1);
         ck_race_pad(G->house.track, 2, &pd, &px, &kind);
         EXPECT_EQ_INT(kind, PAD_RAMP);
         c->a = pd - 20; c->x = px;
         float top = 0;
-        for (int i = 0; i < 40; i++) { ck_game_step(G, 0, 0); c->x = px; top = fmaxf(top, c->jz); }
+        for (int i = 0; i < 40; i++) { ck_game_step(G, CK_A, 0); c->x = px; top = fmaxf(top, c->jz); }
         EXPECT_EQ_INT(top > 10, 1);
         hold(G, 90, 0, 0);
         EXPECT_EQ_INT(c->jz, 0);
@@ -1290,34 +1306,78 @@ static void test_house(void) {
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->scene, SC_PINBALL);
     ck_pinball *P = &G->house.pin;
+    ck_pball *b = &P->ball[0];
     EXPECT_EQ_INT(P->balls, CK_PIN_BALLS);
-    EXPECT_EQ_INT(P->x > 232, 1);
+    EXPECT_EQ_INT(ck_pin_in_lane(b), 1);
+    EXPECT_EQ_INT(P->cam > 100, 1);   // the view starts down at the flippers
     press(G, CK_A, 0);
-    float topY = 999, leftX = 999;
-    for (int i = 0; i < 120; i += 4) { if (getenv("PINDBG")) printf("  %d: %.1f %.1f  v %.2f %.2f\n", i, P->x, P->y, P->vx, P->vy); hold(G, 4, 0, 0); topY = fminf(topY, P->y); leftX = fminf(leftX, P->x); }
+    float topY = 999, leftX = 999, camLo = 999;
+    for (int i = 0; i < 160; i += 4) { if (getenv("PINDBG")) printf("  %d: %.1f %.1f  v %.2f %.2f\n", i, b->x, b->y, b->vx, b->vy); hold(G, 4, 0, 0); topY = fminf(topY, b->y); leftX = fminf(leftX, b->x); camLo = fminf(camLo, P->cam); }
     EXPECT_EQ_INT(topY < 60, 1);   // up the lane...
-    EXPECT_EQ_INT(leftX < 200, 1);   // ...and out onto the table
+    EXPECT_EQ_INT(leftX < 180, 1);   // ...and out onto the table
+    EXPECT_EQ_INT(camLo < 20, 1);   // and the view scrolled up after it
     // a ball dropping on the left flipper gets flicked up
-    P->x = 148; P->y = 196; P->vx = 0; P->vy = 1;
+    *b = (ck_pball){ 96, 392, 0, 1, true, 0 };
     hold(G, 3, 0, 0);
     hold(G, 6, CK_B, 0);
     EXPECT_EQ_INT(P->flip[0] < 0, 1);
-    EXPECT_EQ_INT(P->vy < -3, 1);
+    EXPECT_EQ_INT(b->vy < -3, 1);
+    hold(G, 20, 0, 0);
+    // the spinner up the left orbit spins and scores
+    int sc = P->score;
+    *b = (ck_pball){ 22, 220, 0, -9, true, 0 };
     hold(G, 30, 0, 0);
+    EXPECT_EQ_INT(P->spinA > 1, 1);
+    EXPECT_EQ_INT(P->score > sc, 1);
+    // a slingshot kicks the ball away
+    *b = (ck_pball){ 50, 326, -3, 2, true, 0 };
+    hold(G, 4, 0, 0);
+    EXPECT_EQ_INT(P->sling[0] > 0 && b->vx > 0, 1);
+    // knock down all four drop targets for double scoring
+    for (int k = 0; k < CK_PIN_DROPS; k++) {
+        *b = (ck_pball){ 190, (ck_pin_drops[k].y0 + ck_pin_drops[k].y1) / 2, 6, 0, true, 0 };
+        hold(G, 6, 0, 0);
+        EXPECT_EQ_INT((P->drops >> k) & 1, 1);
+    }
+    EXPECT_EQ_INT(P->x2T > 0 && P->msg == PINMSG_DOUBLE, 1);
+    hold(G, 70, 0, 0);
+    EXPECT_EQ_INT(P->drops, 0);   // the bank pops back up
+    // the saucer holds the ball; the second catch starts multiball
+    for (int n = 0; n < 2; n++) {
+        *b = (ck_pball){ ck_pin_saucer[0] + 1, ck_pin_saucer[1] - 2, 0, 0.5f, true, 0 };
+        hold(G, 2, 0, 0);
+        EXPECT_EQ_INT(b->held > 0, 1);
+        hold(G, 60, 0, 0);
+        EXPECT_EQ_INT(b->held, 0);
+    }
+    int live = 0;
+    for (int i = 0; i < CK_PIN_MULTI; i++) live += P->ball[i].on;
+    EXPECT_EQ_INT(live, CK_PIN_MULTI);
+    EXPECT_EQ_INT(P->balls, CK_PIN_BALLS);
     // play on with a flipper now and then until the balls run out; the score never goes down
-    int last = P->score, falls = 0;
-    for (int i = 0; i < 60 * 600 && !P->over; i++) {
-        int b0 = P->balls;
+    int last = P->score, falls = 0, spins = 0, drops = 0, catches = 0, hits = 0;
+    for (int i = 0; i < 60 * 900 && !P->over; i++) {
+        int b0 = P->balls, d0 = P->drops;
+        bool spun = P->spin > 0;
         ck_game_step(G, (i / 7) % 5 == 0 ? CK_A : (i / 9) % 4 == 0 ? CK_B : 0, 0);
         EXPECT_EQ_INT(P->score >= last, 1);
         last = P->score;
         if (P->balls < b0) falls++;
-        if (P->y < -10 || P->x < 60 || P->x > 260) { printf("  pinball: the ball got out at %.0f, %.0f\n", P->x, P->y); break; }
+        spins += P->spin > 0 && !spun;
+        drops += P->drops != d0 && P->drops;
+        for (int k = 0; k < CK_PIN_MULTI; k++) catches += P->ball[k].held == 49;
+        for (int k = 0; k < CK_PIN_BUMPS; k++) hits += P->flash[k] == 11;
+        bool out = false;
+        for (int k = 0; k < CK_PIN_MULTI; k++) {
+            const ck_pball *q = &P->ball[k];
+            if (q->on && (q->y < 0 || q->x < 0 || q->x > CK_PIN_W)) { printf("  pinball: a ball got out at %.0f, %.0f\n", q->x, q->y); out = true; }
+        }
+        if (out) { EXPECT_EQ_INT(out, 0); break; }
     }
     EXPECT_EQ_INT(P->over, 1);
     EXPECT_EQ_INT(falls >= 1, 1);
     EXPECT_EQ_INT(P->best, P->score);
-    printf("  pinball: %d points\n", P->score);
+    printf("  pinball: %d points, %d bumps, %d spins, %d drops, %d saucer catches\n", P->score, hits, spins, drops, catches);
     hold(G, 70, 0, 0);
     press(G, CK_A, 0);
     EXPECT_EQ_INT(P->over, 0);
