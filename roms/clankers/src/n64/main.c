@@ -13,6 +13,13 @@
 
 static ck_game G;
 static bool scanlines;
+// The picture the console sends. 240p is the classic N64 picture. Many modern TVs decode
+// composite poorly from 240p (rainbow fringes, crawling dots) but handle 480i well, so R on the
+// pause screen switches to a 480i signal that shows the same 320x240 picture in both fields.
+static bool interlaced;
+static resolution_t video_res(void) {
+    return (resolution_t){ .width = 320, .height = 240, .interlaced = interlaced ? INTERLACE_HALF : INTERLACE_OFF };
+}
 
 // A whole file from the ROM filesystem, zero-terminated. NULL if it is missing.
 static char *slurp(const char *path) {
@@ -114,7 +121,7 @@ int main(void) {
     debugf("Clankers %s booting\n", J64_VERSION);
 
     dfs_init(DFS_DEFAULT_LOCATION);
-    display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
+    display_init(video_res(), DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     rdpq_init();
     joypad_init();
 
@@ -152,6 +159,10 @@ int main(void) {
             uint16_t p1 = read_pad(JOYPAD_PORT_1), p2 = read_pad(JOYPAD_PORT_2);
             joypad_buttons_t hit = joypad_get_buttons_pressed(JOYPAD_PORT_1);
             if (G.scene == SC_PAUSE && hit.z) scanlines = !scanlines;
+            if (G.scene == SC_PAUSE && hit.r) {
+                interlaced = !interlaced;
+                display_change(video_res(), DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
+            }
             ck_game_step(&G, p1, p2);
 #endif
             for (int i = 0; i < G.nsfx; i++) synth_sfx(G.sfx[i]);
@@ -164,7 +175,7 @@ int main(void) {
         synth_poll();
         surface_t *disp = display_get();
         rdpq_attach(disp, NULL);
-        draw_frame(&G, scanlines);
+        draw_frame(&G, scanlines, interlaced);
 #ifdef CK_AUTOTEST
         draw_overlay(overlay);
 #endif
