@@ -148,9 +148,9 @@ static void shape(int id, float x, float y, float r, uint32_t hex, float alpha) 
 // and ACC_AT in sprites.h); they go on top of the hero sprite where that frame's head, body and
 // feet are. Items that cycle colour are baked white and tinted here.
 static const int ACC_SPR[SLOT_COUNT] = { SPR_ACC_HEAD, SPR_ACC_FACE, SPR_ACC_NECK, SPR_ACC_BODY, SPR_ACC_FEET };
-static int acc_first[SLOT_COUNT], acc_n[SLOT_COUNT];
+static int acc_idx[ACC_COUNT], acc_n[SLOT_COUNT];   // each item's frame in its slot's strip, and how many share the strip
 static void acc_init(void) {
-    for (int a = 0; a < ACC_COUNT; a++) if (!acc_n[ck_acc[a].slot]++) acc_first[ck_acc[a].slot] = a;
+    for (int a = 0; a < ACC_COUNT; a++) acc_idx[a] = acc_n[ck_acc[a].slot]++;
 }
 static color_t rainbow_col(float t, int alpha) {
     float h = t * 0.6f * 2 * PI;
@@ -170,31 +170,33 @@ static void acc_piece(int a, int view, const acc_pt *p, float x, float y, float 
     bopt o = { .flip = flip, .sx = p->sx * sc, .sy = p->sy * sc, .rot = flip ? p->rot : -p->rot, .tinted = true,
                .tint = ck_acc[a].rainbow ? rainbow_col(t, alpha) : RGBA32(shade, shade, shade, alpha) };
     if (ck_acc[a].rainbow && shade < 255) { o.tint.r = o.tint.r * shade / 255; o.tint.g = o.tint.g * shade / 255; o.tint.b = o.tint.b * shade / 255; }
-    blit_o(ACC_SPR[slot], view * acc_n[slot] + a - acc_first[slot], x + (flip ? -p->x : p->x) * sc, y + p->y * sc, o);
+    blit_o(ACC_SPR[slot], view * acc_n[slot] + acc_idx[a], x + (flip ? -p->x : p->x) * sc, y + p->y * sc, o);
 }
 // Suits have sleeves: a stroke down each arm in the suit's colour (white cuffs on the sweater and
 // the fancy suit), as K.wearSleeve draws them in the browser.
 static void line(float x0, float y0, float x1, float y1, float w, uint32_t hex, float alpha);
-static uint32_t sleeve_col(int a) {
-    switch (a) {
-    case ACC_SWEATER: return 0xE0564F;
-    case ACC_JERSEY: return 0x49D17A;
-    case ACC_TUX: return 0x2B2833;
-    case ACC_SUPER: return 0x3A6FC0;
-    case ACC_DISCO: return 1;   // cycles colour
-    default: return 0;
-    }
-}
+// K.SLEEVE and K.CUFF: 0 no sleeve, 1 cycles colour
+static const uint32_t SLEEVE[ACC_COUNT] = {
+    [ACC_SWEATER] = 0xE0564F, [ACC_JERSEY] = 0x49D17A, [ACC_TUX] = 0x2B2833, [ACC_SUPER] = 0x3A6FC0, [ACC_DISCO] = 1,
+    [ACC_CHEFCOAT] = 0xF5F5F0, [ACC_LABCOAT] = 0xF2F4F8, [ACC_POLICE] = 0x2B4A9A, [ACC_LEATHER] = 0x1F1B26, [ACC_FIRECOAT] = 0xD4A64A,
+    [ACC_SPACESUIT] = 0xEEF1F6, [ACC_VEST] = 0x6A7A8C, [ACC_PIRATESHIRT] = 0xF5F1E8, [ACC_NINJASUIT] = 0x24202E, [ACC_CLOWNSUIT] = 0xFFD23F,
+    [ACC_ARMOR] = 0x9AA3B3, [ACC_ROBE] = 0x5B3F86, [ACC_COWVEST] = 0xC0392B, [ACC_BLUESUIT] = 0x2B4A9A, [ACC_PINSTRIPE] = 0x4A4A58,
+    [ACC_WHITESUIT] = 0xF5F1E8, [ACC_PLAIDSUIT] = 0x3A7A4A, [ACC_VELVETSUIT] = 0x7A2A8A, [ACC_GOLDSUIT] = 0xE8B83A,
+};
+static const uint32_t CUFF[ACC_COUNT] = {
+    [ACC_SWEATER] = 0xFFFFFF, [ACC_TUX] = 0xF5F1E8, [ACC_BLUESUIT] = 0xF5F1E8, [ACC_PINSTRIPE] = 0xF5F1E8, [ACC_PLAIDSUIT] = 0xF5F1E8,
+    [ACC_VELVETSUIT] = 0xF5F1E8, [ACC_GOLDSUIT] = 0x1B1426, [ACC_WHITESUIT] = 0xFF8FC7, [ACC_FIRECOAT] = 0xFFD23F,
+};
 static void sleeve(int a, const acc_arm *m, float x, float y, float sc, bool flip, float t, int alpha) {
-    uint32_t c = sleeve_col(a);
+    uint32_t c = SLEEVE[a];
     if (!c) return;
     if (c == 1) { color_t r = rainbow_col(t, 255); c = (uint32_t)r.r << 16 | (uint32_t)r.g << 8 | r.b; }
     else if (m->far) c = ((c >> 16 & 255) * 3 / 4) << 16 | ((c >> 8 & 255) * 3 / 4) << 8 | (c & 255) * 3 / 4;
     float f = flip ? -1 : 1, x0 = x + m->x0 * sc * f, y0 = y + m->y0 * sc, x1 = x + m->x1 * sc * f, y1 = y + m->y1 * sc, w = fmaxf(1.5f, m->w * sc);
     line(x0, y0, x1, y1, w, c, alpha / 255.0f);
-    if (a == ACC_SWEATER || a == ACC_TUX) {
+    if (CUFF[a]) {
         float dx = x1 - x0, dy = y1 - y0;
-        line(x0 + dx * 0.86f, y0 + dy * 0.86f, x0 + dx * 1.04f, y0 + dy * 1.04f, w, a == ACC_TUX ? 0xF5F1E8 : 0xFFFFFF, alpha / 255.0f);
+        line(x0 + dx * 0.86f, y0 + dy * 0.86f, x0 + dx * 1.04f, y0 + dy * 1.04f, w, CUFF[a], alpha / 255.0f);
     }
 }
 // everything a player wears, over hero frame fr drawn at (x, y) with scale sc
@@ -631,11 +633,8 @@ static void draw_map(const ck_game *G) {
 // The parts shop, laid out like the web one: 48 items in 4 rows of 12 (the 36 accessories, the two
 // heroes, 8 paint pots, the bubble gun and the super jetpack), a cursor per player, and each hero
 // trying on what their cursor is on below. Text is light on dark (dark on yellow blurs on a TV).
-#define SHOP_COLS 12
 #define SHOP_TW 22
 #define SHOP_TH 28
-static float shop_x(int a) { return 16 + (a % SHOP_COLS) * 24; }
-static float shop_y(int a) { return 36 + (a / SHOP_COLS) * 30; }
 static void outline(float x, float y, float w, float h, float th, uint32_t hex) {
     rect(x, y, w, th, hex, 1); rect(x, y + h - th, w, th, hex, 1);
     rect(x, y + th, th, h - th * 2, hex, 1); rect(x + w - th, y + th, th, h - th * 2, hex, 1);
@@ -658,10 +657,16 @@ static void acc_icon(int a, float x, float y, float t) {
     }
 }
 // the heroes, paint pots, bubble gun and super jetpack
-static void item_icon(int a, float x, float y, float t, int col) {
+static void item_icon(int a, float x, float y, float t, int col, int hero) {
     if (a < ACC_COUNT) { acc_icon(a, x, y, t); return; }
     float hx = x + SHOP_TW / 2 - 1;
     y -= 3;
+    if (a >= SHOP_COSTUME0) {   // the player's own hero in the whole look
+        uint8_t wear[SLOT_COUNT];
+        for (int k = 0; k < SLOT_COUNT; k++) wear[k] = (uint8_t)(ck_costumes[a - SHOP_COSTUME0].piece[k] + 1);
+        hero_front(hero, col, 0, hx, y + 29, hero == HERO_ROBOT ? 0.062f / 0.074f : 0.056f / 0.071f, false, wear, t);
+        return;
+    }
     if (a == SHOP_ROBOT || a == SHOP_OSTRICH)   // small white heroes, tinted (a whole hero sheet is too big to keep for an icon)
         blit_o(SPR_SHOP_HERO, a == SHOP_OSTRICH, hx, y + 28, skin_o((bopt){ .tinted = true, .tint = hexc(col < CK_NCOLS ? ck_cols[col] : 0xFFFFFF, 255) }, col, t));
     else if (a == SHOP_GUN) {
@@ -681,17 +686,21 @@ static void item_icon(int a, float x, float y, float t, int col) {
 static bool shop_worn(const ck_game *G, int s, int a) {
     const ck_closet *c = &G->saves.closet;
     if (a < ACC_COUNT) return c->wear[s][ck_acc[a].slot] == a + 1;
+    if (a >= SHOP_COSTUME0) return ck_costume_worn(G, s, a);
     if (a == SHOP_ROBOT) return G->prog.hero[s] == HERO_ROBOT;
     if (a == SHOP_OSTRICH) return G->prog.hero[s] == HERO_OSTRICH;
     if (a == SHOP_GUN || a == SHOP_JET) return ck_shop_owns(G, a);
     if (a == SHOP_RAINBOW) return ck_rainbow_skin(G, s);
     return !ck_rainbow_skin(G, s) && G->prog.col[s] == a - SHOP_PAINT0;
 }
+// One player gets the whole width, 12 tiles across; two players split it, P1 on the left and P2
+// on the right, 6 across each, every half with its own cursor and scroll (as the web shop).
 static void draw_shop(const ck_game *G) {
-    static const uint32_t tint[SLOT_COUNT + 1] = { 0xFFD23F, 0x5AD1FF, 0xFF8FC7, 0xC28BFF, 0x49D17A, 0xFFB347 };
+    static const uint32_t tint[SLOT_COUNT + 2] = { 0xFFD23F, 0x5AD1FF, 0xFF8FC7, 0xC28BFF, 0x49D17A, 0xFFB347, 0xFFB347 };
     const ck_closet *c = &G->saves.closet;
     float t = G->t;
-    int first = G->prog.joined[0] ? 0 : 1;
+    int cols = ck_shop_cols(G), nrows = ck_shop_rows(cols);
+    bool two = cols < 12;
     draw_map(G);
     rect(0, 0, W, H, 0x0F0A19, 0.65f);
     panel(8, 6, W - 16, H - 12, 0x3B2A5C, 1);
@@ -699,50 +708,59 @@ static void draw_shop(const ck_game *G) {
     dark_panel(W - 86, 12, 70, 18);
     blit_o(SPR_BOLT, 0, W - 74, 21, (bopt){ .sx = 5 / 4.2f, .sy = 5 / 4.2f, .rot = -t });
     txt(F_MED, ST_PLAIN, W - 64, 26, ALIGN_LEFT, "x%d", G->prog.bolts);
-    for (int a = 0; a < SHOP_COUNT; a++) {
-        float x = shop_x(a), y = shop_y(a);
-        int cost = ck_shop_cost(a);
-        bool own = ck_shop_owns(G, a), worn = false;
-        for (int s = 0; s < 2; s++) if (G->prog.joined[s] && shop_worn(G, s, a)) worn = true;
-        rect(x, y, SHOP_TW, SHOP_TH, worn ? 0x49D17A : tint[a < ACC_COUNT ? ck_acc[a].slot : SLOT_COUNT], worn ? 0.4f : 0.14f);
-        item_icon(a, x, y, t, skin_col(G, first));
-        // owned: a green dot; for sale: the price in the corner, green if you have the bolts, red if not
-        if (own && cost) shape(SPR_DOT, x + SHOP_TW - 3.5f, y + 3.5f, 3, 0x49D17A, 1);
-        else if (!own) txt(F_SMALL, G->prog.bolts >= cost ? ST_GREEN : ST_RED, x + SHOP_TW - 1, y + SHOP_TH - 1, ALIGN_RIGHT, "%d", cost);
-    }
-    int np = G->prog.joined[0] + G->prog.joined[1], j = 0;
+    if (two) rect(160, 34, 1, 196, 0xFFFFFF, 0.14f);
+    int j = 0;
     for (int s = 0; s < 2; s++) {
         if (!G->prog.joined[s]) continue;
-        int a = G->shopCur[s];
-        if (a < 0 || a >= SHOP_COUNT) a = 0;
-        float x = shop_x(a), y = shop_y(a), o = j * 2;
-        uint32_t pc = s ? 0x8FD3FF : 0xFFD23F;
-        outline(x - 2 - o, y - 2 - o, SHOP_TW + 4 + o * 2, SHOP_TH + 4 + o * 2, 2, pc);
-        if (np > 1) txt(F_SMALL, s ? ST_BLUE : ST_YELLOW, x + (j ? SHOP_TW - 3 : 3), y - 3 - o, ALIGN_CENTER, "P%d", s + 1);
-        // the hero trying it on, over what they already wear (or the other hero, or a new paint)
+        int cur = G->shopCur[s] >= 0 && G->shopCur[s] < SHOP_COUNT ? G->shopCur[s] : SHOP_COSTUME0, top = G->shopScroll[s];
+        float x0 = two ? 14 + j * 152 : 16, right = x0 + cols * 24 - 2;
+        // the section the cursor is in, and arrows when there is more above or below
+        if (two) txt(F_SMALL, s ? ST_BLUE : ST_YELLOW, x0, 40, ALIGN_LEFT, "P%d  %s", s + 1, ck_shop_sec_name(cur));
+        else txt(F_SMALL, ST_PALE, x0, 40, ALIGN_LEFT, "%s", ck_shop_sec_name(cur));
+        if (top > 0) txt(F_SMALL, ST_CREAM, right - 4, 40, ALIGN_CENTER, "^");
+        if (top + CK_SHOP_ROWS < nrows) txt(F_SMALL, ST_CREAM, right - 4, 170, ALIGN_CENTER, "v");
+        for (int r = top; r < top + CK_SHOP_ROWS && r < nrows; r++) {
+            int n = ck_shop_row_len(r, cols);
+            for (int k = 0; k < n; k++) {
+                int a = ck_shop_item_at(r, k, cols);
+                float x = x0 + k * 24, y = 44 + (r - top) * 30;
+                int cost = ck_shop_price(G, a);
+                bool own = ck_shop_owns(G, a), worn = shop_worn(G, s, a);
+                int ti = a < ACC_COUNT ? ck_acc[a].slot : a >= SHOP_COSTUME0 ? SLOT_COUNT + 1 : SLOT_COUNT;
+                rect(x, y, SHOP_TW, SHOP_TH, worn ? 0x49D17A : tint[ti], worn ? 0.4f : ti == SLOT_COUNT + 1 ? 0.16f : 0.14f);
+                item_icon(a, x, y, t, skin_col(G, s), G->prog.hero[s]);
+                // owned: a green dot; for sale: the price in the corner, green if you have the bolts, red if not
+                if (own && ck_shop_cost(a)) shape(SPR_DOT, x + SHOP_TW - 3.5f, y + 3.5f, 3, 0x49D17A, 1);
+                else if (!own) txt(F_SMALL, G->prog.bolts >= cost ? ST_GREEN : ST_RED, x + SHOP_TW - 1, y + SHOP_TH - 1, ALIGN_RIGHT, "%d", cost);
+                if (a == cur) outline(x - 2, y - 2, SHOP_TW + 4, SHOP_TH + 4, 2, s ? 0x8FD3FF : 0xFFD23F);
+            }
+        }
+        // the hero trying it on, over what they already wear (or the whole costume, another hero, a new paint)
+        int a = cur;
         uint8_t tryOn[SLOT_COUNT];
         memcpy(tryOn, c->wear[s], sizeof tryOn);
         if (a < ACC_COUNT) tryOn[ck_acc[a].slot] = (uint8_t)(a + 1);
+        else if (a >= SHOP_COSTUME0) for (int k = 0; k < SLOT_COUNT; k++) tryOn[k] = (uint8_t)(ck_costumes[a - SHOP_COSTUME0].piece[k] + 1);
         int hero = a == SHOP_ROBOT ? HERO_ROBOT : a == SHOP_OSTRICH ? HERO_OSTRICH : G->prog.hero[s];
         int col = a >= SHOP_PAINT0 && a < SHOP_PAINT0 + CK_NCOLS ? a - SHOP_PAINT0 : a == SHOP_RAINBOW ? SKIN_RAINBOW : skin_col(G, s);
-        float hx = np > 1 ? 40 + j * 160 : 120, sc = hero == HERO_ROBOT ? 0.11f / 0.074f : 0.1f / 0.071f, tt = t + j;
+        float hx = two ? 40 + j * 152 : 120, sc = hero == HERO_ROBOT ? 0.11f / 0.074f : 0.1f / 0.071f, tt = t + j;
         rect(hx - 22, 228, 44, 4, 0xFFFFFF, 0.12f);
         int fr = (int)(tt / (hero == HERO_ROBOT ? 0.52f : 0.3f)) % 4;
         hero_front(hero, col, fr, hx, 230, sc, false, tryOn, tt);
         // the words go beside the hero, so they never cover what it is trying on
         float tx = hx + 24;
         char name[32];
-        txt(F_MED, s ? ST_BLUE : ST_YELLOW, tx, 200, ALIGN_LEFT, "%s", ck_shop_name(a, name, sizeof name));
-        int cost = ck_shop_cost(a);
+        txt(F_MED, s ? ST_BLUE : ST_YELLOW, tx, 206, ALIGN_LEFT, "%s", ck_shop_name(a, name, sizeof name));
+        int cost = ck_shop_price(G, a);
         if (!ck_shop_owns(G, a)) {
             char buy[24];
             snprintf(buy, sizeof buy, "A buy  %d", cost);
-            txt(F_SMALL, G->prog.bolts >= cost ? ST_PLAIN : ST_RED, tx, 213, ALIGN_LEFT, "%s", buy);
-            blit_o(SPR_BOLT, 0, tx + txt_w(F_SMALL, buy) + 5, 210, (bopt){ .sx = 3 / 4.2f, .sy = 3 / 4.2f });
+            txt(F_SMALL, G->prog.bolts >= cost ? ST_PLAIN : ST_RED, tx, 219, ALIGN_LEFT, "%s", buy);
+            blit_o(SPR_BOLT, 0, tx + txt_w(F_SMALL, buy) + 5, 216, (bopt){ .sx = 3 / 4.2f, .sy = 3 / 4.2f });
         } else {
-            const char *how = a < ACC_COUNT ? (shop_worn(G, s, a) ? "A take off" : "A wear")
+            const char *how = a < ACC_COUNT || a >= SHOP_COSTUME0 ? (shop_worn(G, s, a) ? "A take off" : "A wear")
                             : a == SHOP_GUN ? "Z shoots in a level" : a == SHOP_JET ? "Hold A to glide" : "A use";
-            txt(F_SMALL, ST_PLAIN, tx, 213, ALIGN_LEFT, "%s", how);
+            txt(F_SMALL, ST_PLAIN, tx, 219, ALIGN_LEFT, "%s", how);
         }
         j++;
     }

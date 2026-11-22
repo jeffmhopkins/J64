@@ -362,7 +362,7 @@ const ck_catch ck_catches[CATCH_COUNT] = {
     { "Robo-fish", 0x9AA4B4, 0x5AD1FF, 14, 1.8f, 2.6f, 9 },
     { "King carp", 0xC98A3A, 0xFFD23F, 22, 0.6f, 3.0f, 12 },
 };
-const int ck_pond_level_at[CK_POND_LEVELS] = { 0, 6, 15, 30, 50 };
+const int ck_pond_level_at[CK_POND_LEVELS] = { 0, 5, 10, 15, 20 };   // fish caught this visit
 int ck_pond_level(int fished) {
     int l = 0;
     while (l + 1 < CK_POND_LEVELS && fished >= ck_pond_level_at[l + 1]) l++;
@@ -394,7 +394,7 @@ void ck_fish_start(ck_game *G) {
     ck_pond *Pd = &H->pond;
     memset(Pd->rod, 0, sizeof Pd->rod);
     for (int i = 0; i < 2; i++) Pd->rod[i].fish = -1;
-    Pd->level = ck_pond_level(G->saves.closet.fished); Pd->levelT = 0;
+    Pd->fished = 0; Pd->level = 0; Pd->levelT = 0;   // every visit starts with the little fish
     for (int k = 0; k < CK_POND_FISH; k++) pond_fish(G, &Pd->fish[k]);
     Pd->last = -1;
     ck_go(G, SC_FISH);
@@ -484,8 +484,8 @@ void ck_fish_update(ck_game *G) {
                 R->state = ROD_GOT; R->t = 150; Pd->last = f->kind;
                 Pd->caught++; Pd->got[f->kind]++;
                 G->prog.bolts += c->bolts;
-                if (f->kind != CATCH_BOOT && G->saves.closet.fished < 60000) G->saves.closet.fished++;
-                int lv = ck_pond_level(G->saves.closet.fished);
+                if (f->kind != CATCH_BOOT) { Pd->fished++; if (G->saves.closet.fished < 60000) G->saves.closet.fished++; }
+                int lv = ck_pond_level(Pd->fished);
                 if (lv > Pd->level) {   // the pond levels up: the fish not on a line make way for bigger ones
                     Pd->level = lv; Pd->levelT = 180;
                     for (int k = 0; k < CK_POND_FISH; k++) if (!fish_taken(Pd, k) && k != (int)(f - Pd->fish)) { pond_fish(G, &Pd->fish[k]); Pd->fish[k].x = CK_W - 10 - k * 6; }

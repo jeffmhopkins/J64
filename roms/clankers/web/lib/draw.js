@@ -381,6 +381,89 @@ const CK = (() => {
     { id: 'flippers', slot: 'feet', name: 'Flippers', cost: 30 },
     { id: 'skates', slot: 'feet', name: 'Roller skates', cost: 40 },
     { id: 'lightup', slot: 'feet', name: 'Light-up shoes', cost: 70, rainbow: true },
+    // added later (appended, so older saves keep their bits): costume pieces and the fashion line
+    { id: 'mirror', slot: 'head', name: 'Head mirror', cost: 25 },
+    { id: 'policecap', slot: 'head', name: 'Police cap', cost: 30 },
+    { id: 'mohawk', slot: 'head', name: 'Rock star hair', cost: 40 },
+    { id: 'firehat', slot: 'head', name: 'Fire helmet', cost: 35 },
+    { id: 'spacehelm', slot: 'head', name: 'Space helmet', cost: 50 },
+    { id: 'hardhat', slot: 'head', name: 'Hard hat', cost: 25 },
+    { id: 'tiara', slot: 'head', name: 'Tiara', cost: 45 },
+    { id: 'ninjaband', slot: 'head', name: 'Ninja headband', cost: 25 },
+    { id: 'clownwig', slot: 'head', name: 'Clown wig', cost: 30 },
+    { id: 'knighthelm', slot: 'head', name: 'Knight helmet', cost: 45 },
+    { id: 'eyepatch', slot: 'face', name: 'Eye patch', cost: 15 },
+    { id: 'rednose', slot: 'face', name: 'Clown nose', cost: 15 },
+    { id: 'mask', slot: 'face', name: 'Doctor mask', cost: 15 },
+    { id: 'stetho', slot: 'neck', name: 'Stethoscope', cost: 25 },
+    { id: 'pearls', slot: 'neck', name: 'Pearls', cost: 40 },
+    { id: 'chain', slot: 'neck', name: 'Star chain', cost: 35 },
+    { id: 'chefcoat', slot: 'body', name: 'Chef coat', cost: 35 },
+    { id: 'labcoat', slot: 'body', name: 'Lab coat', cost: 40 },
+    { id: 'police', slot: 'body', name: 'Police uniform', cost: 45 },
+    { id: 'leather', slot: 'body', name: 'Rock jacket', cost: 50 },
+    { id: 'firecoat', slot: 'body', name: 'Fire coat', cost: 45 },
+    { id: 'spacesuit', slot: 'body', name: 'Space suit', cost: 60 },
+    { id: 'vest', slot: 'body', name: 'Safety vest', cost: 30 },
+    { id: 'pirateshirt', slot: 'body', name: 'Sailor shirt', cost: 35 },
+    { id: 'ninjasuit', slot: 'body', name: 'Ninja suit', cost: 45 },
+    { id: 'clownsuit', slot: 'body', name: 'Clown suit', cost: 40 },
+    { id: 'armor', slot: 'body', name: 'Armor', cost: 60 },
+    { id: 'robe', slot: 'body', name: 'Wizard robe', cost: 50 },
+    { id: 'cowvest', slot: 'body', name: 'Ranch vest', cost: 35 },
+    { id: 'sundress', slot: 'body', name: 'Sundress', cost: 40 },
+    { id: 'partydress', slot: 'body', name: 'Party dress', cost: 45 },
+    { id: 'polkadress', slot: 'body', name: 'Polka dress', cost: 45 },
+    { id: 'tutu', slot: 'body', name: 'Tutu', cost: 40 },
+    { id: 'ballgown', slot: 'body', name: 'Ball gown', cost: 70 },
+    { id: 'sparkledress', slot: 'body', name: 'Sparkle dress', cost: 90, rainbow: true },
+    { id: 'bluesuit', slot: 'body', name: 'Blue suit', cost: 50 },
+    { id: 'pinstripe', slot: 'body', name: 'Pinstripe suit', cost: 55 },
+    { id: 'whitesuit', slot: 'body', name: 'White suit', cost: 55 },
+    { id: 'plaidsuit', slot: 'body', name: 'Plaid suit', cost: 55 },
+    { id: 'velvetsuit', slot: 'body', name: 'Velvet suit', cost: 65 },
+    { id: 'goldsuit', slot: 'body', name: 'Gold suit', cost: 80 },
+    { id: 'dressshoes', slot: 'feet', name: 'Dress shoes', cost: 30 },
+    { id: 'rockboots', slot: 'feet', name: 'Rocker boots', cost: 40 },
+    { id: 'moonboots', slot: 'feet', name: 'Moon boots', cost: 40 },
+    { id: 'clownshoes', slot: 'feet', name: 'Clown shoes', cost: 30 },
+    { id: 'slippers', slot: 'feet', name: 'Glass slippers', cost: 50 },
+    { id: 'heels', slot: 'feet', name: 'High heels', cost: 35 },
+    { id: 'flats', slot: 'feet', name: 'Ballet flats', cost: 25 },
+    { id: 'sandals', slot: 'feet', name: 'Sandals', cost: 20 },
+    { id: 'hightops', slot: 'feet', name: 'High-tops', cost: 35 },
+    { id: 'cowboots', slot: 'feet', name: 'Cowboy boots', cost: 40 },
+  ];
+  // whole looks: one buy gets every piece, one press puts them all on (the same list as ck_costumes)
+  K.COSTUMES = [
+    { id: 'c_chef', name: 'Chef', pieces: ['chef', 'chefcoat', 'mustache'] },
+    { id: 'c_doctor', name: 'Doctor', pieces: ['mirror', 'mask', 'stetho', 'labcoat'] },
+    { id: 'c_police', name: 'Police', pieces: ['policecap', 'shades', 'police', 'dressshoes'] },
+    { id: 'c_rock', name: 'Rock star', pieces: ['mohawk', 'stars', 'chain', 'leather', 'rockboots'] },
+    { id: 'c_fire', name: 'Firefighter', pieces: ['firehat', 'firecoat', 'rainboots'] },
+    { id: 'c_space', name: 'Astronaut', pieces: ['spacehelm', 'spacesuit', 'moonboots'] },
+    { id: 'c_builder', name: 'Builder', pieces: ['hardhat', 'vest', 'boots'] },
+    { id: 'c_pirate', name: 'Pirate', pieces: ['pirate', 'eyepatch', 'pirateshirt', 'boots'] },
+    { id: 'c_princess', name: 'Princess', pieces: ['tiara', 'pearls', 'ballgown', 'slippers'] },
+    { id: 'c_ballerina', name: 'Ballerina', pieces: ['flower', 'tutu', 'flats'] },
+    { id: 'c_ninja', name: 'Ninja', pieces: ['ninjaband', 'ninjasuit'] },
+    { id: 'c_clown', name: 'Clown', pieces: ['clownwig', 'rednose', 'clownsuit', 'clownshoes'] },
+    { id: 'c_knight', name: 'Knight', pieces: ['knighthelm', 'armor', 'boots'] },
+    { id: 'c_wizard', name: 'Wizard', pieces: ['wizard', 'robe', 'medal'] },
+    { id: 'c_cowboy', name: 'Cowboy', pieces: ['cowboy', 'bandana', 'cowvest', 'cowboots'] },
+    { id: 'c_hero', name: 'Super hero', pieces: ['goggles', 'super', 'boots'] },
+  ];
+  // the parts shop's sections, in order (the same as ck_shop_secs); body pieces split three ways
+  K.SHOP_SECS = [
+    ['COSTUMES', K.COSTUMES.map(c => c.id)],
+    ['HATS', ['party', 'flower', 'beanie', 'baseball', 'chef', 'propeller', 'cowboy', 'pirate', 'tophat', 'wizard', 'crown', 'rainbowcap', 'mirror', 'policecap', 'mohawk', 'firehat', 'spacehelm', 'hardhat', 'tiara', 'ninjaband', 'clownwig', 'knighthelm']],
+    ['FACES', ['glasses', 'shades', 'hearts', 'stars', 'goggles', 'mustache', 'monocle', 'eyepatch', 'rednose', 'mask']],
+    ['NECKWEAR', ['bowtie', 'scarf', 'necktie', 'bandana', 'medal', 'stetho', 'pearls', 'chain']],
+    ['OUTFITS', ['sweater', 'overalls', 'jersey', 'super', 'disco', 'chefcoat', 'labcoat', 'police', 'leather', 'firecoat', 'spacesuit', 'vest', 'pirateshirt', 'ninjasuit', 'clownsuit', 'armor', 'robe', 'cowvest']],
+    ['DRESSES', ['sundress', 'partydress', 'polkadress', 'tutu', 'ballgown', 'sparkledress']],
+    ['SUITS', ['tux', 'bluesuit', 'pinstripe', 'whitesuit', 'plaidsuit', 'velvetsuit', 'goldsuit']],
+    ['SHOES', ['sneakers', 'boots', 'rainboots', 'flippers', 'skates', 'lightup', 'dressshoes', 'rockboots', 'moonboots', 'clownshoes', 'slippers', 'heels', 'flats', 'sandals', 'hightops', 'cowboots']],
+    ['HEROES & GEAR', null],
   ];
   K.ACC_SLOTS = ['head', 'face', 'neck', 'body', 'feet'];
   // a colour that cycles; the N64 baker sets K.plain so it draws white for the console to tint
@@ -451,6 +534,56 @@ const CK = (() => {
     } else if (id === 'rainbowcap') {
       for (let i = 0; i < 5; i++) { g.fillStyle = rb(t, i); g.beginPath(); g.ellipse(0, 4, 46 - i * 8, 40 - i * 7, 0, P, 0); g.fill(); }
       rr(-48, -4, 96, 12, 6, rb(t, 5, 45)); K.star(0, -42, 9, K.plain ? '#ffffff' : '#fff6a0');
+    } else if (id === 'mirror') {
+      rr(-50, 6, 100, 10, 5, '#e8e8f0');
+      const mx = side ? 22 : -20;
+      circ(mx, 4, 17, '#8a93a3'); circ(mx, 4, 13, '#dfe6f0'); circ(mx - 4, 0, 4, '#ffffff');
+    } else if (id === 'policecap') {
+      g.fillStyle = '#2b3f7a'; g.beginPath(); g.ellipse(0, -8, 50, 26, 0, P, 0); g.fill(); g.fillRect(-36, -10, 72, 8);
+      rr(-40, -6, 80, 12, 4, '#1b2550');
+      if (side) rr(22, 2, 40, 8, 4, '#14141e'); else { g.fillStyle = '#14141e'; g.beginPath(); g.ellipse(0, 6, 40, 9, 0, 0, P); g.fill(); }
+      K.star(side ? 4 : 0, -18, 9, '#ffd23f');
+    } else if (id === 'mohawk') {
+      for (let i = -2; i <= 2; i++) poly([[i * 12 - 9, 8], [i * 12 + (side ? -10 : i * 3), -46 + Math.abs(i) * 9], [i * 12 + 9, 8]], i % 2 ? '#c23bd0' : '#ff4fa3');
+      for (let i = -2; i <= 2; i++) circ(i * 12 + (side ? -10 : i * 3), -44 + Math.abs(i) * 9, 4, '#ffd23f');
+    } else if (id === 'firehat') {
+      g.fillStyle = '#b02020'; g.beginPath(); g.ellipse(side ? -6 : 0, 4, side ? 70 : 60, 11, 0, 0, P * 2); g.fill();
+      g.fillStyle = '#d8322c'; g.beginPath(); g.ellipse(0, 2, 42, 40, 0, P, 0); g.fill();
+      g.fillStyle = '#ff6a5a'; g.fillRect(-4, -36, 8, 36);
+      if (!side) { rr(-13, -30, 26, 22, 5, '#ffd23f'); g.fillStyle = '#b02020'; g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.fillText('1', 0, -13); }
+      else rr(20, -26, 12, 20, 4, '#ffd23f');
+    } else if (id === 'spacehelm') {
+      // a glass bowl: just the rim and a shine, so the face still shows (the N64 has no half-clear)
+      g.strokeStyle = '#d8dde8'; g.lineWidth = 9; g.beginPath(); g.arc(0, 40, 60, 0, P * 2); g.stroke();
+      g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.arc(0, 40, 48, P * 1.15, P * 1.45); g.stroke();
+      rr(-44, 92, 88, 12, 6, '#9aa1b0');
+      g.fillStyle = '#9aa1b0'; g.fillRect(-2.5, -36, 5, 18); circ(0, -38, 6, '#e0564f');
+    } else if (id === 'hardhat') {
+      rr(-58, -4, 116, 11, 5, '#e6a800');
+      g.fillStyle = '#ffc21a'; g.beginPath(); g.ellipse(0, 0, 44, 38, 0, P, 0); g.fill();
+      rr(-7, -38, 14, 38, 5, '#ffd84d');
+    } else if (id === 'tiara') {
+      g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(-30, 4); g.lineTo(-30, -6); g.lineTo(-18, -14); g.lineTo(-10, -6); g.lineTo(0, -26); g.lineTo(10, -6); g.lineTo(18, -14); g.lineTo(30, -6); g.lineTo(30, 4); g.closePath(); g.fill();
+      circ(0, -12, 6, '#ff5aa8'); circ(-18, -6, 3.5, '#5ad1ff'); circ(18, -6, 3.5, '#5ad1ff'); circ(-1.5, -14, 2, '#ffffff');
+    } else if (id === 'ninjaband') {
+      rr(-52, 8, 104, 15, 5, '#d8322c');
+      if (!side) rr(-14, 9, 28, 13, 3, '#9aa1b0');
+      else rr(14, 9, 22, 13, 3, '#9aa1b0');
+      const bx = side ? -50 : 44;
+      poly([[bx, 10], [bx + (side ? -28 : 26), 26], [bx + (side ? -22 : 20), 34], [bx, 20]], '#b02020');
+      poly([[bx, 14], [bx + (side ? -32 : 30), 40], [bx + (side ? -24 : 22), 46], [bx, 22]], '#d8322c');
+    } else if (id === 'clownwig') {
+      const cols = ['#ff5a5a', '#5ad1ff', '#ffd23f', '#49d17a'];
+      [[-48, 16, 18], [-58, 36, 15], [-34, -4, 16], [48, 16, 18], [58, 36, 15], [34, -4, 16], [-12, -14, 15], [12, -14, 15]].forEach(([x, y, r], i) => {
+        if (side && x > 30) return;
+        circ(side ? x * 0.8 - 10 : x, y, r, cols[i % 4]);
+      });
+    } else if (id === 'knighthelm') {
+      g.fillStyle = '#b8c0cc'; g.beginPath(); g.ellipse(0, 8, 50, 46, 0, P, 0); g.fill();
+      rr(-52, 0, 104, 12, 4, '#8a93a3');
+      for (const rx of [-36, 0, 36]) circ(side ? rx * 0.8 : rx, 6, 3, '#dfe6f0');
+      g.fillStyle = '#dfe6f0'; g.fillRect(-4, -36, 8, 36);
+      for (let i = 0; i < 4; i++) circ((side ? -14 : 0) - i * (side ? 7 : 0), -42 - i * 8 + (side ? i * 6 : 0), 10 - i, i % 2 ? '#ff7a6a' : '#e0564f');
     }
     g.restore();
   };
@@ -489,6 +622,19 @@ const CK = (() => {
       const [x, y, rx, ry] = side ? a : b, pad = rx * 0.2;
       g.strokeStyle = '#d49a10'; g.lineWidth = pxw(Math.max(1.5, rx * 0.2)); g.beginPath(); g.ellipse(x, y, rx + pad, ry + pad, 0, 0, P * 2); g.stroke();
       g.lineWidth = pxw(Math.max(1, rx * 0.08)); g.beginPath(); g.moveTo(x, y + ry + pad); g.quadraticCurveTo(x - rx * 0.6, y + ry * 2.2, x - rx * 1.4, y + ry * 1.9); g.stroke();
+    } else if (id === 'eyepatch') {
+      const [x, y, rx, ry] = a;
+      g.strokeStyle = '#1b1426'; g.lineWidth = pxw(Math.max(1.2, ry * 0.22)); g.beginPath(); g.moveTo(x - rx * 2.4, y - ry * 1.6); g.lineTo(x + rx * 2.6, y + ry * 0.2); g.stroke();
+      g.fillStyle = '#1b1426'; g.beginPath(); g.ellipse(x, y, rx * 1.25, ry * 1.05, 0, 0, P * 2); g.fill();
+    } else if (id === 'rednose') {
+      const nx = side ? a[0] + (b[0] - a[0]) * 0.95 : (a[0] + b[0]) / 2, ny = a[1] + a[3] * (side ? 0.6 : 0.95), r = a[3] * 0.75;
+      circ(nx, ny, r, '#ff3030'); circ(nx - r * 0.35, ny - r * 0.35, r * 0.3, '#ffb0b0');
+    } else if (id === 'mask') {
+      const x0 = Math.min(a[0], b[0]) - (side ? a[2] * 1.6 : a[2] * 1.3), x1 = Math.max(a[0], b[0]) + (side ? b[2] * 1.2 : b[2] * 1.3), y0 = a[1] + a[3] * 0.85, h = a[3] * 1.7;
+      rr(x0, y0, x1 - x0, h, h * 0.35, '#9fd8f0');
+      g.fillStyle = '#7cc0dc'; for (const k of [0.33, 0.66]) g.fillRect(x0 + (x1 - x0) * 0.08, y0 + h * k, (x1 - x0) * 0.84, Math.max(0.8, h * 0.08));
+      g.strokeStyle = '#e8f4fa'; g.lineWidth = pxw(Math.max(1, a[3] * 0.12)); g.beginPath(); g.moveTo(x0, y0 + h * 0.3); g.lineTo(x0 - a[2] * 1.2, y0 - a[3] * 0.4); g.stroke();
+      if (!side) { g.beginPath(); g.moveTo(x1, y0 + h * 0.3); g.lineTo(x1 + a[2] * 1.2, y0 - a[3] * 0.4); g.stroke(); }
     }
   };
   // NECK: at the bottom middle of the head, 100 units = the neck piece's width
@@ -512,6 +658,16 @@ const CK = (() => {
     } else if (id === 'medal') {
       poly([[-26, -8], [-10, -8], [4, 34], [-6, 38]], '#3a8de0'); poly([[26, -8], [10, -8], [-4, 34], [6, 38]], '#e0564f');
       circ(0, 46, 17, '#d49a10'); circ(0, 46, 13, '#ffd23f'); K.star(0, 46, 8, '#fff6a0');
+    } else if (id === 'stetho') {
+      g.strokeStyle = '#3a3346'; g.lineWidth = 7; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(-36, -8); g.quadraticCurveTo(-36, 34, -4, 40); g.stroke();
+      g.beginPath(); g.moveTo(36, -8); g.quadraticCurveTo(34, 30, 10, 42); g.lineTo(14, 52); g.stroke();
+      circ(16, 58, 11, '#8a93a3'); circ(16, 58, 7, '#dfe6f0');
+    } else if (id === 'pearls') {
+      for (let i = 0; i <= 8; i++) { const an = P * (0.08 + i * 0.105); const px = Math.cos(an) * 40, py = -4 + Math.sin(an) * 30; circ(px, py, 7, '#d9d2e6'); circ(px, py, 5.5, '#f8f5ff'); circ(px - 2, py - 2, 1.8, '#ffffff'); }
+    } else if (id === 'chain') {
+      for (let i = 0; i <= 10; i++) { const an = P * (0.1 + i * 0.08); circ(Math.cos(an) * 36, -4 + Math.sin(an) * 34, 4.5, i % 2 ? '#d49a10' : '#ffd23f'); }
+      K.star(0, 44, 16, '#d49a10'); K.star(0, 44, 12, '#ffd23f');
     }
     g.restore();
   };
@@ -550,9 +706,112 @@ const CK = (() => {
       const n = 6;
       for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { g.fillStyle = rb(t * 2, i + j * 2, 55 + ((i + j) % 2) * 12); g.fillRect(x + i * w / n, y + j * h / n, w / n + 0.5, h / n + 0.5); }
       if (!K.plain) { g.globalAlpha = 0.5 + 0.5 * Math.sin(t * 9); K.star(x + w * 0.3, y + h * 0.3, Math.min(w, h) * 0.08, '#ffffff'); g.globalAlpha = 1; }
+    } else if (SUITS[id]) {
+      // a jacket over a shirt and tie (the side view shows the shirt down the front edge)
+      const [jacket, shirt, tie, stripe] = SUITS[id];
+      g.fillStyle = jacket; g.fillRect(x, y, w, h);
+      if (stripe) { g.fillStyle = stripe; for (let k = 1; k < 8; k++) g.fillRect(x + w * k / 8, y, Math.max(1, w * 0.02), h); }
+      if (id === 'plaidsuit') { g.fillStyle = '#2a5a36'; for (let k = 0; k < 4; k++) g.fillRect(x, y + h * (0.12 + k * 0.25), w, h * 0.06); g.fillStyle = '#ffd23f'; for (let k = 0; k < 4; k++) g.fillRect(x + w * (0.1 + k * 0.25), y, Math.max(1, w * 0.02), h); }
+      if (id === 'goldsuit' || id === 'velvetsuit') { g.fillStyle = id === 'goldsuit' ? '#fff6a0' : '#a050b0'; g.fillRect(x + w * 0.08, y, w * 0.08, h); }
+      if (side) { poly([[x + w * 0.62, y], [x + w, y], [x + w, y + h], [x + w * 0.86, y + h]], shirt); if (tie) rr(x + w * 0.86, y, w * 0.08, h * 0.55, 2, tie); circ(x + w * 0.74, y + h * 0.5, w * 0.04, '#1b1426'); }
+      else {
+        poly([[cx - w * 0.22, y], [cx + w * 0.22, y], [cx, y + h * 0.62]], shirt);
+        if (tie) { poly([[cx - w * 0.05, y], [cx + w * 0.05, y], [cx + w * 0.08, y + h * 0.4], [cx, y + h * 0.5], [cx - w * 0.08, y + h * 0.4]], tie); }
+        else { poly([[cx, y + h * 0.08], [cx - w * 0.12, y], [cx - w * 0.12, y + h * 0.16]], '#1b1426'); poly([[cx, y + h * 0.08], [cx + w * 0.12, y], [cx + w * 0.12, y + h * 0.16]], '#1b1426'); }
+        for (const k of [0.7, 0.84]) circ(cx, y + h * k, w * 0.03, '#1b1426');
+      }
+    } else if (id === 'chefcoat') {
+      g.fillStyle = '#f5f5f0'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#d9d2e6'; g.fillRect(side ? x + w * 0.6 : cx - w * 0.01, y, w * 0.02, h);
+      for (const k of [0.32, 0.52, 0.72]) for (const d of side ? [0.72] : [-0.16, 0.16]) circ(side ? x + w * d : cx + w * d, y + h * k, w * 0.035, '#5d566a');
+      if (!side) poly([[cx - w * 0.18, y], [cx + w * 0.18, y], [cx, y + h * 0.2]], '#e0564f');
+    } else if (id === 'labcoat') {
+      g.fillStyle = '#f2f4f8'; g.fillRect(x, y, w, h);
+      if (side) { rr(x + w * 0.3, y + h * 0.55, w * 0.3, h * 0.2, 2, '#dfe3ea'); g.fillStyle = '#3a8de0'; g.fillRect(x + w * 0.36, y + h * 0.48, w * 0.04, h * 0.12); }
+      else {
+        g.fillStyle = '#7cb4e8'; g.fillRect(cx - w * 0.12, y, w * 0.24, h);
+        poly([[cx - w * 0.12, y], [cx - w * 0.26, y], [cx - w * 0.12, y + h * 0.35]], '#dfe3ea'); poly([[cx + w * 0.12, y], [cx + w * 0.26, y], [cx + w * 0.12, y + h * 0.35]], '#dfe3ea');
+        rr(x + w * 0.12, y + h * 0.5, w * 0.2, h * 0.18, 2, '#dfe3ea'); g.fillStyle = '#e0564f'; g.fillRect(x + w * 0.16, y + h * 0.42, w * 0.04, h * 0.12);
+      }
+    } else if (id === 'police') {
+      g.fillStyle = '#2b4a9a'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#1b1426'; g.fillRect(x, y + h * 0.78, w, h * 0.1); rr(side ? x + w * 0.6 : cx - w * 0.08, y + h * 0.77, w * 0.16, h * 0.12, 2, '#ffd23f');
+      K.star(side ? x + w * 0.62 : cx - w * 0.22, y + h * 0.3, Math.min(w, h) * 0.1, '#ffd23f');
+      if (!side) { g.fillStyle = '#1f3a7a'; g.fillRect(cx + w * 0.1, y + h * 0.2, w * 0.24, h * 0.12); for (const k of [0.25, 0.45, 0.65]) circ(cx, y + h * k, w * 0.025, '#ffd23f'); }
+    } else if (id === 'leather') {
+      g.fillStyle = '#1f1b26'; g.fillRect(x, y, w, h);
+      const sx = side ? x + w * 0.66 : cx - w * 0.13, sw = side ? w * 0.34 : w * 0.26;
+      g.fillStyle = '#e0564f'; g.fillRect(sx, y, sw, h);
+      poly([[sx + sw * 0.6, y + h * 0.15], [sx + sw * 0.2, y + h * 0.45], [sx + sw * 0.5, y + h * 0.45], [sx + sw * 0.3, y + h * 0.8], [sx + sw * 0.85, y + h * 0.38], [sx + sw * 0.55, y + h * 0.38]], '#ffd23f');
+      for (let k = 0; k < 4; k++) { circ(sx - w * 0.04, y + h * (0.12 + k * 0.2), w * 0.025, '#c9d2e0'); if (!side) circ(sx + sw + w * 0.04, y + h * (0.12 + k * 0.2), w * 0.025, '#c9d2e0'); }
+    } else if (id === 'firecoat') {
+      g.fillStyle = '#d4a64a'; g.fillRect(x, y, w, h);
+      for (const k of [0.5, 0.78]) { g.fillStyle = '#ffd23f'; g.fillRect(x, y + h * k, w, h * 0.12); g.fillStyle = '#e8eef4'; g.fillRect(x, y + h * (k + 0.03), w, h * 0.06); }
+      if (!side) { g.fillStyle = '#3a3346'; for (const k of [0.15, 0.32]) g.fillRect(cx - w * 0.08, y + h * k, w * 0.16, h * 0.05); }
+    } else if (id === 'spacesuit') {
+      g.fillStyle = '#eef1f6'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#9aa1b0'; g.fillRect(x, y + h * 0.8, w, h * 0.08);
+      const px = side ? x + w * 0.5 : cx - w * 0.2;
+      rr(px, y + h * 0.25, w * 0.4, h * 0.3, 3, '#5d566a');
+      circ(px + w * 0.1, y + h * 0.35, w * 0.045, '#e0564f'); circ(px + w * 0.22, y + h * 0.35, w * 0.045, '#5ad1ff'); rr(px + w * 0.06, y + h * 0.44, w * 0.28, h * 0.06, 1, '#ffd23f');
+      if (!side) { rr(x + w * 0.1, y + h * 0.12, w * 0.16, h * 0.1, 1, '#3a6fc0'); g.fillStyle = '#ffffff'; g.fillRect(x + w * 0.1, y + h * 0.16, w * 0.16, h * 0.02); }
+    } else if (id === 'vest') {
+      g.fillStyle = '#6a7a8c'; g.fillRect(x, y, w, h);
+      if (side) { g.fillStyle = '#ff8a1a'; g.fillRect(x, y, w * 0.8, h); }
+      else { g.fillStyle = '#ff8a1a'; g.fillRect(x, y, w * 0.38, h); g.fillRect(x + w * 0.62, y, w * 0.38, h); }
+      g.fillStyle = '#e8eef4'; for (const k of [0.42, 0.68]) { g.fillRect(x, y + h * k, side ? w * 0.8 : w * 0.38, h * 0.07); if (!side) g.fillRect(x + w * 0.62, y + h * k, w * 0.38, h * 0.07); }
+    } else if (id === 'pirateshirt') {
+      g.fillStyle = '#f5f1e8'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#2b4a9a'; for (let k = 0; k < 5; k++) g.fillRect(x, y + h * (0.06 + k * 0.2), w, h * 0.09);
+      g.fillStyle = '#5d3a1c'; g.fillRect(x, y + h * 0.74, w, h * 0.12); rr(side ? x + w * 0.6 : cx - w * 0.1, y + h * 0.72, w * 0.2, h * 0.16, 2, '#ffd23f'); rr(side ? x + w * 0.64 : cx - w * 0.06, y + h * 0.75, w * 0.12, h * 0.1, 1, '#5d3a1c');
+    } else if (id === 'ninjasuit') {
+      g.fillStyle = '#24202e'; g.fillRect(x, y, w, h);
+      poly([[x + w * (side ? 0.5 : 0.25), y], [x + w * (side ? 0.68 : 0.42), y], [x + w * (side ? 1 : 0.78), y + h * 0.7], [x + w * (side ? 0.82 : 0.6), y + h * 0.7]], '#14121a');
+      g.fillStyle = '#d8322c'; g.fillRect(x, y + h * 0.66, w, h * 0.12);
+      if (!side) poly([[cx + w * 0.1, y + h * 0.72], [cx + w * 0.2, y + h], [cx + w * 0.28, y + h]], '#b02020');
+    } else if (id === 'clownsuit') {
+      g.fillStyle = '#ffd23f'; g.fillRect(x, y, w, h);
+      if (!side) { g.fillStyle = '#ff8fc7'; g.fillRect(cx, y, w / 2, h); }
+      [[0.25, 0.35, '#e0564f'], [0.7, 0.3, '#3a8de0'], [0.4, 0.7, '#49d17a'], [0.78, 0.72, '#c28bff'], [0.15, 0.82, '#3a8de0']].forEach(([u, v, c]) => circ(x + w * u, y + h * v, Math.min(w, h) * 0.08, c));
+      for (let k = 0; k < 6; k++) circ(x + w * (k + 0.5) / 6, y + h * 0.02, w * 0.1, '#ffffff');
+    } else if (id === 'armor') {
+      g.fillStyle = '#b8c0cc'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#8a93a3'; for (let k = 1; k < 5; k++) g.fillRect(x, y + h * k / 5, w, Math.max(1, h * 0.025));
+      g.fillStyle = '#dfe6f0'; g.fillRect(x + w * 0.1, y, w * 0.08, h);
+      const ex = side ? x + w * 0.6 : cx;
+      g.fillStyle = '#e0564f'; g.fillRect(ex - w * 0.05, y + h * 0.15, w * 0.1, h * 0.42); g.fillRect(ex - w * 0.16, y + h * 0.26, w * 0.32, h * 0.09);
+    } else if (id === 'robe') {
+      g.fillStyle = '#5b3f86'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#ffd23f'; g.fillRect(side ? x + w * 0.82 : cx - w * 0.05, y, w * 0.1, h);
+      [[0.2, 0.25, 0.09], [0.32, 0.65, 0.07], [0.75, 0.4, 0.08], [0.68, 0.82, 0.06]].forEach(([u, v, r]) => K.star(x + w * u, y + h * v, Math.min(w, h) * r, '#ffd23f'));
+    } else if (id === 'cowvest') {
+      g.fillStyle = '#c0392b'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#8a2a20'; for (let k = 1; k < 5; k++) { g.fillRect(x, y + h * k / 5, w, Math.max(1, h * 0.03)); g.fillRect(x + w * k / 5, y, Math.max(1, w * 0.03), h); }
+      g.fillStyle = '#8a5a30'; if (side) g.fillRect(x, y, w * 0.7, h); else { g.fillRect(x, y, w * 0.34, h); g.fillRect(x + w * 0.66, y, w * 0.34, h); }
+      K.star(side ? x + w * 0.4 : x + w * 0.18, y + h * 0.32, Math.min(w, h) * 0.1, '#ffd23f');
+    } else if (DRESSES[id]) {
+      // a fitted top and a skirt from the waist down, with the dress's trim
+      const [top, skirt, trim] = DRESSES[id];
+      const pc = id === 'sparkledress' ? rb(t * 2, 1, 60) : top;
+      g.fillStyle = pc; g.fillRect(x, y, w, h);
+      g.fillStyle = id === 'sparkledress' ? rb(t * 2, 3, 55) : skirt; g.fillRect(x, y + h * 0.5, w, h * 0.5);
+      if (id === 'sundress') [[0.2, 0.7], [0.5, 0.85], [0.8, 0.68], [0.35, 0.3], [0.7, 0.25]].forEach(([u, v]) => { for (let i = 0; i < 5; i++) circ(x + w * u + Math.cos(i * 1.26) * w * 0.04, y + h * v + Math.sin(i * 1.26) * w * 0.04, w * 0.03, '#ffffff'); circ(x + w * u, y + h * v, w * 0.025, '#ff8a3d'); });
+      if (id === 'polkadress') for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2) circ(x + w * (i + 0.5) / 4, y + h * (j + 0.5) / 4, Math.min(w, h) * 0.05, '#ffffff');
+      if (id === 'partydress') { g.fillStyle = trim; for (const k of [0.62, 0.8]) for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(x + w * (i + 0.5) / 6, y + h * k, w / 12, 0, P); g.fill(); } }
+      if (id === 'tutu') { g.fillStyle = trim; g.beginPath(); g.moveTo(x, y + h * 0.48); for (let i = 0; i <= 10; i++) g.lineTo(x + w * i / 10, y + h * (i % 2 ? 0.8 : 0.66)); g.lineTo(x + w, y + h * 0.48); g.closePath(); g.fill(); }
+      if (id === 'ballgown') { g.fillStyle = trim; for (let i = 1; i < 5; i++) g.fillRect(x + w * i / 5, y + h * 0.55, Math.max(1, w * 0.025), h * 0.45); for (const [u, v] of [[0.25, 0.3], [0.7, 0.2], [0.4, 0.75], [0.8, 0.7]]) K.star(x + w * u, y + h * v, Math.min(w, h) * 0.05, '#ffffff'); }
+      if (id === 'sparkledress' && !K.plain) { g.globalAlpha = 0.5 + 0.5 * Math.sin(t * 9); K.star(x + w * 0.7, y + h * 0.3, Math.min(w, h) * 0.08, '#ffffff'); g.globalAlpha = 1; }
+      g.fillStyle = id === 'sparkledress' ? (K.plain ? '#ffffff' : '#fff6a0') : trim; g.fillRect(x, y + h * 0.46, w, h * 0.07);
+      if (id === 'partydress' || id === 'polkadress') rr(side ? x + w * 0.6 : cx - w * 0.12, y + h * 0.42, w * 0.24, h * 0.14, 3, id === 'partydress' ? '#e0408f' : '#1b1426');
     }
     g.restore();
   };
+  // [jacket, shirt, tie (null: a black bow tie), stripes]
+  const SUITS = { bluesuit: ['#2b4a9a', '#f5f1e8', '#e0564f'], pinstripe: ['#4a4a58', '#f5f1e8', '#7a58a8', '#8a8a9a'], whitesuit: ['#f5f1e8', '#ff8fc7', null],
+    plaidsuit: ['#3a7a4a', '#f5f1e8', '#ffd23f'], velvetsuit: ['#7a2a8a', '#f5f1e8', null], goldsuit: ['#e8b83a', '#1b1426', '#e0564f'] };
+  // [top, skirt, trim]
+  const DRESSES = { sundress: ['#ffd23f', '#ffc21a', '#ffffff'], partydress: ['#ff8fc7', '#ff8fc7', '#ffc8e4'], polkadress: ['#e0564f', '#e0564f', '#1b1426'],
+    tutu: ['#ffb3d9', '#ffb3d9', '#ff8fc7'], ballgown: ['#3a6fc0', '#5a8de0', '#8fb8f0'], sparkledress: ['#ffffff', '#ffffff', '#ffffff'] };
   // FEET: one shoe at a foot's end; s = how big the foot is (units); side views point the toe forward
   K.wearFoot = (id, x, y, s, t = 0, side = false, far = false) => {
     const g = K.g, k = s / 30;
@@ -566,6 +825,16 @@ const CK = (() => {
     else if (id === 'flippers') { poly([[-14, -6], [14, -6], [34 + toe * 1.5, 14], [-34 + (side ? 14 : 0), 14]], '#49d17a'); rr(-14, -12, 28, 14, 6, '#3f9e57'); }
     else if (id === 'skates') { shoe('#c28bff', -14, '#7a58a8'); for (const dx of [-14, 14]) { circ(dx + toe * 0.5, 20, 6, '#2b2833'); circ(dx + toe * 0.5, 20, 2.5, '#ffd23f'); } }
     else if (id === 'lightup') { shoe('#f5f1e8', -12, rb(t, 0, 55)); for (let i = 0; i < 4; i++) circ(-15 + i * 10 + toe * 0.4, 13, 3, rb(t, i + 1, 65)); }
+    else if (id === 'dressshoes') { shoe('#1f1b26', -10, '#3a3346'); rr(-10 + toe * 0.6, -6, 10, 3, 1.5, '#8a8496'); }
+    else if (id === 'rockboots') { rr(-18 + toe * 0.2, -34, 32, 34, 6, '#24202e'); shoe('#24202e', -12, '#5d566a'); for (const y of [-26, -14]) rr(-19 + toe * 0.2, y, 34, 4, 2, '#c9d2e0'); }
+    else if (id === 'moonboots') { rr(-22 + toe * 0.2, -30, 42, 32, 10, '#eef1f6'); shoe('#eef1f6', -12, '#9aa1b0'); g.fillStyle = '#9aa1b0'; for (const y of [-22, -12]) g.fillRect(-20 + toe * 0.2, y, 38, 3); }
+    else if (id === 'clownshoes') { g.fillStyle = '#e0303a'; g.beginPath(); g.ellipse(toe * 0.9, 4, 34 + toe, 14, 0, 0, P * 2); g.fill(); circ(toe * 0.9 + 10, -2, 4, '#ff9090'); rr(-12, -10, 24, 8, 4, '#ffd23f'); }
+    else if (id === 'slippers') { shoe('#bfe8ff', -8, '#8fd3ff'); K.star(-4 + toe * 0.5, -2, 6, '#ffffff'); }
+    else if (id === 'heels') { rr(-20 + toe * 0.3, -6, 40 + toe, 14, 7, '#e0303a'); rr(side ? -22 : -20, 4, 7, 12, 2, '#a01e28'); if (!side) rr(13, 4, 7, 12, 2, '#a01e28'); rr(-4 + toe * 0.6, 8, 24, 4, 2, '#a01e28'); }
+    else if (id === 'flats') { shoe('#ffb3d9', -6, '#ff8fc7'); circ(6 + toe * 0.6, -3, 4, '#ff5aa8'); circ(-0 + toe * 0.6, -3, 4, '#ff5aa8'); }
+    else if (id === 'sandals') { rr(-24 + toe * 0.3, 10, 48 + toe, 6, 3, '#b07a44'); rr(-18 + toe * 0.3, -4, 36 + toe * 0.5, 5, 2.5, '#8a5a30'); rr(-14 + toe * 0.4, 3, 30 + toe * 0.5, 5, 2.5, '#8a5a30'); }
+    else if (id === 'hightops') { rr(-18 + toe * 0.2, -30, 32, 30, 6, '#7a58a8'); shoe('#7a58a8'); circ(-2 + toe * 0.2, -18, 6, '#ffffff'); circ(-2 + toe * 0.2, -18, 3.5, '#e0564f'); g.fillStyle = '#ffffff'; for (const y of [-26, -8]) g.fillRect(4 + toe * 0.3, y, 8, 2); }
+    else if (id === 'cowboots') { rr(-18 + toe * 0.2, -34, 32, 34, 6, '#a0622c'); shoe('#a0622c', -12, '#5d3a1c'); g.fillStyle = '#e8c890'; g.fillRect(-12 + toe * 0.2, -28, 2, 18); g.fillRect(6 + toe * 0.2, -28, 2, 18); K.star(-22, 2, 5, '#ffd23f'); }
     g.restore();
   };
   // what the hero wears on the head, face and neck; a: the view's head anchors
@@ -578,7 +847,12 @@ const CK = (() => {
   }
   function wearBody(p, b) { if (K.onWear) K.onWear('body', b); if (p.acc && p.acc.body) K.wearBody(p.acc.body, b, p.t ?? 0, b.side); }
   // sleeves: outfits with arms cover the robot's upper arms too (the ostrich has wings, not arms)
-  K.SLEEVE = { sweater: '#e0564f', jersey: '#49d17a', tux: '#2b2833', super: '#3a6fc0', disco: 'rainbow' };
+  K.SLEEVE = { sweater: '#e0564f', jersey: '#49d17a', tux: '#2b2833', super: '#3a6fc0', disco: 'rainbow',
+    chefcoat: '#f5f5f0', labcoat: '#f2f4f8', police: '#2b4a9a', leather: '#1f1b26', firecoat: '#d4a64a', spacesuit: '#eef1f6', vest: '#6a7a8c',
+    pirateshirt: '#f5f1e8', ninjasuit: '#24202e', clownsuit: '#ffd23f', armor: '#9aa3b3', robe: '#5b3f86', cowvest: '#c0392b',
+    bluesuit: '#2b4a9a', pinstripe: '#4a4a58', whitesuit: '#f5f1e8', plaidsuit: '#3a7a4a', velvetsuit: '#7a2a8a', goldsuit: '#e8b83a' };
+  // sleeves with a white cuff at the wrist
+  K.CUFF = { sweater: '#ffffff', tux: '#f5f1e8', bluesuit: '#f5f1e8', pinstripe: '#f5f1e8', plaidsuit: '#f5f1e8', velvetsuit: '#f5f1e8', goldsuit: '#1b1426', whitesuit: '#ff8fc7', firecoat: '#ffd23f' };
   K.wearSleeve = (id, x, y, deg, ln, w, t = 0, far = false) => {
     const c0 = K.SLEEVE[id]; if (!c0) return;
     const g = K.g, a = deg * P / 180, ex = -Math.sin(a), ey = Math.cos(a), l = ln * 0.72;
@@ -586,7 +860,7 @@ const CK = (() => {
     if (far && c0 !== 'rainbow') c = K.shade(c, 0.75);
     g.strokeStyle = c; g.lineWidth = w * 1.3; g.lineCap = 'round';
     g.beginPath(); g.moveTo(x, y); g.lineTo(x + ex * l, y + ey * l); g.stroke();
-    if (id === 'sweater' || id === 'tux') { g.strokeStyle = id === 'tux' ? '#f5f1e8' : '#ffffff'; g.lineWidth = w * 1.3; g.lineCap = 'butt'; g.beginPath(); g.moveTo(x + ex * l * 0.86, y + ey * l * 0.86); g.lineTo(x + ex * l * 1.02, y + ey * l * 1.02); g.stroke(); }
+    if (K.CUFF[id]) { g.strokeStyle = K.CUFF[id]; g.lineWidth = w * 1.3; g.lineCap = 'butt'; g.beginPath(); g.moveTo(x + ex * l * 0.86, y + ey * l * 0.86); g.lineTo(x + ex * l * 1.02, y + ey * l * 1.02); g.stroke(); }
   };
   function wearArm(p, x, y, deg, ln, w, far) {
     if (K.onWear) K.onWear('arm', { x, y, deg, ln, w, far });

@@ -543,36 +543,65 @@ function mapMenu() {
 }
 
 // ----------------------------------------------------------------------------- PARTS SHOP
-// Trade bolts for hats, glasses and neckwear. Each player has a cursor; A buys, then puts on or takes off.
+// Trade bolts for costumes, hats, glasses, neckwear, outfits, dresses, suits and shoes. The items
+// come in sections (K.SHOP_SECS), each starting a new row. One player gets the whole width; two
+// players split the screen, P1 on the left and P2 on the right, each with their own cursor and
+// scroll. A buys, then puts on or takes off. A costume buys every piece it still needs at once.
+// The N64 shop (src/core/ck_game.c, src/n64/draw.c) has the same sections, sizes and rules.
+const SHOP_ROWS = 4;   // rows on screen at once (CK_SHOP_ROWS)
 function shopScene(back) {
-  const S = { song: mapScene.song, t: 0, cur: [0, 0], msg: null };
-  const team = activeParty();
-  // rows: hats; face and neck; outfits and shoes; then the heroes (free to swap), paint pots and the bubble gun
-  const ITEMS = [...K.ACC, { kind: 'hero', hero: 'robot', name: 'Robot', cost: 0 }, { kind: 'hero', hero: 'ostrich', name: 'Robot ostrich', cost: 0 },
-    ...COLS.map((c, k) => ({ kind: 'paint', col: k, name: CNAMES[k] + ' paint', cost: FREE_PAINTS.includes(k) ? 0 : PAINT_COST })),
-    { kind: 'rainbow', name: 'Rainbow paint', cost: RAINBOW_COST },
-    { kind: 'gun', name: 'Bubble gun', cost: GUN_COST }, { kind: 'jet', name: 'Super jetpack', cost: JET_COST }];
-  const COLS_N = 12, TW = 22, TH = 28, cell = (k) => ({ x: 16 + (k % COLS_N) * 24, y: 36 + Math.floor(k / COLS_N) * 30 });
-  const TINT = { head: 'rgba(255,210,63,0.13)', face: 'rgba(90,209,255,0.13)', neck: 'rgba(255,143,199,0.13)', body: 'rgba(194,139,255,0.15)', feet: 'rgba(73,209,122,0.13)', bot: 'rgba(255,255,255,0.1)' };
-  const owns = it => it.slot ? closet.own.includes(it.id) : it.kind === 'paint' ? closet.paints.includes(it.col) : it.kind === 'rainbow' ? closet.rbw : it.kind === 'gun' ? closet.gun : it.kind === 'jet' ? closet.jet : true;
+  const S = { song: mapScene.song, t: 0, cur: [0, 0], scroll: [0, 0], msg: null };
+  const team = activeParty(), two = team.length > 1;
+  const byId = Object.fromEntries(K.ACC.map(a => [a.id, a]));
+  const ITEMS = [], SEC = [];   // SEC[k]: [name, first item, count]
+  for (const [name, ids] of K.SHOP_SECS) {
+    const first = ITEMS.length;
+    if (name === 'COSTUMES') for (const c of K.COSTUMES) ITEMS.push({ kind: 'costume', id: c.id, name: c.name, pieces: c.pieces.map(id => byId[id]) });
+    else if (ids) for (const id of ids) ITEMS.push(byId[id]);
+    else ITEMS.push({ kind: 'hero', hero: 'robot', name: 'Robot', cost: 0 }, { kind: 'hero', hero: 'ostrich', name: 'Robot ostrich', cost: 0 },
+      ...COLS.map((c, k) => ({ kind: 'paint', col: k, name: CNAMES[k] + ' paint', cost: FREE_PAINTS.includes(k) ? 0 : PAINT_COST })),
+      { kind: 'rainbow', name: 'Rainbow paint', cost: RAINBOW_COST },
+      { kind: 'gun', name: 'Bubble gun', cost: GUN_COST }, { kind: 'jet', name: 'Super jetpack', cost: JET_COST });
+    SEC.push([name, first, ITEMS.length - first]);
+  }
+  const TW = 22, TH = 28, NC = two ? 6 : 12;
+  // rows of item numbers: each section starts a row
+  const ROWS = [];
+  for (const [, first, n] of SEC) for (let k = 0; k < n; k += NC) ROWS.push(Array.from({ length: Math.min(NC, n - k) }, (_, q) => first + k + q));
+  const rowOf = k => ROWS.findIndex(r => r.includes(k));
+  const secOf = k => SEC.find(([, f, n]) => k >= f && k < f + n)[0];
+  // where player j's half starts, and where item k sits in it (null when scrolled out of sight)
+  const half = j => two ? 14 + j * 152 : 16;
+  const cell = (k, j) => { const r = rowOf(k) - S.scroll[j]; if (r < 0 || r >= SHOP_ROWS) return null; return { x: half(j) + ROWS[rowOf(k)].indexOf(k) * 24, y: 44 + r * 30 }; };
+  const TINT = { costume: 'rgba(255,179,71,0.16)', head: 'rgba(255,210,63,0.13)', face: 'rgba(90,209,255,0.13)', neck: 'rgba(255,143,199,0.13)', body: 'rgba(194,139,255,0.15)', feet: 'rgba(73,209,122,0.13)', bot: 'rgba(255,255,255,0.1)' };
+  const costOf = it => it.kind === 'costume' ? it.pieces.reduce((s, p) => s + (closet.own.includes(p.id) ? 0 : p.cost), 0) : it.cost;
+  const owns = it => it.kind === 'costume' ? costOf(it) === 0 : it.slot ? closet.own.includes(it.id) : it.kind === 'paint' ? closet.paints.includes(it.col) : it.kind === 'rainbow' ? closet.rbw : it.kind === 'gun' ? closet.gun : it.kind === 'jet' ? closet.jet : true;
   const member = slot => party[slot];
+  const wornBy = (it, slot) => it.kind === 'costume' ? it.pieces.every(p => closet.wear[slot][p.slot] === p.id) : it.slot ? closet.wear[slot][it.slot] === it.id : it.kind === 'hero' ? member(slot).hero === it.hero : it.kind === 'paint' ? member(slot).col === it.col && !closet.rainbow[slot] : it.kind === 'rainbow' ? closet.rainbow[slot] : (it.kind === 'gun' && closet.gun) || (it.kind === 'jet' && closet.jet);
   const leave = () => { saveProg(); if (back) back(); else go(mapScene); };
-  function act(slot) {
-    const it = ITEMS[S.cur[slot]], wear = closet.wear[slot], m = member(slot);
+  function act(slot, j) {
+    const it = ITEMS[S.cur[slot]], wear = closet.wear[slot], m = member(slot), cost = costOf(it);
     if (!owns(it)) {
-      if ((prog.bolts || 0) < it.cost) { SND.fx.nope(); S.msg = { text: 'Need ' + (it.cost - (prog.bolts || 0)) + ' more bolts', t: 90 }; return; }
-      prog.bolts -= it.cost; saveProg();
-      if (it.slot) { closet.own.push(it.id); wear[it.slot] = it.id; }
+      if ((prog.bolts || 0) < cost) { SND.fx.nope(); S.msg = { text: 'Need ' + (cost - (prog.bolts || 0)) + ' more bolts', t: 90 }; return; }
+      prog.bolts -= cost; saveProg();
+      if (it.kind === 'costume') { for (const p of it.pieces) if (!closet.own.includes(p.id)) closet.own.push(p.id); for (const k of K.ACC_SLOTS) delete wear[k]; for (const p of it.pieces) wear[p.slot] = p.id; }
+      else if (it.slot) { closet.own.push(it.id); wear[it.slot] = it.id; }
       else if (it.kind === 'paint') { closet.paints.push(it.col); m.col = it.col; closet.rainbow[slot] = false; saveParty(); }
       else if (it.kind === 'rainbow') { closet.rbw = true; closet.rainbow[slot] = true; m.col = 7; saveParty(); }
       else if (it.kind === 'gun') { closet.gun = true; }
       else if (it.kind === 'jet') closet.jet = true;
       saveCloset();
-      SND.fx.buy(); sparks(cell(S.cur[slot]).x + TW / 2, cell(S.cur[slot]).y + TH / 2, 14, '#ffd23f');
+      const c = cell(S.cur[slot], j);
+      SND.fx.buy(); if (c) sparks(c.x + TW / 2, c.y + TH / 2, 14, '#ffd23f');
       S.msg = { text: it.kind === 'gun' ? 'Bubble gun! Z shoots' : it.kind === 'jet' ? 'Hold A to glide far!' : it.name + '!', t: it.kind === 'gun' || it.kind === 'jet' ? 150 : 90 };
       return;
     }
-    if (it.slot) { if (wear[it.slot] === it.id) { delete wear[it.slot]; SND.fx.select(); } else { wear[it.slot] = it.id; SND.fx.confirm(); } saveCloset(); }
+    if (it.kind === 'costume') {
+      if (wornBy(it, slot)) { for (const p of it.pieces) delete wear[p.slot]; SND.fx.select(); }
+      else { for (const k of K.ACC_SLOTS) delete wear[k]; for (const p of it.pieces) wear[p.slot] = p.id; SND.fx.confirm(); }
+      saveCloset();
+    }
+    else if (it.slot) { if (wear[it.slot] === it.id) { delete wear[it.slot]; SND.fx.select(); } else { wear[it.slot] = it.id; SND.fx.confirm(); } saveCloset(); }
     else if (it.kind === 'hero') { m.hero = it.hero; saveParty(); SND.fx.confirm(); }
     else if (it.kind === 'paint') { m.col = it.col; closet.rainbow[slot] = false; saveParty(); saveCloset(); SND.fx.confirm(); }
     else if (it.kind === 'rainbow') { m.col = 7; closet.rainbow[slot] = true; saveParty(); saveCloset(); SND.fx.confirm(); }
@@ -581,7 +610,8 @@ function shopScene(back) {
   // one item drawn small inside its tile, on a grey stand-in head, body or pair of feet
   function icon(it, x, y, t, slot) {
     const hx = x + TW / 2 - 1; y -= 3;   // leave the bottom-right corner for the price
-    if (it.kind === 'hero') { const hex = skinHex(slot); if (it.hero === 'robot') K.robot(hx, y + 26, 0.07, hex, { t }); else K.ostrich(hx, y + 27, 0.062, hex, { t }); }
+    if (it.kind === 'costume') { const acc = Object.fromEntries(it.pieces.map(p => [p.slot, p.id])), hex = skinHex(slot); if (member(slot).hero === 'robot') K.robot(hx, y + 28, 0.062, hex, { t, acc }); else K.ostrich(hx, y + 28, 0.056, hex, { t, acc }); }
+    else if (it.kind === 'hero') { const hex = skinHex(slot); if (it.hero === 'robot') K.robot(hx, y + 26, 0.07, hex, { t }); else K.ostrich(hx, y + 27, 0.062, hex, { t }); }
     else if (it.kind === 'paint') { K.rr(hx - 7, y + 9, 14, 15, 3, '#9aa1b0'); K.rr(hx - 7, y + 9, 14, 6, 3, '#' + COLS[it.col].toString(16).padStart(6, '0')); K.rr(hx - 8, y + 7, 16, 4, 2, '#5d566a'); g.strokeStyle = '#5d566a'; g.lineWidth = 1.2; g.beginPath(); g.arc(hx, y + 9, 7, P, 0); g.stroke(); }
     else if (it.kind === 'rainbow') { K.rr(hx - 7, y + 9, 14, 15, 3, '#9aa1b0'); for (let k = 0; k < 6; k++) K.rr(hx - 7 + k * 14 / 6, y + 9, 14 / 6 + 0.2, 6, 0, hexStr(COLS[(k + Math.floor(t * 6)) % 6])); K.rr(hx - 8, y + 7, 16, 4, 2, '#5d566a'); g.strokeStyle = '#5d566a'; g.lineWidth = 1.2; g.beginPath(); g.arc(hx, y + 9, 7, P, 0); g.stroke(); }
     else if (it.kind === 'gun') { K.rr(hx - 9, y + 11, 14, 7, 2.5, '#9aa1b0'); K.rr(hx - 7, y + 16, 5, 8, 1.5, '#5d566a'); K.rr(hx + 4, y + 12.5, 4, 4, 1, '#5d566a'); g.globalAlpha = 0.5; K.circ(hx + 7, y + 7, 3.5, '#bff0ff'); K.circ(hx + 2, y + 4, 2.2, '#bff0ff'); g.globalAlpha = 1; K.circ(hx + 6, y + 6, 1, '#fff'); }
@@ -594,15 +624,20 @@ function shopScene(back) {
   }
   S.update = function () {
     S.t += 1 / 60;
-    for (const m of team) {
+    team.forEach((m, j) => {
       const i = m.slot, n = ITEMS.length;
-      if (hit(i, 'left')) { S.cur[i] = (S.cur[i] + n - 1) % n; SND.fx.select(); }
-      if (hit(i, 'right')) { S.cur[i] = (S.cur[i] + 1) % n; SND.fx.select(); }
-      if (hit(i, 'up') && S.cur[i] >= COLS_N) { S.cur[i] -= COLS_N; SND.fx.select(); }
-      if (hit(i, 'down') && S.cur[i] + COLS_N < n) { S.cur[i] += COLS_N; SND.fx.select(); }
-      if (hit(i, 'a')) act(i);
-      if (hit(i, 'b') || hit(i, 'start')) { SND.fx.select(); leave(); return; }
-    }
+      let k = S.cur[i], r = rowOf(k), c = ROWS[r].indexOf(k);
+      if (hit(i, 'left')) { k = (k + n - 1) % n; SND.fx.select(); }
+      else if (hit(i, 'right')) { k = (k + 1) % n; SND.fx.select(); }
+      else if (hit(i, 'up') && r > 0) { const row = ROWS[r - 1]; k = row[Math.min(c, row.length - 1)]; SND.fx.select(); }
+      else if (hit(i, 'down') && r + 1 < ROWS.length) { const row = ROWS[r + 1]; k = row[Math.min(c, row.length - 1)]; SND.fx.select(); }
+      S.cur[i] = k; r = rowOf(k);
+      // keep the cursor's row on screen
+      if (r < S.scroll[j]) S.scroll[j] = r;
+      if (r >= S.scroll[j] + SHOP_ROWS) S.scroll[j] = r - SHOP_ROWS + 1;
+      if (hit(i, 'a')) act(i, j);
+      if (hit(i, 'b') || hit(i, 'start')) { SND.fx.select(); leave(); }
+    });
     if (S.msg && --S.msg.t <= 0) S.msg = null;
     stepParticles();
   };
@@ -612,36 +647,39 @@ function shopScene(back) {
     panel(8, 6, W - 16, H - 12, '#3b2a5c');
     text('PARTS SHOP', 20, 26, 14, '#ffd23f', 'left');
     panel(W - 86, 12, 70, 18, 'rgba(27,20,38,0.9)'); K.nut(W - 74, 21, 5, S.t, '#ffd23f'); text('×' + (prog.bolts || 0), W - 64, 26, 10, '#fff6d8', 'left', null);
-    ITEMS.forEach((it, k) => {
-      const { x, y } = cell(k), own = owns(it);
-      const worn = team.some(m => it.slot ? closet.wear[m.slot][it.slot] === it.id : it.kind === 'hero' ? member(m.slot).hero === it.hero : it.kind === 'paint' ? member(m.slot).col === it.col && !closet.rainbow[m.slot] : it.kind === 'rainbow' ? closet.rainbow[m.slot] : (it.kind === 'gun' && closet.gun) || (it.kind === 'jet' && closet.jet));
-      K.rr(x, y, TW, TH, 4, worn ? 'rgba(73,209,122,0.4)' : TINT[it.slot || 'bot']);
-      icon(it, x, y, S.t, team[0].slot);
-      // owned: a tick; for sale: the price in the corner, green if you have the bolts, red if not
-      if (own && it.cost) { K.circ(x + TW - 3.5, y + 3.5, 3.5, '#49d17a'); text('✓', x + TW - 3.5, y + 5.8, 5, '#fff', 'center', null); }
-      else if (!own) text(String(it.cost), x + TW - 1, y + TH - 1, 7, (prog.bolts || 0) >= it.cost ? '#49d17a' : '#ff8a8a', 'right');
-    });
-    // cursors, one per player
+    if (two) { g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(160, 34, 1, 196); }
     team.forEach((m, j) => {
-      const { x, y } = cell(S.cur[m.slot]), c = m.slot ? '#8fd3ff' : '#ffd23f', o = j * 2;
-      g.strokeStyle = c; g.lineWidth = 2; g.strokeRect(x - 1 - o, y - 1 - o, TW + 2 + o * 2, TH + 2 + o * 2);
-      if (team.length > 1) text('P' + (m.slot + 1), x + (j ? TW - 3 : 3), y - 2 - o, 7, c);
+      const slot = m.slot, pc = slot ? '#8fd3ff' : '#ffd23f', x0 = half(j), right = x0 + NC * 24 - 2;
+      // the section the cursor is in, and arrows when there is more above or below
+      text((two ? 'P' + (slot + 1) + '  ' : '') + secOf(S.cur[slot]), x0, 40, 7, two ? pc : '#d9d2e6', 'left', null);
+      if (S.scroll[j] > 0) text('▲', right - 4, 40, 7, '#fff6d8', 'center', null);
+      if (S.scroll[j] + SHOP_ROWS < ROWS.length) text('▼', right - 4, 170, 7, '#fff6d8', 'center', null);
+      for (let r = S.scroll[j]; r < Math.min(ROWS.length, S.scroll[j] + SHOP_ROWS); r++) for (const k of ROWS[r]) {
+        const it = ITEMS[k], { x, y } = cell(k, j), own = owns(it), cost = costOf(it);
+        K.rr(x, y, TW, TH, 4, wornBy(it, slot) ? 'rgba(73,209,122,0.4)' : TINT[it.kind === 'costume' ? 'costume' : it.slot || 'bot']);
+        icon(it, x, y, S.t, slot);
+        // owned: a tick; for sale: the price in the corner, green if you have the bolts, red if not
+        if (own && (it.cost || it.kind === 'costume')) { K.circ(x + TW - 3.5, y + 3.5, 3.5, '#49d17a'); text('✓', x + TW - 3.5, y + 5.8, 5, '#fff', 'center', null); }
+        else if (!own) text(String(cost), x + TW - 1, y + TH - 1, 7, (prog.bolts || 0) >= cost ? '#49d17a' : '#ff8a8a', 'right');
+      }
+      const c = cell(S.cur[slot], j);
+      if (c) { g.strokeStyle = pc; g.lineWidth = 2; g.strokeRect(c.x - 1, c.y - 1, TW + 2, TH + 2); }
     });
     // the heroes trying on what their cursor is on, on top of everything they already wear
     team.forEach((m, j) => {
       const it = ITEMS[S.cur[m.slot]], worn = closet.wear[m.slot], mm = member(m.slot);
-      const tryOn = it.slot ? Object.assign({}, worn, { [it.slot]: it.id }) : worn;
+      const tryOn = it.kind === 'costume' ? Object.fromEntries(it.pieces.map(p => [p.slot, p.id])) : it.slot ? Object.assign({}, worn, { [it.slot]: it.id }) : worn;
       const hero = it.kind === 'hero' ? it.hero : mm.hero, hex = it.kind === 'paint' ? COLS[it.col] : it.kind === 'rainbow' ? rainbowHex(t) : skinHex(m.slot);
-      const x = team.length > 1 ? 40 + j * 160 : 120, y = 230, t = S.t + j;
+      const x = two ? 40 + j * 152 : 120, y = 230, t = S.t + j;
       K.rr(x - 22, y - 2, 44, 5, 2.5, 'rgba(255,255,255,0.12)');
       if (hero === 'robot') K.robot(x, y, 0.11, hex, { t, bob: Math.sin(t * 3) * 3, eyes: { happy: 0.6 }, acc: tryOn });
       else K.ostrich(x, y, 0.1, hex, { t, bob: Math.abs(Math.sin(t * 2.6)) * 8, eyes: { happy: 0.6 }, acc: tryOn });
-      const own = owns(it);
-      const how = !own ? 'A buy  ' + it.cost : it.slot ? (worn[it.slot] === it.id ? 'A take off' : 'A wear') : it.kind === 'gun' ? 'Z shoots in a level' : it.kind === 'jet' ? 'Hold A to glide' : 'A use';
+      const own = owns(it), cost = costOf(it);
+      const how = !own ? 'A buy  ' + cost : it.kind === 'costume' ? (wornBy(it, m.slot) ? 'A take off' : 'A wear') : it.slot ? (worn[it.slot] === it.id ? 'A take off' : 'A wear') : it.kind === 'gun' ? 'Z shoots in a level' : it.kind === 'jet' ? 'Hold A to glide' : 'A use';
       const tx = x + 24;   // beside the hero, so the words never cover what it is trying on
-      text(it.name, tx, 200, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'left');
-      text(how, tx, 212, 7, own || (prog.bolts || 0) >= it.cost ? '#fff6d8' : '#ff9a8a', 'left');
-      if (!own) K.nut(tx + textW(how, 7) + 5, 209.5, 3, S.t, '#ffd23f');
+      text(it.name, tx, 206, 8, m.slot ? '#8fd3ff' : '#ffd23f', 'left');
+      text(how, tx, 218, 7, own || (prog.bolts || 0) >= cost ? '#fff6d8' : '#ff9a8a', 'left');
+      if (!own) K.nut(tx + textW(how, 7) + 5, 215.5, 3, S.t, '#ffd23f');
     });
     drawParticles(0);
     if (S.msg) { fitPanel(S.msg.text, 10, 0, 12, 18, '#ffd23f'); text(S.msg.text, W / 2, 25, 10, '#2b2230', 'center', null); }

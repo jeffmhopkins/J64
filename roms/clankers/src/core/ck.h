@@ -196,16 +196,24 @@ enum {
     ACC_BOWTIE, ACC_SCARF, ACC_NECKTIE, ACC_BANDANA, ACC_MEDAL,
     ACC_SWEATER, ACC_OVERALLS, ACC_JERSEY, ACC_TUX, ACC_SUPER, ACC_DISCO,
     ACC_SNEAKERS, ACC_BOOTS, ACC_RAINBOOTS, ACC_FLIPPERS, ACC_SKATES, ACC_LIGHTUP,
+    // added later, so older saves keep their bits: costume pieces, then dresses, suits and shoes
+    ACC_MIRROR, ACC_POLICECAP, ACC_MOHAWK, ACC_FIREHAT, ACC_SPACEHELM, ACC_HARDHAT, ACC_TIARA, ACC_NINJABAND,
+    ACC_CLOWNWIG, ACC_KNIGHTHELM, ACC_EYEPATCH, ACC_REDNOSE, ACC_MASK, ACC_STETHO, ACC_PEARLS, ACC_CHAIN,
+    ACC_CHEFCOAT, ACC_LABCOAT, ACC_POLICE, ACC_LEATHER, ACC_FIRECOAT, ACC_SPACESUIT, ACC_VEST, ACC_PIRATESHIRT,
+    ACC_NINJASUIT, ACC_CLOWNSUIT, ACC_ARMOR, ACC_ROBE, ACC_COWVEST, ACC_SUNDRESS, ACC_PARTYDRESS, ACC_POLKADRESS,
+    ACC_TUTU, ACC_BALLGOWN, ACC_SPARKLEDRESS, ACC_BLUESUIT, ACC_PINSTRIPE, ACC_WHITESUIT, ACC_PLAIDSUIT, ACC_VELVETSUIT,
+    ACC_GOLDSUIT, ACC_DRESSSHOES, ACC_ROCKBOOTS, ACC_MOONBOOTS, ACC_CLOWNSHOES, ACC_SLIPPERS, ACC_HEELS, ACC_FLATS,
+    ACC_SANDALS, ACC_HIGHTOPS, ACC_COWBOOTS,
     ACC_COUNT
 };
 enum { SLOT_HEAD, SLOT_FACE, SLOT_NECK, SLOT_BODY, SLOT_FEET, SLOT_COUNT };
 typedef struct { const char *name; uint8_t slot; uint8_t rainbow; uint16_t cost; } ck_accdef;   // rainbow: cycles colour
 extern const ck_accdef ck_acc[ACC_COUNT];
-#define CK_OWNS(c, a) (((c)->own[(a) >> 3] >> ((a) & 7)) & 1)
 #define CK_CLOSET_MAGIC 0xC2
+#define CK_OWN1_BITS 40               // accessories 0..39 own a bit in own[], the rest in own2[]
 typedef struct {
     uint8_t magic;                   // CK_CLOSET_MAGIC, or the closet starts empty (older saves)
-    uint8_t own[(ACC_COUNT + 7) / 8];  // bit per accessory
+    uint8_t own[CK_OWN1_BITS / 8];   // bit per accessory
     uint8_t wear[2][SLOT_COUNT];       // per player and slot: 0 nothing, else accessory + 1
     // added later: paint pots and gear, valid when magic2 is CK_CLOSET_MAGIC2 (else they start fresh)
     uint8_t magic2;
@@ -215,14 +223,36 @@ typedef struct {
     // added later: fish caught in the pond, valid when magic3 is CK_CLOSET_MAGIC3 (else 0)
     uint8_t magic3, pad3;
     uint16_t fished;
+    // added later: the costume pieces and fashion line, valid when magic4 is CK_CLOSET_MAGIC4
+    uint8_t magic4;
+    uint8_t own2[7];                 // bit per accessory from CK_OWN1_BITS on
 } ck_closet;
+#define CK_CLOSET_MAGIC4 0xC5
+_Static_assert(ACC_COUNT <= CK_OWN1_BITS + 7 * 8, "own2 has room for every accessory");
+bool ck_owns_acc(const ck_closet *c, int a);
+void ck_own_acc(ck_closet *c, int a);
+#define CK_OWNS(c, a) ck_owns_acc(c, a)
+// Whole looks: one buy gets every piece still missing, one press puts them all on (and takes the
+// other slots off). The same list as K.COSTUMES in web/lib/draw.js.
+#define CK_COSTUMES 16
+typedef struct { const char *name; int8_t piece[SLOT_COUNT]; } ck_costume;   // -1: nothing in that slot
+extern const ck_costume ck_costumes[CK_COSTUMES];
 #define CK_CLOSET_MAGIC2 0xC3
 #define CK_CLOSET_MAGIC3 0xC4
 #define CK_FREE_PAINTS 0x03
 enum { CK_GEAR_GUN = 1, CK_GEAR_JET = 2, CK_GEAR_RAINBOW = 4 };   // the bubble gun; the super jetpack (near-level glide); rainbow paint
 // The shop sells the accessories, then (on its last row) the two heroes (free to swap), a paint pot
 // per colour, the rainbow paint, the bubble gun and the super jetpack.
-enum { SHOP_ROBOT = ACC_COUNT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_RAINBOW = SHOP_PAINT0 + CK_NCOLS, SHOP_GUN, SHOP_JET, SHOP_COUNT };
+enum { SHOP_ROBOT = ACC_COUNT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_RAINBOW = SHOP_PAINT0 + CK_NCOLS, SHOP_GUN, SHOP_JET, SHOP_COSTUME0, SHOP_COUNT = SHOP_COSTUME0 + CK_COSTUMES };
+// The shop shows its items in sections (K.SHOP_SECS), each starting a new row of cols tiles: 12
+// across for one player, 6 for each half when two play. CK_SHOP_ROWS rows show at once.
+#define CK_SHOP_SECS 9
+#define CK_SHOP_ROWS 4
+int ck_shop_rows(int cols);                              // how many rows in all
+int ck_shop_row_of(int item, int cols, int *col);        // the row (and column) an item sits in
+int ck_shop_row_len(int row, int cols);
+int ck_shop_item_at(int row, int col, int cols);         // -1 past the row's end
+const char *ck_shop_sec_name(int item);
 #define CK_PAINT_COST 30
 #define CK_RAINBOW_COST 150
 #define CK_RAINBOW_COL 7   // a rainbow hero is drawn from the Snow sheet, tinted
@@ -230,7 +260,7 @@ enum { SHOP_ROBOT = ACC_COUNT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_RAINBOW = SHOP_PA
 #define CK_JET_COST 300
 #define CK_GLIDE_VY 0.6f       // how fast a glide sinks
 #define CK_SUPERGLIDE_VY 0.12f // with the super jetpack: almost level
-int ck_shop_cost(int item);              // 0 for the heroes
+int ck_shop_cost(int item);              // 0 for the heroes; a costume: all its pieces
 const char *ck_shop_name(int item, char *buf, int n);
 
 
@@ -682,12 +712,12 @@ enum { CATCH_MINNOW, CATCH_GOLDFISH, CATCH_BASS, CATCH_GOLDEN, CATCH_BOOT,
 typedef struct { const char *name; uint32_t col, col2; float len, speed, pull; int bolts; } ck_catch;
 extern const ck_catch ck_catches[CATCH_COUNT];
 #define CK_POND_LEVELS 5
-extern const int ck_pond_level_at[CK_POND_LEVELS];   // fish caught to reach each level
+extern const int ck_pond_level_at[CK_POND_LEVELS];   // fish caught this visit to reach each level
 int ck_pond_level(int fished);
 typedef struct { int kind; float x, y, vx; int scare; } ck_pfish;
 enum { ROD_IDLE, ROD_CHARGE, ROD_FLY, ROD_WAIT, ROD_BITE, ROD_REEL, ROD_GOT, ROD_SNAP };
 typedef struct { int state, fish, t, nibble; float power, x, y, vx, vy, tension, bob; bool pulling; } ck_rod;   // bob: the bobber's x
-typedef struct { ck_pfish fish[CK_POND_FISH]; ck_rod rod[2]; int caught, got[CATCH_COUNT], last, level, levelT; } ck_pond;
+typedef struct { ck_pfish fish[CK_POND_FISH]; ck_rod rod[2]; int caught, got[CATCH_COUNT], last, level, levelT, fished; } ck_pond;   // fished: this visit, not counting boots
 void ck_rod_tip(int i, float *x, float *y);   // player i's rod tip (they stand on the bank)
 // One hero in the house or one of its games (not every game uses every field).
 typedef struct {
@@ -889,6 +919,7 @@ typedef struct ck_game {
     bool menuAsk;
     // the parts shop: a cursor per player, and a short message
     int shopCur[2];
+    int shopScroll[2];         // the top row each player's half shows
     char shopMsg[32];
     int shopMsgT;
 
@@ -929,6 +960,9 @@ void ck_game_new_game(ck_game *G);
 // What player slot s wears in each slot: an accessory id, or -1.
 int ck_wearing(const ck_game *G, int s, int slot);
 bool ck_shop_owns(const ck_game *G, int item);     // any shop item, SHOP_* included
+int ck_shop_price(const ck_game *G, int item);     // what buying it costs now (a costume: its missing pieces)
+bool ck_costume_worn(const ck_game *G, int s, int item);   // player s wears every piece of that costume
+int ck_shop_cols(const ck_game *G);                // 12 for one player, 6 a half for two
 bool ck_rainbow_skin(const ck_game *G, int slot);   // that player wears the rainbow paint
 bool ck_gun_on(const ck_game *G, int slot);        // that player has the bubble gun: Z or L fires it
 void ck_map_baby_pos(const ck_game *G, int i, float *x, float *y);

@@ -315,7 +315,7 @@ const POND = {
     { name: 'King carp', col: 0xC98A3A, col2: 0xFFD23F, len: 22, speed: 0.6, pull: 3.0, bolts: 12 },
   ],
   // the pond starts with plain little fish; the more the family catches, the bigger and harder they get
-  LEVEL_AT: [0, 6, 15, 30, 50],
+  LEVEL_AT: [0, 5, 10, 15, 20],   // fish caught this visit
   POPS: [   // [kind, how many in a hundred]
     [[0, 45], [5, 45], [4, 10]],
     [[0, 20], [5, 10], [1, 30], [6, 30], [4, 10]],
@@ -327,7 +327,7 @@ const POND = {
 const pondLevel = n => { let l = 0; while (l + 1 < POND.LEVEL_AT.length && n >= POND.LEVEL_AT[l + 1]) l++; return l; };
 const rodTip = i => [46 + i * 14, 62 + i * 6];
 function fishScene(house) {
-  const PD = POND, S = { song: 'select', t: 0, caught: 0, last: -1, level: pondLevel(store.get('fished', 0)), levelT: 0 };
+  const PD = POND, S = { song: 'select', t: 0, caught: 0, last: -1, level: 0, levelT: 0, fished: 0 };   // every visit starts with the little fish
   const newFish = f => {
     const pop = PD.POPS[S.level]; let r = Math.floor(Math.random() * 100), k = 0;
     while (k < pop.length - 1 && r >= pop[k][1]) r -= pop[k++][1];
@@ -393,8 +393,8 @@ function fishScene(house) {
             (f.kind === 4 ? SND.fx.clank : SND.fx.gear)();
             if (f.kind === 3) confetti(160, 40, 40);
             sparks(R.x, PD.TOP - 10, 8, AHX(c.col));
-            const fished = store.get('fished', 0) + (f.kind === 4 ? 0 : 1); store.set('fished', fished);
-            const lv = pondLevel(fished);
+            if (f.kind !== 4) S.fished++;
+            const lv = pondLevel(S.fished);
             if (lv > S.level) {   // the pond levels up: the fish not on a line make way for bigger ones
               S.level = lv; S.levelT = 180;
               S.fish.forEach((o, k) => { if (o !== f && !taken(k)) { newFish(o); o.x = W - 10 - k * 6; } });

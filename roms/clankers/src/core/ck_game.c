@@ -153,12 +153,167 @@ const ck_accdef ck_acc[ACC_COUNT] = {
     [ACC_FLIPPERS] = { "Flippers", SLOT_FEET, 0, 30 },
     [ACC_SKATES] = { "Roller skates", SLOT_FEET, 0, 40 },
     [ACC_LIGHTUP] = { "Light-up shoes", SLOT_FEET, 1, 70 },
+    [ACC_MIRROR] = { "Head mirror", SLOT_HEAD, 0, 25 },
+    [ACC_POLICECAP] = { "Police cap", SLOT_HEAD, 0, 30 },
+    [ACC_MOHAWK] = { "Rock star hair", SLOT_HEAD, 0, 40 },
+    [ACC_FIREHAT] = { "Fire helmet", SLOT_HEAD, 0, 35 },
+    [ACC_SPACEHELM] = { "Space helmet", SLOT_HEAD, 0, 50 },
+    [ACC_HARDHAT] = { "Hard hat", SLOT_HEAD, 0, 25 },
+    [ACC_TIARA] = { "Tiara", SLOT_HEAD, 0, 45 },
+    [ACC_NINJABAND] = { "Ninja headband", SLOT_HEAD, 0, 25 },
+    [ACC_CLOWNWIG] = { "Clown wig", SLOT_HEAD, 0, 30 },
+    [ACC_KNIGHTHELM] = { "Knight helmet", SLOT_HEAD, 0, 45 },
+    [ACC_EYEPATCH] = { "Eye patch", SLOT_FACE, 0, 15 },
+    [ACC_REDNOSE] = { "Clown nose", SLOT_FACE, 0, 15 },
+    [ACC_MASK] = { "Doctor mask", SLOT_FACE, 0, 15 },
+    [ACC_STETHO] = { "Stethoscope", SLOT_NECK, 0, 25 },
+    [ACC_PEARLS] = { "Pearls", SLOT_NECK, 0, 40 },
+    [ACC_CHAIN] = { "Star chain", SLOT_NECK, 0, 35 },
+    [ACC_CHEFCOAT] = { "Chef coat", SLOT_BODY, 0, 35 },
+    [ACC_LABCOAT] = { "Lab coat", SLOT_BODY, 0, 40 },
+    [ACC_POLICE] = { "Police uniform", SLOT_BODY, 0, 45 },
+    [ACC_LEATHER] = { "Rock jacket", SLOT_BODY, 0, 50 },
+    [ACC_FIRECOAT] = { "Fire coat", SLOT_BODY, 0, 45 },
+    [ACC_SPACESUIT] = { "Space suit", SLOT_BODY, 0, 60 },
+    [ACC_VEST] = { "Safety vest", SLOT_BODY, 0, 30 },
+    [ACC_PIRATESHIRT] = { "Sailor shirt", SLOT_BODY, 0, 35 },
+    [ACC_NINJASUIT] = { "Ninja suit", SLOT_BODY, 0, 45 },
+    [ACC_CLOWNSUIT] = { "Clown suit", SLOT_BODY, 0, 40 },
+    [ACC_ARMOR] = { "Armor", SLOT_BODY, 0, 60 },
+    [ACC_ROBE] = { "Wizard robe", SLOT_BODY, 0, 50 },
+    [ACC_COWVEST] = { "Ranch vest", SLOT_BODY, 0, 35 },
+    [ACC_SUNDRESS] = { "Sundress", SLOT_BODY, 0, 40 },
+    [ACC_PARTYDRESS] = { "Party dress", SLOT_BODY, 0, 45 },
+    [ACC_POLKADRESS] = { "Polka dress", SLOT_BODY, 0, 45 },
+    [ACC_TUTU] = { "Tutu", SLOT_BODY, 0, 40 },
+    [ACC_BALLGOWN] = { "Ball gown", SLOT_BODY, 0, 70 },
+    [ACC_SPARKLEDRESS] = { "Sparkle dress", SLOT_BODY, 1, 90 },
+    [ACC_BLUESUIT] = { "Blue suit", SLOT_BODY, 0, 50 },
+    [ACC_PINSTRIPE] = { "Pinstripe suit", SLOT_BODY, 0, 55 },
+    [ACC_WHITESUIT] = { "White suit", SLOT_BODY, 0, 55 },
+    [ACC_PLAIDSUIT] = { "Plaid suit", SLOT_BODY, 0, 55 },
+    [ACC_VELVETSUIT] = { "Velvet suit", SLOT_BODY, 0, 65 },
+    [ACC_GOLDSUIT] = { "Gold suit", SLOT_BODY, 0, 80 },
+    [ACC_DRESSSHOES] = { "Dress shoes", SLOT_FEET, 0, 30 },
+    [ACC_ROCKBOOTS] = { "Rocker boots", SLOT_FEET, 0, 40 },
+    [ACC_MOONBOOTS] = { "Moon boots", SLOT_FEET, 0, 40 },
+    [ACC_CLOWNSHOES] = { "Clown shoes", SLOT_FEET, 0, 30 },
+    [ACC_SLIPPERS] = { "Glass slippers", SLOT_FEET, 0, 50 },
+    [ACC_HEELS] = { "High heels", SLOT_FEET, 0, 35 },
+    [ACC_FLATS] = { "Ballet flats", SLOT_FEET, 0, 25 },
+    [ACC_SANDALS] = { "Sandals", SLOT_FEET, 0, 20 },
+    [ACC_HIGHTOPS] = { "High-tops", SLOT_FEET, 0, 35 },
+    [ACC_COWBOOTS] = { "Cowboy boots", SLOT_FEET, 0, 40 },
 };
+
+#define C5(h, f, n, b, ft) { h, f, n, b, ft }
+const ck_costume ck_costumes[CK_COSTUMES] = {
+    { "Chef", C5(ACC_CHEF, ACC_MUSTACHE, -1, ACC_CHEFCOAT, -1) },
+    { "Doctor", C5(ACC_MIRROR, ACC_MASK, ACC_STETHO, ACC_LABCOAT, -1) },
+    { "Police", C5(ACC_POLICECAP, ACC_SHADES, -1, ACC_POLICE, ACC_DRESSSHOES) },
+    { "Rock star", C5(ACC_MOHAWK, ACC_STARS, ACC_CHAIN, ACC_LEATHER, ACC_ROCKBOOTS) },
+    { "Firefighter", C5(ACC_FIREHAT, -1, -1, ACC_FIRECOAT, ACC_RAINBOOTS) },
+    { "Astronaut", C5(ACC_SPACEHELM, -1, -1, ACC_SPACESUIT, ACC_MOONBOOTS) },
+    { "Builder", C5(ACC_HARDHAT, -1, -1, ACC_VEST, ACC_BOOTS) },
+    { "Pirate", C5(ACC_PIRATE, ACC_EYEPATCH, -1, ACC_PIRATESHIRT, ACC_BOOTS) },
+    { "Princess", C5(ACC_TIARA, -1, ACC_PEARLS, ACC_BALLGOWN, ACC_SLIPPERS) },
+    { "Ballerina", C5(ACC_FLOWER, -1, -1, ACC_TUTU, ACC_FLATS) },
+    { "Ninja", C5(ACC_NINJABAND, -1, -1, ACC_NINJASUIT, -1) },
+    { "Clown", C5(ACC_CLOWNWIG, ACC_REDNOSE, -1, ACC_CLOWNSUIT, ACC_CLOWNSHOES) },
+    { "Knight", C5(ACC_KNIGHTHELM, -1, -1, ACC_ARMOR, ACC_BOOTS) },
+    { "Wizard", C5(ACC_WIZARD, -1, ACC_MEDAL, ACC_ROBE, -1) },
+    { "Cowboy", C5(ACC_COWBOY, -1, ACC_BANDANA, ACC_COWVEST, ACC_COWBOOTS) },
+    { "Super hero", C5(-1, ACC_GOGGLES, -1, ACC_SUPER, ACC_BOOTS) },
+};
+#undef C5
+
+// The shop's sections, in order (K.SHOP_SECS): body pieces split into outfits, dresses and suits.
+static const uint8_t SEC_HATS[] = { ACC_PARTY, ACC_FLOWER, ACC_BEANIE, ACC_BASEBALL, ACC_CHEF, ACC_PROPELLER, ACC_COWBOY, ACC_PIRATE, ACC_TOPHAT, ACC_WIZARD, ACC_CROWN, ACC_RAINBOWCAP,
+    ACC_MIRROR, ACC_POLICECAP, ACC_MOHAWK, ACC_FIREHAT, ACC_SPACEHELM, ACC_HARDHAT, ACC_TIARA, ACC_NINJABAND, ACC_CLOWNWIG, ACC_KNIGHTHELM };
+static const uint8_t SEC_FACES[] = { ACC_GLASSES, ACC_SHADES, ACC_HEARTS, ACC_STARS, ACC_GOGGLES, ACC_MUSTACHE, ACC_MONOCLE, ACC_EYEPATCH, ACC_REDNOSE, ACC_MASK };
+static const uint8_t SEC_NECK[] = { ACC_BOWTIE, ACC_SCARF, ACC_NECKTIE, ACC_BANDANA, ACC_MEDAL, ACC_STETHO, ACC_PEARLS, ACC_CHAIN };
+static const uint8_t SEC_OUTFITS[] = { ACC_SWEATER, ACC_OVERALLS, ACC_JERSEY, ACC_SUPER, ACC_DISCO, ACC_CHEFCOAT, ACC_LABCOAT, ACC_POLICE, ACC_LEATHER, ACC_FIRECOAT, ACC_SPACESUIT,
+    ACC_VEST, ACC_PIRATESHIRT, ACC_NINJASUIT, ACC_CLOWNSUIT, ACC_ARMOR, ACC_ROBE, ACC_COWVEST };
+static const uint8_t SEC_DRESSES[] = { ACC_SUNDRESS, ACC_PARTYDRESS, ACC_POLKADRESS, ACC_TUTU, ACC_BALLGOWN, ACC_SPARKLEDRESS };
+static const uint8_t SEC_SUITS[] = { ACC_TUX, ACC_BLUESUIT, ACC_PINSTRIPE, ACC_WHITESUIT, ACC_PLAIDSUIT, ACC_VELVETSUIT, ACC_GOLDSUIT };
+static const uint8_t SEC_SHOES[] = { ACC_SNEAKERS, ACC_BOOTS, ACC_RAINBOOTS, ACC_FLIPPERS, ACC_SKATES, ACC_LIGHTUP, ACC_DRESSSHOES, ACC_ROCKBOOTS, ACC_MOONBOOTS, ACC_CLOWNSHOES,
+    ACC_SLIPPERS, ACC_HEELS, ACC_FLATS, ACC_SANDALS, ACC_HIGHTOPS, ACC_COWBOOTS };
+static const uint8_t SEC_COSTUMES[CK_COSTUMES] = { SHOP_COSTUME0, SHOP_COSTUME0 + 1, SHOP_COSTUME0 + 2, SHOP_COSTUME0 + 3, SHOP_COSTUME0 + 4, SHOP_COSTUME0 + 5, SHOP_COSTUME0 + 6, SHOP_COSTUME0 + 7,
+    SHOP_COSTUME0 + 8, SHOP_COSTUME0 + 9, SHOP_COSTUME0 + 10, SHOP_COSTUME0 + 11, SHOP_COSTUME0 + 12, SHOP_COSTUME0 + 13, SHOP_COSTUME0 + 14, SHOP_COSTUME0 + 15 };
+static const uint8_t SEC_GEAR[] = { SHOP_ROBOT, SHOP_OSTRICH, SHOP_PAINT0, SHOP_PAINT0 + 1, SHOP_PAINT0 + 2, SHOP_PAINT0 + 3, SHOP_PAINT0 + 4, SHOP_PAINT0 + 5, SHOP_PAINT0 + 6, SHOP_PAINT0 + 7,
+    SHOP_RAINBOW, SHOP_GUN, SHOP_JET };
+_Static_assert(CK_NCOLS == 8, "SEC_GEAR lists a paint pot per colour");
+#define SEC(name, a) { name, (int)(sizeof a / sizeof a[0]), a }
+static const struct { const char *name; int n; const uint8_t *items; } SECS[CK_SHOP_SECS] = {
+    SEC("COSTUMES", SEC_COSTUMES), SEC("HATS", SEC_HATS), SEC("FACES", SEC_FACES), SEC("NECKWEAR", SEC_NECK), SEC("OUTFITS", SEC_OUTFITS),
+    SEC("DRESSES", SEC_DRESSES), SEC("SUITS", SEC_SUITS), SEC("SHOES", SEC_SHOES), SEC("HEROES & GEAR", SEC_GEAR),
+};
+#undef SEC
+
+int ck_shop_rows(int cols) {
+    int r = 0;
+    for (int s = 0; s < CK_SHOP_SECS; s++) r += (SECS[s].n + cols - 1) / cols;
+    return r;
+}
+// the section and the index in it that a row starts at
+static bool shop_row_start(int row, int cols, int *sec, int *first) {
+    if (row < 0 || cols < 1) return false;
+    for (int s = 0; s < CK_SHOP_SECS; s++) {
+        int nr = (SECS[s].n + cols - 1) / cols;
+        if (row < nr) { *sec = s; *first = row * cols; return true; }
+        row -= nr;
+    }
+    return false;
+}
+int ck_shop_row_len(int row, int cols) {
+    int s, f;
+    if (!shop_row_start(row, cols, &s, &f)) return 0;
+    return SECS[s].n - f < cols ? SECS[s].n - f : cols;
+}
+int ck_shop_item_at(int row, int col, int cols) {
+    int s, f;
+    if (col < 0 || col >= ck_shop_row_len(row, cols) || !shop_row_start(row, cols, &s, &f)) return -1;
+    return SECS[s].items[f + col];
+}
+int ck_shop_row_of(int item, int cols, int *col) {
+    int row = 0;
+    for (int s = 0; s < CK_SHOP_SECS; s++) {
+        for (int k = 0; k < SECS[s].n; k++)
+            if (SECS[s].items[k] == item) { if (col) *col = k % cols; return row + k / cols; }
+        row += (SECS[s].n + cols - 1) / cols;
+    }
+    if (col) *col = 0;
+    return 0;
+}
+const char *ck_shop_sec_name(int item) {
+    for (int s = 0; s < CK_SHOP_SECS; s++)
+        for (int k = 0; k < SECS[s].n; k++) if (SECS[s].items[k] == item) return SECS[s].name;
+    return "";
+}
+// the item after (dir 1) or before (dir -1) this one, in the order the shop shows them
+static int shop_step(int item, int dir) {
+    int flat[SHOP_COUNT], n = 0, at = 0;
+    for (int s = 0; s < CK_SHOP_SECS; s++) for (int k = 0; k < SECS[s].n; k++) { if (SECS[s].items[k] == item) at = n; flat[n++] = SECS[s].items[k]; }
+    return flat[(at + dir + n) % n];
+}
+
+bool ck_owns_acc(const ck_closet *c, int a) {
+    if (a < 0 || a >= ACC_COUNT) return false;
+    if (a < CK_OWN1_BITS) return (c->own[a >> 3] >> (a & 7)) & 1;
+    a -= CK_OWN1_BITS;
+    return (c->own2[a >> 3] >> (a & 7)) & 1;
+}
+void ck_own_acc(ck_closet *c, int a) {
+    if (a < 0 || a >= ACC_COUNT) return;
+    if (a < CK_OWN1_BITS) c->own[a >> 3] |= (uint8_t)(1u << (a & 7));
+    else { a -= CK_OWN1_BITS; c->own2[a >> 3] |= (uint8_t)(1u << (a & 7)); }
+}
 
 // An older save has no closet, and a damaged one may wear what it does not own: keep it sane.
 static void sanitize_closet(ck_closet *c) {
     if (c->magic != CK_CLOSET_MAGIC) { memset(c, 0, sizeof *c); c->magic = CK_CLOSET_MAGIC; }
-    for (int a = ACC_COUNT; a < (int)sizeof c->own * 8; a++) c->own[a >> 3] &= (uint8_t)~(1u << (a & 7));
+    if (c->magic4 != CK_CLOSET_MAGIC4) { c->magic4 = CK_CLOSET_MAGIC4; memset(c->own2, 0, sizeof c->own2); }
+    for (int a = ACC_COUNT - CK_OWN1_BITS; a < (int)sizeof c->own2 * 8; a++) c->own2[a >> 3] &= (uint8_t)~(1u << (a & 7));
     for (int s = 0; s < 2; s++)
         for (int k = 0; k < SLOT_COUNT; k++) {
             int a = c->wear[s][k] - 1;
@@ -177,6 +332,11 @@ int ck_shop_cost(int item) {
     if (item == SHOP_RAINBOW) return CK_RAINBOW_COST;
     if (item == SHOP_GUN) return CK_GUN_COST;
     if (item == SHOP_JET) return CK_JET_COST;
+    if (item >= SHOP_COSTUME0 && item < SHOP_COUNT) {
+        int sum = 0;
+        for (int k = 0; k < SLOT_COUNT; k++) { int a = ck_costumes[item - SHOP_COSTUME0].piece[k]; if (a >= 0) sum += ck_acc[a].cost; }
+        return sum;
+    }
     return 0;
 }
 const char *ck_shop_name(int item, char *buf, int n) {
@@ -187,6 +347,7 @@ const char *ck_shop_name(int item, char *buf, int n) {
     else if (item == SHOP_RAINBOW) snprintf(buf, n, "Rainbow paint");
     else if (item == SHOP_GUN) snprintf(buf, n, "Bubble gun");
     else if (item == SHOP_JET) snprintf(buf, n, "Super jetpack");
+    else if (item >= SHOP_COSTUME0 && item < SHOP_COUNT) snprintf(buf, n, "%s", ck_costumes[item - SHOP_COSTUME0].name);
     else snprintf(buf, n, "?");
     return buf;
 }
@@ -536,18 +697,39 @@ static void menu_update(ck_game *G) {
 }
 
 // The parts shop: each player moves their own cursor; A buys an accessory, then wears or takes it off.
-#define SHOP_COLS 12   // the same grid as the web shop: hats; face and neck; outfits and shoes; bots and gear
+// A costume buys every piece it still needs (its price is theirs) and puts on the whole look.
+static const ck_costume *costume_of(int item) { return item >= SHOP_COSTUME0 && item < SHOP_COUNT ? &ck_costumes[item - SHOP_COSTUME0] : NULL; }
 static bool shop_owns(const ck_closet *c, int item) {
     if (item < ACC_COUNT) return CK_OWNS(c, item);
+    const ck_costume *cos = costume_of(item);
+    if (cos) { for (int k = 0; k < SLOT_COUNT; k++) if (cos->piece[k] >= 0 && !CK_OWNS(c, cos->piece[k])) return false; return true; }
     if (item >= SHOP_PAINT0 && item < SHOP_PAINT0 + CK_NCOLS) return (c->paints >> (item - SHOP_PAINT0)) & 1;
     if (item == SHOP_RAINBOW) return (c->gear & CK_GEAR_RAINBOW) != 0;
     if (item == SHOP_GUN) return c->gear & CK_GEAR_GUN;
     if (item == SHOP_JET) return (c->gear & CK_GEAR_JET) != 0;
     return true;   // the heroes are free
 }
+int ck_shop_cols(const ck_game *G) { return G->prog.joined[0] && G->prog.joined[1] ? 6 : 12; }
+int ck_shop_price(const ck_game *G, int item) {
+    const ck_costume *cos = costume_of(item);
+    if (!cos) return ck_shop_cost(item);
+    int sum = 0;
+    for (int k = 0; k < SLOT_COUNT; k++) if (cos->piece[k] >= 0 && !CK_OWNS(&G->saves.closet, cos->piece[k])) sum += ck_acc[cos->piece[k]].cost;
+    return sum;
+}
+bool ck_costume_worn(const ck_game *G, int s, int item) {
+    const ck_costume *cos = costume_of(item);
+    if (!cos || s < 0 || s > 1) return false;
+    for (int k = 0; k < SLOT_COUNT; k++) if (cos->piece[k] >= 0 && G->saves.closet.wear[s][k] != cos->piece[k] + 1) return false;
+    return true;
+}
+static void costume_on(ck_closet *c, int s, const ck_costume *cos) {
+    for (int k = 0; k < SLOT_COUNT; k++) c->wear[s][k] = (uint8_t)(cos->piece[k] + 1);   // -1 leaves the slot empty
+}
 static void shop_act(ck_game *G, int s) {
-    int a = G->shopCur[s], cost = ck_shop_cost(a);
+    int a = G->shopCur[s], cost = ck_shop_price(G, a);
     ck_closet *c = &G->saves.closet;
+    const ck_costume *cos = costume_of(a);
     char name[24];
     ck_shop_name(a, name, sizeof name);
     if (!shop_owns(c, a)) {
@@ -559,7 +741,8 @@ static void shop_act(ck_game *G, int s) {
         }
         G->prog.bolts = (uint16_t)(G->prog.bolts - cost);
         G->map.bolts = G->prog.bolts;
-        if (a < ACC_COUNT) { c->own[a >> 3] |= (uint8_t)(1u << (a & 7)); c->wear[s][ck_acc[a].slot] = (uint8_t)(a + 1); }
+        if (a < ACC_COUNT) { ck_own_acc(c, a); c->wear[s][ck_acc[a].slot] = (uint8_t)(a + 1); }
+        else if (cos) { for (int k = 0; k < SLOT_COUNT; k++) ck_own_acc(c, cos->piece[k]); costume_on(c, s, cos); }
         else if (a == SHOP_GUN) c->gear |= CK_GEAR_GUN;
         else if (a == SHOP_JET) c->gear |= CK_GEAR_JET;
         else if (a == SHOP_RAINBOW) { c->gear |= CK_GEAR_RAINBOW; c->rainbow |= (uint8_t)(1u << s); G->prog.col[s] = CK_RAINBOW_COL; }
@@ -568,7 +751,10 @@ static void shop_act(ck_game *G, int s) {
         if (a == SHOP_GUN) snprintf(G->shopMsg, sizeof G->shopMsg, "Bubble gun! Z shoots");
         else if (a == SHOP_JET) snprintf(G->shopMsg, sizeof G->shopMsg, "Hold A to glide far!");
         else snprintf(G->shopMsg, sizeof G->shopMsg, "%s!", name);
-        G->shopMsgT = a >= SHOP_GUN ? 150 : 90;
+        G->shopMsgT = a == SHOP_GUN || a == SHOP_JET ? 150 : 90;
+    } else if (cos) {
+        if (ck_costume_worn(G, s, a)) { for (int k = 0; k < SLOT_COUNT; k++) if (cos->piece[k] >= 0) c->wear[s][k] = 0; ck_sfx(G, SFX_SELECT); }
+        else { costume_on(c, s, cos); ck_sfx(G, SFX_CONFIRM); }
     } else if (a < ACC_COUNT) {
         uint8_t *w = &c->wear[s][ck_acc[a].slot];
         if (*w == a + 1) { *w = 0; ck_sfx(G, SFX_SELECT); } else { *w = (uint8_t)(a + 1); ck_sfx(G, SFX_CONFIRM); }
@@ -588,14 +774,20 @@ bool ck_shop_owns(const ck_game *G, int item) { return shop_owns(&G->saves.close
 bool ck_rainbow_skin(const ck_game *G, int slot) { return slot >= 0 && slot < 2 && ((G->saves.closet.rainbow >> slot) & 1); }
 static void shop_update(ck_game *G) {
     ck_map_update(G, G->map.now + 1.0f / 60);
+    int cols = ck_shop_cols(G);
     for (int s = 0; s < 2; s++) {
         if (!G->prog.joined[s]) continue;
-        int *cur = &G->shopCur[s];
-        if (*cur < 0 || *cur >= SHOP_COUNT) *cur = 0;
-        if (HIT(G, s, CK_LEFT)) { *cur = (*cur + SHOP_COUNT - 1) % SHOP_COUNT; ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, s, CK_RIGHT)) { *cur = (*cur + 1) % SHOP_COUNT; ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, s, CK_UP) && *cur >= SHOP_COLS) { *cur -= SHOP_COLS; ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, s, CK_DOWN) && *cur + SHOP_COLS < SHOP_COUNT) { *cur += SHOP_COLS; ck_sfx(G, SFX_SELECT); }
+        int *cur = &G->shopCur[s], *scroll = &G->shopScroll[s];
+        if (*cur < 0 || *cur >= SHOP_COUNT) *cur = SHOP_COSTUME0;
+        int col, row = ck_shop_row_of(*cur, cols, &col);
+        if (HIT(G, s, CK_LEFT)) { *cur = shop_step(*cur, -1); ck_sfx(G, SFX_SELECT); }
+        else if (HIT(G, s, CK_RIGHT)) { *cur = shop_step(*cur, 1); ck_sfx(G, SFX_SELECT); }
+        else if (HIT(G, s, CK_UP) && row > 0) { int n = ck_shop_row_len(row - 1, cols); *cur = ck_shop_item_at(row - 1, col < n ? col : n - 1, cols); ck_sfx(G, SFX_SELECT); }
+        else if (HIT(G, s, CK_DOWN) && row + 1 < ck_shop_rows(cols)) { int n = ck_shop_row_len(row + 1, cols); *cur = ck_shop_item_at(row + 1, col < n ? col : n - 1, cols); ck_sfx(G, SFX_SELECT); }
+        // keep the cursor's row on screen
+        row = ck_shop_row_of(*cur, cols, NULL);
+        if (*scroll > row) *scroll = row;
+        if (*scroll < row - CK_SHOP_ROWS + 1) *scroll = row - CK_SHOP_ROWS + 1;
         if (HIT(G, s, CK_A)) shop_act(G, s);
         if (HIT(G, s, CK_B) || HIT(G, s, CK_START)) {
             ck_sfx(G, SFX_SELECT);

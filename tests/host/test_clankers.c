@@ -774,7 +774,7 @@ static void press(ck_game *G, uint16_t p1, uint16_t p2) { ck_game_step(G, p1, p2
 static void test_shop(void) {
     ck_game *G = load_game();
     if (!G) return;
-    EXPECT_EQ_INT(ACC_COUNT, 36);
+    EXPECT_EQ_INT(ACC_COUNT, 87);
     for (int a = 0; a < ACC_COUNT; a++) EXPECT_EQ_INT(!!(ck_acc[a].cost > 0 && ck_acc[a].slot < SLOT_COUNT && ck_acc[a].name[0]), 1);
     G->prog.joined[0] = G->prog.joined[1] = true;
     G->prog.bolts = 100;
@@ -801,12 +801,92 @@ static void test_shop(void) {
     press(G, CK_A, 0);
     EXPECT_EQ_INT(!!(!CK_OWNS(&G->saves.closet, ACC_DISCO)), 1);
     EXPECT_EQ_INT(!!(G->shopMsgT > 0), 1);
-    // the grid is 12 wide: down moves a row, right steps one
-    G->shopCur[0] = 0;
-    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], 12);
-    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], 13);
-    // the last row: heroes swap for free, paint pots are bought then worn, the bubble gun is bought once
-    EXPECT_EQ_INT(SHOP_COUNT, 49);
+    // two players split the screen, 6 across each; sections start new rows: down moves a row, right steps one
+    EXPECT_EQ_INT(ck_shop_cols(G), 6);
+    G->shopCur[0] = ACC_PARTY;
+    press(G, CK_DOWN, 0); EXPECT_EQ_INT(G->shopCur[0], ACC_COWBOY);
+    press(G, CK_RIGHT, 0); EXPECT_EQ_INT(G->shopCur[0], ACC_PIRATE);
+    EXPECT_EQ_INT(SHOP_COUNT, ACC_COUNT + 13 + CK_COSTUMES);
+    // every item is in exactly one section, and every row is full but a section's last
+    {
+        int seen[SHOP_COUNT] = { 0 };
+        for (int cols = 6; cols <= 12; cols += 6)
+            for (int r = 0; r < ck_shop_rows(cols); r++) {
+                int n = ck_shop_row_len(r, cols);
+                EXPECT_EQ_INT(n >= 1 && n <= cols, 1);
+                for (int k = 0; k < n; k++) { int a = ck_shop_item_at(r, k, cols), col; seen[a]++; EXPECT_EQ_INT(ck_shop_row_of(a, cols, &col), r); EXPECT_EQ_INT(col, k); }
+                EXPECT_EQ_INT(ck_shop_item_at(r, n, cols), -1);
+            }
+        int once = 1;
+        for (int a = 0; a < SHOP_COUNT; a++) if (seen[a] != 2) once = 0;
+        EXPECT_EQ_INT(once, 1);
+        EXPECT_EQ_INT(ck_shop_row_of(SHOP_COSTUME0, 12, NULL), 0);   // costumes come first
+        EXPECT_EQ_INT(strcmp(ck_shop_sec_name(ACC_BALLGOWN), "DRESSES"), 0);
+        EXPECT_EQ_INT(strcmp(ck_shop_sec_name(ACC_TUX), "SUITS"), 0);
+        EXPECT_EQ_INT(strcmp(ck_shop_sec_name(SHOP_JET), "HEROES & GEAR"), 0);
+        // each costume piece sits in the slot it names
+        int fits = 1;
+        for (int k = 0; k < CK_COSTUMES; k++) for (int s = 0; s < SLOT_COUNT; s++) { int a = ck_costumes[k].piece[s]; if (a >= 0 && ck_acc[a].slot != s) fits = 0; }
+        EXPECT_EQ_INT(fits, 1);
+    }
+    // each half scrolls on its own: P2 runs down to the shoes while P1 stays at the top
+    G->shopCur[1] = SHOP_COSTUME0; G->shopScroll[0] = G->shopScroll[1] = 0;
+    G->shopCur[0] = SHOP_COSTUME0; press(G, 0, 0);
+    for (int i = 0; i < 20; i++) press(G, 0, CK_DOWN);
+    EXPECT_EQ_INT(G->shopScroll[0], 0);
+    {
+        int r1 = ck_shop_row_of(G->shopCur[1], 6, NULL);
+        EXPECT_EQ_INT(r1, 20);
+        EXPECT_EQ_INT(G->shopScroll[1], r1 - CK_SHOP_ROWS + 1);
+        press(G, 0, CK_UP); press(G, 0, CK_UP);
+        EXPECT_EQ_INT(G->shopScroll[1], r1 - CK_SHOP_ROWS + 1);   // still on screen: no scroll
+        for (int i = 0; i < 4; i++) press(G, 0, CK_UP);
+        EXPECT_EQ_INT(G->shopScroll[1], r1 - 6);
+    }
+    // a costume: its price is the pieces still missing; one buy gets them all and puts the whole look on
+    {
+        int chef = SHOP_COSTUME0;   // chef hat, mustache, chef coat
+        G->prog.bolts = 1000;
+        EXPECT_EQ_INT(ck_shop_price(G, chef), ck_acc[ACC_CHEF].cost + ck_acc[ACC_MUSTACHE].cost + ck_acc[ACC_CHEFCOAT].cost);
+        G->shopCur[0] = ACC_MUSTACHE; press(G, CK_A, 0);
+        EXPECT_EQ_INT(ck_shop_price(G, chef), ck_acc[ACC_CHEF].cost + ck_acc[ACC_CHEFCOAT].cost);
+        G->shopCur[0] = ACC_SNEAKERS; press(G, CK_A, 0);
+        int b0 = G->prog.bolts;
+        G->shopCur[0] = chef; press(G, CK_A, 0);
+        EXPECT_EQ_INT(G->prog.bolts, b0 - ck_acc[ACC_CHEF].cost - ck_acc[ACC_CHEFCOAT].cost);
+        EXPECT_EQ_INT(ck_shop_owns(G, chef), 1);
+        EXPECT_EQ_INT(ck_shop_price(G, chef), 0);
+        EXPECT_EQ_INT(!!CK_OWNS(&G->saves.closet, ACC_CHEFCOAT), 1);
+        EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_CHEF);
+        EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_BODY), ACC_CHEFCOAT);
+        EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), -1);   // the whole look: the sneakers come off
+        EXPECT_EQ_INT(ck_costume_worn(G, 0, chef), 1);
+        EXPECT_EQ_INT(ck_costume_worn(G, 1, chef), 0);
+        b0 = G->prog.bolts;
+        press(G, CK_A, 0);   // A again takes it off, for free
+        EXPECT_EQ_INT(G->prog.bolts, b0);
+        EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), -1);
+        EXPECT_EQ_INT(ck_costume_worn(G, 0, chef), 0);
+        press(G, CK_A, 0);   // and on again
+        EXPECT_EQ_INT(ck_costume_worn(G, 0, chef), 1);
+        // a piece past the first 40 saves in own2, and survives a save round trip
+        G->shopCur[0] = ACC_COWBOOTS; press(G, CK_A, 0);
+        EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), ACC_COWBOOTS);
+        ck_saves sv;
+        ck_saves_read(&sv, ck_game_saves(G));
+        EXPECT_EQ_INT(!!CK_OWNS(&sv.closet, ACC_COWBOOTS), 1);
+        EXPECT_EQ_INT(sv.closet.wear[0][SLOT_FEET], ACC_COWBOOTS + 1);
+        // a save from before the fashion line (no magic4) keeps its old items and starts the new ones empty
+        sv.closet.magic4 = 0; memset(sv.closet.own2, 0xFF, sizeof sv.closet.own2);
+        ck_saves old;
+        ck_saves_read(&old, &sv);
+        EXPECT_EQ_INT(!!CK_OWNS(&old.closet, ACC_MUSTACHE), 1);
+        EXPECT_EQ_INT(!!CK_OWNS(&old.closet, ACC_COWBOOTS), 0);
+        EXPECT_EQ_INT(old.closet.wear[0][SLOT_FEET], 0);
+        EXPECT_EQ_INT(old.closet.wear[0][SLOT_HEAD], ACC_CHEF + 1);
+        G->prog.bolts = 100;
+    }
+    // the last section: heroes swap for free, paint pots are bought then worn, the bubble gun is bought once
     G->prog.hero[1] = HERO_ROBOT;
     G->shopCur[1] = SHOP_OSTRICH; bolts = G->prog.bolts;
     press(G, 0, CK_A);
@@ -838,7 +918,7 @@ static void test_shop(void) {
     G->shopCur[0] = ACC_DISCO; press(G, CK_A, 0);
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_FEET), ACC_LIGHTUP);
     EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_BODY), ACC_DISCO);
-    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_PARTY);
+    EXPECT_EQ_INT(ck_wearing(G, 0, SLOT_HEAD), ACC_CHEF);   // still the chef hat from the costume
     G->prog.bolts = 500;
     G->shopCur[0] = SHOP_GUN;
     press(G, CK_A, 0);
@@ -1718,27 +1798,28 @@ static void test_house(void) {
     EXPECT_EQ_INT(Pd->caught, 1);
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
-    // the pond levels up with the fish the family has caught: plain little fish first, bigger later
+    // the pond levels up every five fish caught, and starts over with little fish every visit
     EXPECT_EQ_INT(ck_pond_level(0), 0);
-    EXPECT_EQ_INT(ck_pond_level(ck_pond_level_at[1]), 1);
+    EXPECT_EQ_INT(ck_pond_level(4), 0);
+    EXPECT_EQ_INT(ck_pond_level(5), 1);
+    EXPECT_EQ_INT(ck_pond_level(20), CK_POND_LEVELS - 1);
     EXPECT_EQ_INT(ck_pond_level(9999), CK_POND_LEVELS - 1);
-    for (int lv = 0; lv < CK_POND_LEVELS; lv += CK_POND_LEVELS - 1) {
-        G->saves.closet.fished = (uint16_t)ck_pond_level_at[lv];
-        press(G, CK_A, 0);
-        EXPECT_EQ_INT(G->scene, SC_FISH);
-        EXPECT_EQ_INT(Pd->level, lv);
-        float biggest = 0;
-        for (int n = 0; n < 20; n++) {   // restock a few times to see who lives there
-            press(G, CK_START, 0); press(G, CK_A, 0);
-            for (int k = 0; k < CK_POND_FISH; k++) if (Pd->fish[k].kind != CATCH_BOOT) biggest = fmaxf(biggest, ck_catches[Pd->fish[k].kind].len);
-        }
-        if (lv == 0) EXPECT_EQ_INT(biggest <= 7, 1);
-        else EXPECT_EQ_INT(biggest >= 18, 1);
-        press(G, CK_START, 0);
-    }
-    // catching the fish that reaches the next level restocks the pond
-    G->saves.closet.fished = (uint16_t)(ck_pond_level_at[1] - 1);
+    G->saves.closet.fished = 500;   // however many the family caught before
     press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_FISH);
+    EXPECT_EQ_INT(Pd->level, 0);
+    EXPECT_EQ_INT(Pd->fished, 0);
+    float biggest = 0;
+    for (int n = 0; n < 20; n++) {   // restock a few times to see who lives there
+        press(G, CK_START, 0); press(G, CK_A, 0);
+        for (int k = 0; k < CK_POND_FISH; k++) if (Pd->fish[k].kind != CATCH_BOOT) biggest = fmaxf(biggest, ck_catches[Pd->fish[k].kind].len);
+    }
+    EXPECT_EQ_INT(biggest <= 7, 1);
+    EXPECT_EQ_INT(Pd->level, 0);
+    press(G, CK_START, 0);
+    // catching the fish that reaches the next level restocks the pond
+    press(G, CK_A, 0);
+    Pd->fished = ck_pond_level_at[1] - 1;
     hold(G, 40, CK_A, 0);
     for (int i = 0; i < 200 && R->state != ROD_WAIT; i++) ck_game_step(G, 0, 0);
     for (int k = 0; k < CK_POND_FISH; k++) { Pd->fish[k].x = 300; Pd->fish[k].scare = 9999; }
