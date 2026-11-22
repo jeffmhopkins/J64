@@ -269,7 +269,10 @@ static float txt_w(int font, const char *s0) {
     char s[192];   // the same wider spaces as txt()
     size_t m = 0;
     for (const char *c = s0; *c && m < sizeof s - 2; c++) {
-        if (*c == ' ' && c > s0 && c[-1] != ' ' && c[1] != ' ') s[m++] = ' ';
+        // $ and ^ doubled, as in txt(): rdpq_text reads them as font and style changes (a bare
+        // ^ makes rdpq_paragraph_build assert)
+        if (*c == '$' || *c == '^') s[m++] = *c;
+        else if (*c == ' ' && c > s0 && c[-1] != ' ' && c[1] != ' ') s[m++] = ' ';
         s[m++] = *c;
     }
     s[m] = 0;
