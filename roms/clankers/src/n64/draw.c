@@ -228,20 +228,29 @@ static void rect(float x, float y, float w, float h, uint32_t hex, float alpha) 
 static void panel(float x, float y, float w, float h, uint32_t hex, float alpha) { rect(x, y, w, h, hex, alpha); }
 static void dark_panel(float x, float y, float w, float h) { panel(x, y, w, h, 0x1B1426, 0.86f); }
 
-// A straight line of width w (a stretched, rotated pixel).
+// A straight line of width w, drawn as runs of plain rectangles. It used to be a stretched,
+// rotated pixel, but the RDP dropped one of that quad's two triangles on long thin lines, so the
+// first half of a fishing rod or line vanished on the console.
 static void line(float x0, float y0, float x1, float y1, float w, uint32_t hex, float alpha) {
     float dx = x1 - x0, dy = y1 - y0, len = sqrtf(dx * dx + dy * dy);
     if (len < 0.5f) return;
-    if (fabsf(dx) < 0.01f || fabsf(dy) < 0.01f) {
-        float xa = fminf(x0, x1), ya = fminf(y0, y1);
-        rect(xa - (fabsf(dy) < 0.01f ? 0 : w / 2), ya - (fabsf(dx) < 0.01f ? 0 : w / 2),
-             fabsf(dx) < 0.01f ? w : len, fabsf(dy) < 0.01f ? w : len, hex, alpha);
-        return;
+    if (w < 1) w = 1;
+    bool steep = fabsf(dy) > fabsf(dx);
+    if (steep) { float s; s = x0; x0 = y0; y0 = s; s = x1; x1 = y1; y1 = s; s = dx; dx = dy; dy = s; }
+    if (dx < 0) { float s; s = x0; x0 = x1; x1 = s; s = y0; y0 = y1; y1 = s; dx = -dx; dy = -dy; }
+    // Walk the long axis a pixel at a time, merging pixels that land on the same row into one run.
+    float slope = dy / dx, h = w * len / dx;
+    int a0 = (int)floorf(x0), a1 = (int)ceilf(x1);
+    if (a1 <= a0) a1 = a0 + 1;
+    int run = a0;
+    float runB = roundf(y0 + (a0 + 0.5f - x0) * slope - h / 2);
+    for (int a = a0 + 1; a <= a1; a++) {
+        float b = a < a1 ? roundf(y0 + (a + 0.5f - x0) * slope - h / 2) : runB + 1e9f;
+        if (b == runB) continue;
+        if (steep) rect(runB, run, h, a - run, hex, alpha);
+        else rect(run, runB, a - run, h, hex, alpha);
+        run = a; runB = b;
     }
-    if (w < 2) w = 2;   // a rotated line thinner than this drops out in places on the RDP
-    mode_tex();
-    rdpq_set_prim_color(hexc(hex, (int)(alpha * 255)));
-    rdpq_sprite_blit(sp(SPR_PX), x0, y0, &(rdpq_blitparms_t){ .cx = 0, .cy = 2, .scale_x = len / 4, .scale_y = w / 4, .theta = -atan2f(dy, dx) });
 }
 
 static void txt(int font, int style, float x, float y, int align, const char *fmt, ...) {
