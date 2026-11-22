@@ -1,5 +1,6 @@
 // The heroes' house and the little games in it. Mirrors houseScene, paintScene, aquaScene,
 // carsScene and pianoScene in web/game.js (the layout is HOUSEART.LAYOUT in web/lib/houseart.js).
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -224,7 +225,7 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
         H->mode = HM_LETTER;
         break;
     case SPOT_TREE:
-        p->hold = FOOD_APPLE + 1;
+        p->hold = FOOD_APPLE + 1; p->garnish = 0;
         ck_sfx(G, SFX_SPROUT);
         ck_sparks(G, p->x - H->cam, p->y - 50, 6, 0x49D17A);
         say(H, "You picked an apple!");
@@ -245,7 +246,7 @@ void ck_house_back(ck_game *G) { ck_sfx(G, SFX_SELECT); G->scene = SC_HOUSE; G->
 #define back_to_house ck_house_back
 
 // The stove: the dish is named by what went in the pan (the first rule that fits wins).
-void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size) {
+void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int size) {
     bool has[FOOD_COUNT] = { 0 };
     for (int i = 0; i < n; i++) has[pan[i]] = true;
     int k;
@@ -262,9 +263,55 @@ void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size) {
     else k = has[FOOD_POTATO] ? DISH_VEGGIE_STEW : has[FOOD_SAUSAGE] ? DISH_SAUSAGE_STEW : has[FOOD_TOMATO] ? DISH_TOMATO_SOUP : has[FOOD_MUSHROOM] ? DISH_MUSHROOM_SOUP
          : has[FOOD_CARROT] ? DISH_CARROT_SOUP : n == 1 ? DISH_CHEESE_PLATE : DISH_CHEESE_SOUP;
     *dish = FOOD_DISH0 + k + 1;
-    snprintf(name, size, "%s", ck_foods[FOOD_DISH0 + k].name);
+    // which ingredients the dish's own name already covers
+#define B(f) (1u << (f))
+    static const uint32_t core[CK_DISHES] = {
+        [DISH_OMELETTE] = B(FOOD_EGG), [DISH_CHEESY_OMELETTE] = B(FOOD_EGG) | B(FOOD_CHEESE), [DISH_MUSHROOM_OMELETTE] = B(FOOD_EGG) | B(FOOD_MUSHROOM),
+        [DISH_TOMATO_OMELETTE] = B(FOOD_EGG) | B(FOOD_TOMATO), [DISH_POTATO_OMELETTE] = B(FOOD_EGG) | B(FOOD_POTATO), [DISH_BIG_BREAKFAST] = B(FOOD_EGG) | B(FOOD_SAUSAGE),
+        [DISH_TOAST] = B(FOOD_BREAD), [DISH_CHEESE_TOASTIE] = B(FOOD_BREAD) | B(FOOD_CHEESE), [DISH_PIZZA_TOASTIE] = B(FOOD_BREAD) | B(FOOD_CHEESE) | B(FOOD_TOMATO),
+        [DISH_MUSHROOM_TOAST] = B(FOOD_BREAD) | B(FOOD_MUSHROOM),
+        [DISH_TOMATO_SOUP] = B(FOOD_TOMATO), [DISH_MUSHROOM_SOUP] = B(FOOD_MUSHROOM), [DISH_CARROT_SOUP] = B(FOOD_CARROT), [DISH_CHEESE_SOUP] = B(FOOD_CHEESE),
+        [DISH_VEGGIE_STEW] = B(FOOD_POTATO) | B(FOOD_CARROT) | B(FOOD_TOMATO) | B(FOOD_MUSHROOM), [DISH_SAUSAGE_STEW] = B(FOOD_SAUSAGE),
+        [DISH_HOTDOG] = B(FOOD_SAUSAGE) | B(FOOD_BREAD), [DISH_CHEESY_HOTDOG] = B(FOOD_SAUSAGE) | B(FOOD_BREAD) | B(FOOD_CHEESE), [DISH_KETCHUP_HOTDOG] = B(FOOD_SAUSAGE) | B(FOOD_BREAD) | B(FOOD_TOMATO),
+        [DISH_SPAGHETTI] = B(FOOD_PASTA) | B(FOOD_TOMATO), [DISH_MEATBALLS] = B(FOOD_PASTA) | B(FOOD_TOMATO) | B(FOOD_SAUSAGE), [DISH_MAC_CHEESE] = B(FOOD_PASTA) | B(FOOD_CHEESE),
+        [DISH_MUSHROOM_PASTA] = B(FOOD_PASTA) | B(FOOD_MUSHROOM), [DISH_BUTTER_PASTA] = B(FOOD_PASTA),
+        [DISH_FRIED_RICE] = B(FOOD_RICE) | B(FOOD_EGG), [DISH_SAUSAGE_RICE] = B(FOOD_RICE) | B(FOOD_SAUSAGE), [DISH_VEGGIE_RICE] = B(FOOD_RICE) | B(FOOD_CARROT) | B(FOOD_MUSHROOM),
+        [DISH_RICE_PUDDING] = B(FOOD_RICE) | B(FOOD_BANANA) | B(FOOD_APPLE), [DISH_RICE_BOWL] = B(FOOD_RICE),
+        [DISH_APPLE_PIE] = B(FOOD_APPLE), [DISH_FRUIT_PIE] = B(FOOD_APPLE) | B(FOOD_BANANA), [DISH_PANCAKES] = B(FOOD_BANANA) | B(FOOD_EGG),
+        [DISH_CHIPS] = B(FOOD_POTATO), [DISH_CHEESY_CHIPS] = B(FOOD_POTATO) | B(FOOD_CHEESE), [DISH_SAUSAGE_CHIPS] = B(FOOD_POTATO) | B(FOOD_SAUSAGE),
+        [DISH_BANANA_BREAD] = B(FOOD_BANANA) | B(FOOD_BREAD), [DISH_CARROT_CAKE] = B(FOOD_CARROT) | B(FOOD_EGG), [DISH_CHEESE_PLATE] = B(FOOD_CHEESE),
+    };
+#undef B
+    // the rest of the pan becomes words: the first extra a word in front, the next two "with" and "and"
+    static const char *adj[CK_COOK_INGR] = { "eggy", "saucy", "cheesy", "foresty", "crunchy", "crusty", "spuddy", "fluffy", "meaty", "noodly", "appley", "tropical" };
+    static const char *noun[CK_COOK_INGR] = { "egg", "tomato", "cheese", "mushrooms", "carrots", "toast", "mash", "rice", "sausage", "noodles", "apple", "banana" };
+    // a doubled main ingredient makes it a "double" dish; a doubled extra makes that word "extra"
+    int ex[CK_COOK_INGR], nex = 0, most = 0, mostI = -1;
+    *extra = 0;
+    for (int i = 0; i < CK_COOK_INGR; i++) {
+        int f = ck_cook_ingr[i], cnt = 0;
+        for (int j = 0; j < n; j++) cnt += pan[j] == f;
+        if (cnt > most) { most = cnt; mostI = i; }
+        if (cnt && !(core[k] >> f & 1)) { ex[nex++] = i; *extra |= 1 << i; }
+    }
+    bool coreMost = most >= 2 && (core[k] >> ck_cook_ingr[mostI] & 1);
+    for (int e = 1; e < nex; e++)   // the doubled extra goes first
+        if (most >= 2 && ex[e] == mostI) { ex[e] = ex[0]; ex[0] = mostI; }
+    const char *lead = !nex || most < 2 ? "" : coreMost ? "" : ex[0] != mostI ? "" : most >= 3 ? "super " : "extra ";
+    const char *base = ck_foods[FOOD_DISH0 + k].name;
+    char buf[64];
+    int len = snprintf(buf, sizeof buf, "%s%s%s%s", coreMost ? (most >= 4 ? "mega " : most == 3 ? "triple " : "double ") : "", lead, nex ? adj[ex[0]] : "", nex ? " " : "");
+    bool lower = len > 0;   // the dish's own name goes lower case after a word in front
+    len += snprintf(buf + len, sizeof buf - len, "%c%s", lower ? tolower((unsigned char)base[0]) : base[0], base + 1);
+    for (int e = 1; e < nex; e++) {   // more extras, while the name still fits a banner
+        int add = (int)strlen(noun[ex[e]]) + (e == 1 ? 6 : 5);
+        if (len + add >= size || len + add > 38) break;
+        len += snprintf(buf + len, sizeof buf - len, "%s%s", e == 1 ? " with " : " and ", noun[ex[e]]);
+    }
+    buf[0] = (char)toupper((unsigned char)buf[0]);
+    snprintf(name, size, "%.*s", size - 1, buf);
 }
-static void cook_name(ck_house *H) { ck_cook_dish(H->pan, H->npan, &H->dish, H->dishName, sizeof H->dishName); }
+static void cook_name(ck_house *H) { ck_cook_dish(H->pan, H->npan, &H->dish, &H->dishExtra, H->dishName, sizeof H->dishName); }
 static void cook_update(ck_game *G) {
     ck_house *H = &G->house;
     for (int i = 0; i < H->np; i++) {
@@ -275,8 +322,8 @@ static void cook_update(ck_game *G) {
         if ((HIT(G, s, CK_UP) || HIT(G, s, CK_DOWN)) && !H->dish) { *c = (*c + CK_COOK_ROW) % CK_COOK_INGR; ck_sfx(G, SFX_SELECT); }   // the other shelf
         if (H->dish) {   // done: A (or START) takes the dish, and everyone playing gets one
             if (HIT(G, s, CK_A) || HIT(G, s, CK_START)) {
-                for (int k = 0; k < H->np; k++) H->ps[k].hold = H->dish;
-                char m[40];
+                for (int k = 0; k < H->np; k++) { H->ps[k].hold = H->dish; H->ps[k].garnish = H->dishExtra; }
+                char m[56];
                 snprintf(m, sizeof m, H->np > 1 ? "%s for two!" : "%s!", H->dishName);
                 say(H, m);
                 ck_sfx(G, SFX_BUY);
@@ -325,7 +372,7 @@ void ck_house_update(ck_game *G) {
             if (HIT(G, s, CK_UP) && *c >= 3) { *c -= 3; ck_sfx(G, SFX_SELECT); }
             if (HIT(G, s, CK_DOWN) && *c < 6) { *c += 3; ck_sfx(G, SFX_SELECT); }
             if (HIT(G, s, CK_A)) {
-                p->hold = *c + 1;
+                p->hold = *c + 1; p->garnish = 0;
                 ck_sfx(G, SFX_BUY);
                 char m[32];
                 snprintf(m, sizeof m, "Got some %s!", ck_foods[*c].name);

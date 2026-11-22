@@ -627,6 +627,7 @@ typedef struct {
     int laps, key, rep, bounce;
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
+    int garnish;               // a cooked dish's extras on top (bits of ck_cook_ingr)
     uint64_t hit;              // cars: the obstacles you have bumped, one bit each
     int size;                  // paint: the brush size, 0 (one cell) to 2 (three cells across)
     bool stick;                // paint: holding a sticker instead of the brush
@@ -664,7 +665,10 @@ enum {
 #define CK_COOK_PAN 4
 extern const int ck_cook_ingr[CK_COOK_INGR];
 // what a pan of n ingredients cooks into: *dish is FOOD_* + 1, name its name
-void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size);
+// The stove's dish: its kind (FOOD_* + 1) from the main ingredients, then a name built from
+// everything in the pan ("Double meaty cheesy omelette with carrots"), and *extra: a bit per
+// ck_cook_ingr that is in the pan but not in the dish's name already, drawn on top as garnish.
+void ck_cook_dish(const int *pan, int n, int *dish, int *extra, char *name, int size);
 typedef struct { const char *name; int n; ck_fshape s[6]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];
 typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
@@ -684,7 +688,7 @@ typedef struct {
     float cam;
     int mode, pick;
     float sleepT;
-    char msg[48];
+    char msg[56];
     int msgT;
     uint8_t mural[CK_MURAL_W * CK_MURAL_H];
     ck_fish fish[CK_AQUA_FISH];
@@ -706,7 +710,8 @@ typedef struct {
     int pan[CK_COOK_PAN], npan;   // HM_COOK: what is in the pan (FOOD_*)
     float heat;                // HM_COOK: 0..100, the dish is done at 100
     int dish;                  // HM_COOK: the cooked dish, FOOD_* + 1 (0: still cooking)
-    char dishName[28];
+    char dishName[40];
+    int dishExtra;
     ck_thrown thrown[CK_THROWN];
     int nthrown;
     int chestT[CK_AQUA_CHESTS];   // aquarium: frames a chest stays open

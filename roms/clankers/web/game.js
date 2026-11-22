@@ -294,6 +294,29 @@ function hint(s, y) { const w = textW(s, 7) + 14; panel((W - w) / 2, y - 9, w, 1
 // a message: a dark box with a bright rim, light words (the N64's banner(); dark words on yellow blur on a TV)
 function rimBanner(s, size, y, h, rim = '#ffd23f', col = '#ffd23f') { const ww = Math.min(W - 6, Math.max(120, textW(s, size) + 20)); K.rr((W - ww) / 2, y, ww, h, 5, rim); K.rr((W - ww) / 2 + 2, y + 2, ww - 4, h - 4, 4, '#1b1426'); text(s, W / 2, y + h / 2 + size * 0.36, size, col, 'center', null); }
 // a food from HOUSEART.FOODS (ck_foods) at (x, y), sc times its size
+// a cooked dish's extras on top, a little piece of each (bits of COOK_INGR); garnish_art in draw.c
+function garnishArt(mask, x, y, sc) {
+  if (!mask) return;
+  const box = (x0, y0, w, h, c) => { g.fillStyle = c; g.fillRect(x0, y0, w, h); }, dot = (x0, y0, r, c) => K.circ(x0, y0, r, c);
+  const n = [...Array(12).keys()].filter(i => mask >> i & 1).length;
+  [...Array(12).keys()].filter(i => mask >> i & 1).forEach((i, j) => {
+    const px = x + (j - (n - 1) / 2) * 4.5 * sc, py = y - 3.5 * sc + (j % 2) * 1.5 * sc, s = sc;
+    switch (i) {
+      case 0: dot(px, py, 1.8 * s, '#ffffff'); dot(px, py, 0.9 * s, '#ffc21f'); break;
+      case 1: dot(px, py, 1.5 * s, '#e0402f'); dot(px - 0.4 * s, py - 0.4 * s, 0.5 * s, '#ff9a8a'); break;
+      case 2: box(px - 1.2 * s, py - 1.2 * s, 2.4 * s, 2.4 * s, '#ffd23f'); box(px - 0.4 * s, py - 0.4 * s, 0.7 * s, 0.7 * s, '#e0a92b'); break;
+      case 3: box(px - 0.4 * s, py, 0.8 * s, 1.4 * s, '#f2e6d0'); dot(px, py, 1.4 * s, '#b07a4c'); break;
+      case 4: box(px - 1.6 * s, py - 0.6 * s, 3.2 * s, 1.2 * s, '#ff8a3d'); box(px + 1.4 * s, py - 0.9 * s, 0.8 * s, 0.6 * s, '#49d17a'); break;
+      case 5: box(px - 1.3 * s, py - 1.1 * s, 2.6 * s, 2.2 * s, '#c98a4b'); box(px - 0.9 * s, py - 0.7 * s, 1.8 * s, 1.4 * s, '#f2d49b'); break;
+      case 6: dot(px, py, 1.6 * s, '#f2e6b0'); break;
+      case 7: for (let k = 0; k < 3; k++) dot(px - s + k * s, py + (k % 2) * 0.6 * s, 0.6 * s, '#ffffff'); break;
+      case 8: box(px - 1.5 * s, py - 0.7 * s, 3 * s, 1.4 * s, '#9a4a2a'); dot(px + 1.5 * s, py, 0.7 * s, '#9a4a2a'); break;
+      case 9: for (let k = 0; k < 3; k++) box(px - 1.5 * s + k * s, py - 0.6 * s + (k % 2) * 0.6 * s, s, 0.6 * s, '#f2d27a'); break;
+      case 10: dot(px, py, 1.4 * s, '#e04f4f'); box(px, py - 2 * s, 0.8 * s, 0.8 * s, '#49d17a'); break;
+      case 11: box(px - 1.5 * s, py - 0.5 * s, 3 * s, s, '#ffe066'); box(px - 1.5 * s, py + 0.2 * s, 0.6 * s, 0.6 * s, '#6f4630'); break;
+    }
+  });
+}
 function foodArt(k, x, y, sc = 1) { for (const [kind, fx, fy, w, h, c] of HOUSEART.FOODS[k].s) { if (kind === 0) K.circ(x + fx * sc, y + fy * sc, w * sc, hexStr(c)); else { g.fillStyle = hexStr(c); g.fillRect(x + fx * sc, y + fy * sc, w * sc, h * sc); } } }
 
 // ----------------------------------------------------------------------------- TITLE
@@ -695,7 +718,7 @@ function houseScene(from) {
     const kind = HL.spots[k][1];
     if (kind === 'back') { SND.fx.confirm(); saveProg(); enterWorld(worldNum - 1, 'exit'); }
     else if (kind === 'mail') { SND.fx.open(); S.letter = S.letter % HOUSEART.LETTERS.length + 1; S.mode = 'letter'; }
-    else if (kind === 'tree') { p.hold = 1; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
+    else if (kind === 'tree') { p.hold = 1; p.garnish = 0; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
     else if (kind === 'snack') { SND.fx.open(); S.mode = 'fridge'; }
     else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.heat = 0; S.dish = 0; }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
@@ -729,12 +752,12 @@ function houseScene(from) {
         if (hit(sl, 'left') && S.cpick[i] % 6 > 0) { S.cpick[i]--; SND.fx.select(); }
         if (hit(sl, 'right') && S.cpick[i] % 6 < 5) { S.cpick[i]++; SND.fx.select(); }
         if ((hit(sl, 'up') || hit(sl, 'down')) && !S.dish) { S.cpick[i] = (S.cpick[i] + 6) % ING.length; SND.fx.select(); }   // the other shelf
-        if (S.dish) { if (hit(sl, 'a') || hit(sl, 'start')) { for (const q of S.ps) q.hold = S.dish; S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
+        if (S.dish) { if (hit(sl, 'a') || hit(sl, 'start')) { for (const q of S.ps) { q.hold = S.dish; q.garnish = S.dishExtra; } S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
         if (hit(sl, 'a')) { if (S.pan.length < 4) S.pan.push(ING[S.cpick[i]]); else S.pan[3] = ING[S.cpick[i]]; SND.fx.hop(); }   // a full pan swaps its last one
         if (hit(sl, 'b') && S.pan.length) {
           S.heat += 9; SND.fx.hover(); for (let k = 0; k < 2; k++) puff(150 + Math.random() * 20, 120, 1, 'rgba(255,255,255,0.63)');
           if (S.heat >= 100) {
-            S.heat = 100; [S.dish, S.dishName] = HOUSEART.cookDish(S.pan);
+            S.heat = 100; [S.dish, S.dishName, S.dishExtra] = HOUSEART.cookDish(S.pan);
             SND.fx.gear(); sparks(160, 140, 12, '#ffd23f');
           }
         }
@@ -750,7 +773,7 @@ function houseScene(from) {
         if (hit(sl, 'right') && S.fpick[i] % 3 < 2) { S.fpick[i]++; SND.fx.select(); }
         if (hit(sl, 'up') && S.fpick[i] >= 3) { S.fpick[i] -= 3; SND.fx.select(); }
         if (hit(sl, 'down') && S.fpick[i] < 6) { S.fpick[i] += 3; SND.fx.select(); }
-        if (hit(sl, 'a')) { p.hold = S.fpick[i] + 1; SND.fx.buy(); S.msg = { text: 'Got some ' + HOUSEART.FOODS[S.fpick[i]].name + '!', t: 100 }; S.mode = 'walk'; }
+        if (hit(sl, 'a')) { p.hold = S.fpick[i] + 1; p.garnish = 0; SND.fx.buy(); S.msg = { text: 'Got some ' + HOUSEART.FOODS[S.fpick[i]].name + '!', t: 100 }; S.mode = 'walk'; }
       });
       if (S.mode === 'fridge' && (anyHit('b') || anyHit('start'))) { S.mode = 'walk'; SND.fx.select(); }
       return;
@@ -810,8 +833,8 @@ function houseScene(from) {
       const x = p.x - S.cam, t = S.t + p.m.slot * 0.7;
       const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : !p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle';
       drawHeroPose(p.m, x, p.y, st, st === 'run' ? p.anim / 11 : t, p.face);
-      if (p.eatT > 0) foodArt(p.food, x + 6, p.y - 24, 0.4 + 0.6 * p.eatT / 50);   // shrinking as it is eaten
-      else if (p.hold) foodArt(p.hold - 1, x + p.face * 9, p.y - 20);
+      if (p.eatT > 0) { const sc = 0.4 + 0.6 * p.eatT / 50; foodArt(p.food, x + 6, p.y - 24, sc); garnishArt(p.garnish, x + 6, p.y - 24, sc); }   // shrinking as it is eaten
+      else if (p.hold) { foodArt(p.hold - 1, x + p.face * 9, p.y - 20); garnishArt(p.garnish, x + p.face * 9, p.y - 20, 1); }
     }
     for (const f of S.thrown) foodArt(f.kind, f.x - S.cam, f.y);
     // what Down does where you stand
@@ -850,7 +873,7 @@ function houseScene(from) {
       g.fillStyle = '#3a3f4a'; g.fillRect(50, 150, 220, 80); g.fillStyle = '#5a5e6a'; g.fillRect(56, 156, 208, 6);
       K.circ(160, 160, 34, S.heat > 0 && !S.dish ? '#ff8a3d' : '#2b2833');
       K.circ(160, 140, 46, '#5a5e6a'); K.circ(160, 140, 40, '#2b2833'); g.fillStyle = '#3a2618'; g.fillRect(202, 136, 62, 8);
-      if (S.dish) foodArt(S.dish - 1, 160, 140, 6);
+      if (S.dish) { foodArt(S.dish - 1, 160, 140, 6); garnishArt(S.dishExtra, 160, 140, 6); }
       else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 140 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
       if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each' : 'A take it', 226); }

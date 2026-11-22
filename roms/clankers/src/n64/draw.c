@@ -1340,6 +1340,31 @@ static void food_art(int kind, float x, float y, float sc) {
         else rect(x + s->x * sc, y + s->y * sc, s->w * sc, s->h * sc, s->col, 1);
     }
 }
+// A cooked dish's extras on top, a little piece of each (bits of ck_cook_ingr, the same order).
+// web/game.js garnishArt draws the same.
+static void garnish_art(int mask, float x, float y, float sc) {
+    int n = 0;
+    for (int i = 0; i < CK_COOK_INGR; i++) n += mask >> i & 1;
+    for (int i = 0, j = 0; i < CK_COOK_INGR; i++) {
+        if (!(mask >> i & 1)) continue;
+        float px = x + (j - (n - 1) / 2.0f) * 4.5f * sc, py = y - 3.5f * sc + (j % 2) * 1.5f * sc;
+        j++;
+        switch (ck_cook_ingr[i]) {
+        case FOOD_EGG: shape(SPR_DOT, px, py, 1.8f * sc, 0xFFFFFF, 1); shape(SPR_DOT, px, py, 0.9f * sc, 0xFFC21F, 1); break;
+        case FOOD_TOMATO: shape(SPR_DOT, px, py, 1.5f * sc, 0xE0402F, 1); shape(SPR_DOT, px - 0.4f * sc, py - 0.4f * sc, 0.5f * sc, 0xFF9A8A, 1); break;
+        case FOOD_CHEESE: rect(px - 1.2f * sc, py - 1.2f * sc, 2.4f * sc, 2.4f * sc, 0xFFD23F, 1); rect(px - 0.4f * sc, py - 0.4f * sc, 0.7f * sc, 0.7f * sc, 0xE0A92B, 1); break;
+        case FOOD_MUSHROOM: rect(px - 0.4f * sc, py, 0.8f * sc, 1.4f * sc, 0xF2E6D0, 1); shape(SPR_DOT, px, py, 1.4f * sc, 0xB07A4C, 1); break;
+        case FOOD_CARROT: rect(px - 1.6f * sc, py - 0.6f * sc, 3.2f * sc, 1.2f * sc, 0xFF8A3D, 1); rect(px + 1.4f * sc, py - 0.9f * sc, 0.8f * sc, 0.6f * sc, 0x49D17A, 1); break;
+        case FOOD_BREAD: rect(px - 1.3f * sc, py - 1.1f * sc, 2.6f * sc, 2.2f * sc, 0xC98A4B, 1); rect(px - 0.9f * sc, py - 0.7f * sc, 1.8f * sc, 1.4f * sc, 0xF2D49B, 1); break;
+        case FOOD_POTATO: shape(SPR_DOT, px, py, 1.6f * sc, 0xF2E6B0, 1); break;
+        case FOOD_RICE: for (int k = 0; k < 3; k++) shape(SPR_DOT, px - sc + k * sc, py + (k % 2) * 0.6f * sc, 0.6f * sc, 0xFFFFFF, 1); break;
+        case FOOD_SAUSAGE: rect(px - 1.5f * sc, py - 0.7f * sc, 3 * sc, 1.4f * sc, 0x9A4A2A, 1); shape(SPR_DOT, px + 1.5f * sc, py, 0.7f * sc, 0x9A4A2A, 1); break;
+        case FOOD_PASTA: for (int k = 0; k < 3; k++) rect(px - 1.5f * sc + k * sc, py - 0.6f * sc + (k % 2) * 0.6f * sc, sc, 0.6f * sc, 0xF2D27A, 1); break;
+        case FOOD_APPLE: shape(SPR_DOT, px, py, 1.4f * sc, 0xE04F4F, 1); rect(px, py - 2 * sc, 0.8f * sc, 0.8f * sc, 0x49D17A, 1); break;
+        case FOOD_BANANA: rect(px - 1.5f * sc, py - 0.5f * sc, 3 * sc, sc, 0xFFE066, 1); rect(px - 1.5f * sc, py + 0.2f * sc, 0.6f * sc, 0.6f * sc, 0x6F4630, 1); break;
+        }
+    }
+}
 static void house_hero(const ck_game *G, int slot, float x, float y, int pose, float t, int face) {
     int hero = G->prog.hero[slot], col = skin_col(G, slot);
     bool R = hero == HERO_ROBOT, side = pose == HP_RUN || pose == HP_JUMP || pose == HP_JET;
@@ -1438,8 +1463,8 @@ static void draw_house(const ck_game *G) {
         float x = p->x - cam, tt = t + p->slot * 0.7f;
         int pose = p->eat > 0 || Hs->mode == HM_SLEEP ? HP_CHEER : !p->ground ? HP_JUMP : fabsf(p->vx) > 0.3f ? HP_RUN : HP_IDLE;
         house_hero(G, p->slot, x, p->y, pose, tt, p->face);
-        if (p->eat > 0) food_art(p->col, x + 6, p->y - 24, 0.4f + 0.6f * p->eat / 50.0f);   // shrinking as it is eaten
-        else if (p->hold) food_art(p->hold - 1, x + p->face * 9, p->y - 20, 1);
+        if (p->eat > 0) { float sc = 0.4f + 0.6f * p->eat / 50.0f; food_art(p->col, x + 6, p->y - 24, sc); if (p->col >= FOOD_DISH0) garnish_art(p->garnish, x + 6, p->y - 24, sc); }   // shrinking as it is eaten
+        else if (p->hold) { food_art(p->hold - 1, x + p->face * 9, p->y - 20, 1); garnish_art(p->garnish, x + p->face * 9, p->y - 20, 1); }
     }
     for (int i = 0; i < Hs->nthrown; i++) food_art(Hs->thrown[i].kind, Hs->thrown[i].x - cam, Hs->thrown[i].y, 1);
     // what Down does where you stand
@@ -1500,7 +1525,7 @@ static void draw_house(const ck_game *G) {
         shape(SPR_DOT, 160, 140, 46, 0x5A5E6A, 1);   // the pan
         shape(SPR_DOT, 160, 140, 40, 0x2B2833, 1);
         rect(202, 136, 62, 8, 0x3A2618, 1);   // its handle
-        if (Hs->dish) food_art(Hs->dish - 1, 160, 140, 6);
+        if (Hs->dish) { food_art(Hs->dish - 1, 160, 140, 6); garnish_art(Hs->dishExtra, 160, 140, 6); }
         else for (int i = 0; i < Hs->npan; i++) {
             float a = i * 1.57f + G->t * (Hs->heat > 0 ? 1.5f : 0);
             food_art(Hs->pan[i], 160 + cosf(a) * 18, 140 + sinf(a) * 14, 2.2f);

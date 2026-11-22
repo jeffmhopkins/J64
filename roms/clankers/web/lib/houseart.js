@@ -469,7 +469,38 @@ const HOUSEART = (() => {
       : has('bread') ? (has('cheese') && has('tomato') ? 'Pizza toastie' : has('cheese') ? 'Cheese toastie' : has('mushroom') ? 'Mushroom toast' : 'Toast')
       : has('potato') && !has('tomato') && !has('carrot') && !has('mushroom') ? (has('cheese') ? 'Cheesy chips' : has('sausage') ? 'Sausage and chips' : 'Chips')
       : has('potato') ? 'Veggie stew' : has('sausage') ? 'Sausage stew' : has('tomato') ? 'Tomato soup' : has('mushroom') ? 'Mushroom soup' : has('carrot') ? 'Carrot soup' : pan.length === 1 ? 'Melted cheese' : 'Cheese soup';
-    return [FOOD[k] + 1, k];
+    // which ingredients the dish's own name already covers; the rest go into the name and on top
+    const CORE = {
+      'Omelette': 'egg', 'Cheesy omelette': 'egg cheese', 'Mushroom omelette': 'egg mushroom', 'Tomato omelette': 'egg tomato', 'Potato omelette': 'egg potato', 'Big breakfast': 'egg sausage',
+      'Toast': 'bread', 'Cheese toastie': 'bread cheese', 'Pizza toastie': 'bread cheese tomato', 'Mushroom toast': 'bread mushroom',
+      'Tomato soup': 'tomato', 'Mushroom soup': 'mushroom', 'Carrot soup': 'carrot', 'Cheese soup': 'cheese', 'Veggie stew': 'potato carrot tomato mushroom', 'Sausage stew': 'sausage',
+      'Hot dog': 'sausage bread', 'Cheesy hot dog': 'sausage bread cheese', 'Hot dog and ketchup': 'sausage bread tomato',
+      'Spaghetti and sauce': 'pasta tomato', 'Spaghetti and meatballs': 'pasta tomato sausage', 'Mac and cheese': 'pasta cheese', 'Mushroom pasta': 'pasta mushroom', 'Buttered pasta': 'pasta',
+      'Egg fried rice': 'rice egg', 'Sausage rice': 'rice sausage', 'Veggie rice': 'rice carrot mushroom', 'Rice pudding': 'rice banana apple', 'Rice bowl': 'rice',
+      'Apple pie': 'apple', 'Fruit pie': 'apple banana', 'Banana pancakes': 'banana egg',
+      'Chips': 'potato', 'Cheesy chips': 'potato cheese', 'Sausage and chips': 'potato sausage',
+      'Banana bread': 'banana bread', 'Carrot cake': 'carrot egg', 'Melted cheese': 'cheese',
+    }[k].split(' ').map(n => FOOD[n]);
+    const ADJ = ['eggy', 'saucy', 'cheesy', 'foresty', 'crunchy', 'crusty', 'spuddy', 'fluffy', 'meaty', 'noodly', 'appley', 'tropical'];
+    const NOUN = ['egg', 'tomato', 'cheese', 'mushrooms', 'carrots', 'toast', 'mash', 'rice', 'sausage', 'noodles', 'apple', 'banana'];
+    let ex = [], most = 0, mostI = -1, extra = 0;
+    COOK_INGR.forEach((f, i) => {
+      const cnt = pan.filter(p => p === f).length;
+      if (cnt > most) { most = cnt; mostI = i; }
+      if (cnt && !CORE.includes(f)) { ex.push(i); extra |= 1 << i; }
+    });
+    // a doubled main ingredient makes it a "double" dish; a doubled extra makes that word "extra"
+    const coreMost = most >= 2 && CORE.includes(COOK_INGR[mostI]);
+    for (let e = 1; e < ex.length; e++) if (most >= 2 && ex[e] === mostI) { ex[e] = ex[0]; ex[0] = mostI; }
+    const lead = !ex.length || most < 2 || coreMost || ex[0] !== mostI ? '' : most >= 3 ? 'super ' : 'extra ';
+    let s = (coreMost ? (most >= 4 ? 'mega ' : most === 3 ? 'triple ' : 'double ') : '') + lead + (ex.length ? ADJ[ex[0]] + ' ' : '');
+    s += s ? k[0].toLowerCase() + k.slice(1) : k;
+    for (let e = 1; e < ex.length; e++) {   // more extras, while the name still fits a banner
+      const add = (e === 1 ? ' with ' : ' and ') + NOUN[ex[e]];
+      if (s.length + add.length > 38) break;
+      s += add;
+    }
+    return [FOOD[k] + 1, s[0].toUpperCase() + s.slice(1), extra];
   }
    // the aquarium's treasure chests (ck_aqua_chest_x)
   return { FOODS, FOOD, FRIDGE_FOODS, COOK_INGR, cookDish, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, fancyFish, aquaDecor, RACE, TRACKS, raceObst, raceCurve, racePad, raceProject, raceView, carBack, KEYS, hx };
