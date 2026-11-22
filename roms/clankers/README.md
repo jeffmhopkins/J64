@@ -97,7 +97,7 @@ Walk off the yard's left edge to go back to the map.
 | Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall (hold B); L and R change colour, C changes the brush size (one, two or three cells), and the last colour choice, ALL, wipes the wall with B. Turning round keeps the brush where it was |
 | Music room | The piano (the stick picks a key, A plays it, B jumps an octave) or the drums (every button is a different drum) |
 | Aquarium | Dive into a tank three screens wide with a bubble helmet. B sprinkles food (a fed fish follows you for a while), opens a treasure chest (5 bolts each, once a visit), pokes a crab on the beach, and picks up a shrimp (B again throws it); swimming into a fish boops it |
-| Garage | A top-down race, half the screen each for two players, on four tracks (Green Hills, Desert Dash, Snowy Pass, Moon Run) with their own obstacles; pick one with left and right. Steer across three lanes; A or up goes faster, B or down brakes |
+| Garage | A race seen from behind the car, with a horizon and bends that push you wide; half the screen each for two players, on four tracks (Green Hills, Desert Dash, Snowy Pass, Moon Run) with their own obstacles, boost pads and jump ramps. Pick a track with left and right. Steer across three lanes; A or up goes faster, B or down brakes |
 | Arcade | Pinball (B or L flips the left flipper, A or R the right; A fires the ball up the lane) and Bug Blaster (the stick moves your cannon, A or B fires; clear the bugs before they reach the shields) |
 
 Food you hold (from the tree, the fridge or the stove) goes in your hand: A eats it and fills your

@@ -436,25 +436,39 @@ extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 #define CK_AQUA_SHRIMP 8
 #define CK_AQUA_CRABS 3
 #define CK_AQUA_FOOD 12           // fish food flakes sinking at once
-// the garage's race track: an oval ring seen from above
-// The garage race, top down: the road scrolls down, the stick steers across three lanes to dodge
-// cones, crates, oil and slow cars; up or A goes faster, down or B brakes. Two players get a half
-// of the screen each, the same road.
+// The garage race, seen from behind the car: the road runs off to a horizon and bends left and
+// right, the stick steers across three lanes to dodge cones, crates, oil and slow cars, and a bend
+// pushes the car to its outside. Up or A goes faster, down or B brakes. Boost pads speed you up and
+// ramps jump you over whatever is just past them. Two players get a half of the screen each.
 #define CK_RACE_LEN 9600          // about a minute at cruising speed
 #define CK_RACE_OBST 64           // sparse at the start, closer together further on
 #define CK_RACE_LANE 40           // the lanes are at -40, 0 and 40 from the road's middle
-#define CK_RACE_EDGE 52           // how far from the middle a car can go
-#define CK_RACE_CAR_Y 190         // where your car sits on the screen
+#define CK_RACE_ROAD 64           // the road's half width; past it is the kerb, then grass that slows you
+#define CK_RACE_EDGE 84           // how far from the middle a car can go
+#define CK_RACE_PADS 14           // boost pads and ramps along the road
+enum { PAD_BOOST, PAD_RAMP };
+// the view: the horizon's height, the depth scale (a row r px below the horizon is CK_RACE_ZC / r
+// ahead of the camera), how far ahead of the camera your car sits, and px per unit across at the
+// bottom of a 320 px wide view
+#define CK_RACE_HZ 96
+#define CK_RACE_ZC 2880.0f
+#define CK_RACE_CAR_Z 26.0f
+#define CK_RACE_PX0 2.66f
+#define CK_RACE_BEND 0.0026f      // how far a bend carries the road sideways in the distance
 // The kinds work the same on every track and only look different: a small thing, a big block, a
 // slippery patch, and something that moves (cars and moon rovers drive on, tumbleweeds and
 // penguins wander across the road).
 enum { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CAR };
 #define CK_RACE_TRACKS 4
 enum { TRACK_HILLS, TRACK_DESERT, TRACK_SNOW, TRACK_MOON };
-typedef struct { const char *name; uint32_t ground, deco, road, kerbA, kerbB, line; } ck_racetrack;
+typedef struct { const char *name; uint32_t ground, deco, road, kerbA, kerbB, line, sky, hills; } ck_racetrack;
 extern const ck_racetrack ck_tracks[CK_RACE_TRACKS];
 // obstacle i on a track: how far along the road (at race time `clock`: movers move), across, its kind and size
 void ck_race_obst(int track, int i, float clock, float *d, float *x, int *kind, float *w, float *h);
+// how hard the road bends at distance d (-1 hard left .. 1 hard right, 0 straight)
+float ck_race_curve(int track, float d);
+// boost pad or ramp i: how far along, across, and which (pads are 28 across and 30 long)
+void ck_race_pad(int track, int i, float *d, float *x, int *kind);
 // the piano: two octaves from middle C, 14 white keys
 #define CK_KEYS_X 20
 #define CK_KEYS_Y 150
@@ -546,7 +560,10 @@ typedef struct {
     bool ground, land, jet, brush;
     int eat, bubT, col;        // house: snack time; aqua: next bubble; paint: palette choice
     float bx, by;              // paint: where the brush was last frame
-    float a, s, lapT, best;    // cars: distance along the road, speed, (unused), finish time
+    float a, s, sky, best;     // cars: distance along the road, speed, how far the skyline has turned, finish time
+    float jz, jvz, lean;       // cars: height off the road and climb speed after a ramp, how hard it leans into a turn
+    int boost;                 // cars: frames of boost pad speed left
+    uint32_t pads;             // cars: the boost pads and ramps you have used, one bit each
     int laps, key, rep, bounce;
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)

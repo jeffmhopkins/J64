@@ -74,16 +74,42 @@ function pinballScene(house) {
   };
   S.draw = function () {
     K.g = g;
+    const lit = (S.lit & 1) + (S.lit >> 1 & 1) + (S.lit >> 2 & 1), party = S.litT > 0 && Math.floor(S.litT / 6) % 2;
+    const hazard = (x0, y0, x1, y1, w, n) => { for (let k = 0; k < n; k++) { const a = k / n, b = (k + 1) / n; aLine(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a, x0 + (x1 - x0) * b, y0 + (y1 - y0) * b, w, k % 2 ? 0x1B1426 : 0xFFD23F); } };
     aBox(0, 0, W, H, 0x2B2240);
     for (let k = 0; k < 24; k++) aDot((k * 53) % 320, (k * 37) % 240, 1, 0x5A4F78);
-    aBox(70, 16, 180, H - 16, 0x1B2A4A);
-    for (let y = 30; y < H; y += 20) aBox(72, y, 158, 1, 0x22355C);
-    for (const w of PIN.walls) aLine(w[0], w[1], w[2], w[3], 3, 0xC9C4E0);
+    text('CLANK-O-MATIC', W / 2, 12, 8, '#ffd23f');
+    aBox(70, 16, 180, H - 16, 0x34404F);   // the steel plate, its seams and rivets
+    for (let y = 56; y < H; y += 40) aBox(70, y, 180, 1, 0x283240);
+    for (let x = 115; x < 232; x += 45) aBox(x, 16, 1, H - 16, 0x283240);
+    for (let y = 56; y < H; y += 40) for (let x = 115; x < 232; x += 45) aDot(x, y, 1.5, 0x6A7888);
+    aBox(136, 146, 48, 36, 0x4A5666); aBox(139, 149, 42, 30, 0x3E4856); aBox(159, 136, 2, 10, 0x8F8AA8);   // the robot face on the table
+    aDot(160, 135, 3, party ? 0xFFD23F : 0xE04F4F);
+    for (let e = 0; e < 2; e++) { aDot(150 + e * 20, 159, 5.5, 0x1B2A3A); if (party || lit > e) aDot(150 + e * 20, 159, 4, 0x5AD1FF); }
+    aBox(147, 168, 26, 6, 0x1B1426); for (let k = 0; k < 5; k++) aBox(149 + k * 5, 169, 2, 4, party || lit >= 3 ? 0xFFD23F : 0x6A7888);
+    hazard(70, 236, 232, 236, 6, 18);   // the drain
+    aBox(236, 226, 10, 6, 0xE04F4F); aBox(239, 232, 4, 8, 0x8F8AA8);   // the plunger
+    PIN.walls.forEach((w, k) => { if (k < PIN.walls.length - 2) aLine(w[0], w[1], w[2], w[3], 3, 0xC9C4E0); else hazard(w[0], w[1], w[2], w[3], 4, 7); });
     aLine(...PIN.gate, 2, 0xFFD23F);
-    PIN.lights.forEach(([x, y], k) => { const on = (S.lit & (1 << k)) || (S.litT > 0 && Math.floor(S.litT / 6) % 2); aDot(x, y, 5, on ? 0xFFD23F : 0x3A3650); aRing(x, y, 6, 0x8F8AA8); });
+    PIN.lights.forEach(([x, y], k) => {   // bolt targets
+      const on = (S.lit & (1 << k)) || party;
+      aDot(x, y, 7, 0x1B1426); aRing(x, y, 7, on ? 0xFFD23F : 0x6A7888); K.nut(x, y, 4.6, on ? S.t * 3 : 0, on ? '#ffd23f' : '#5a5a6e');
+    });
     const bcol = [0xFF5A5A, 0x5AD1FF, 0xC28BFF, 0x49D17A, 0x49D17A];
-    PIN.bumps.forEach(([x, y, r0], k) => { const r = r0 + (S.flash[k] > 0 ? 2 : 0); aDot(x, y, r, S.flash[k] > 0 ? 0xFFFFFF : bcol[k]); aDot(x, y, r * 0.55, 0x1B1426); aDot(x, y, r * 0.3, bcol[k]); });
-    for (let s = 0; s < 2; s++) { const [x0, y0, x1, y1] = pinFlipper(s, S.flip[s]); aLine(x0, y0, x1, y1, 6, 0xFFD23F); aDot(x0, y0, 4, 0xFF8A3D); }
+    PIN.bumps.forEach(([x, y, r0], k) => {
+      const hitB = S.flash[k] > 0, r = r0 + (hitB ? 2 : 0);
+      if (r0 > 8) {   // big bumpers are gears that spin when hit
+        S.spin = S.spin || [0, 0, 0, 0, 0]; S.spin[k] += (k % 2 ? -1 : 1) * (hitB ? 0.1 : 0.013);
+        if (hitB) aDot(x, y, r + 3, 0xFFFFFF, 0.6);
+        K.gear(x, y, r * 1.05, 10, S.spin[k], '#ffd854', '#a37d13');
+        aDot(x, y, r * 0.45, 0x1B1426); aDot(x, y, r * 0.3, hitB ? 0xFFFFFF : bcol[k]);
+      } else { aDot(x, y, r, hitB ? 0xFFFFFF : 0x25222C); aDot(x, y, r * 0.55, 0x3C3846); aDot(x, y, r * 0.28, bcol[k]); }   // small ones are tyres
+    });
+    for (let s = 0; s < 2; s++) {   // the flippers are robot arms
+      const [x0, y0, x1, y1] = pinFlipper(s, S.flip[s]);
+      aLine(x0, y0, x1, y1, 7, 0x8F8AA8); aLine(x0, y0, x1, y1, 3, 0xC9C4E0);
+      aDot(x1, y1, 3.5, 0xFF8A3D); aDot(x0, y0, 4.5, 0x5A5E6A); aDot(x0, y0, 2, 0xFFD23F);
+    }
     if (!S.over) { aDot(S.x, S.y, PIN.R, 0xE6E6F0); aDot(S.x - 1.2, S.y - 1.2, 1.4, 0xFFFFFF); }
     drawParticles(0);
     scoreBox(6, 20, 'SCORE', S.score, '#ffd23f'); scoreBox(6, 56, 'BALLS', S.balls, '#fff6d8'); scoreBox(256, 20, 'BEST', S.best, '#49d17a');

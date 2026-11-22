@@ -1146,6 +1146,36 @@ static void test_house(void) {
     for (int k = 0; k < CK_RACE_OBST; k++) bumps += (G->house.gs[0].hit >> k) & 1;
     EXPECT_EQ_INT(bumps >= 6, 1);
     EXPECT_EQ_INT(G->house.gs[0].best > good + 3, 1);
+    // the road starts straight then bends both ways; a bend pushes a car that does not steer outwards
+    {
+        EXPECT_EQ_INT(ck_race_curve(TRACK_HILLS, 100) == 0, 1);
+        float lo = 0, hi = 0;
+        for (float z = 0; z < CK_RACE_LEN; z += 10) { float c = ck_race_curve(TRACK_HILLS, z); lo = fminf(lo, c); hi = fmaxf(hi, c); }
+        EXPECT_EQ_INT(lo < -0.4f && hi > 0.4f, 1);
+    }
+    // a boost pad speeds you up; a ramp jumps you over what is just past it
+    {
+        hold(G, 60 * 5, 0, 0);
+        press(G, CK_A, 0);
+        hold(G, 200, 0, 0);
+        ck_hhero *c = &G->house.gs[0];
+        float pd, px; int kind;
+        ck_race_pad(G->house.track, 0, &pd, &px, &kind);
+        EXPECT_EQ_INT(kind, PAD_BOOST);
+        c->a = pd - 20; c->x = px; c->s = 3; c->hit = ~0ull;
+        hold(G, 20, 0, 0);
+        EXPECT_EQ_INT(c->boost > 0, 1);
+        hold(G, 40, 0, 0);
+        EXPECT_EQ_INT(c->s > 4, 1);
+        ck_race_pad(G->house.track, 2, &pd, &px, &kind);
+        EXPECT_EQ_INT(kind, PAD_RAMP);
+        c->a = pd - 20; c->x = px;
+        float top = 0;
+        for (int i = 0; i < 40; i++) { ck_game_step(G, 0, 0); c->x = px; top = fmaxf(top, c->jz); }
+        EXPECT_EQ_INT(top > 10, 1);
+        hold(G, 90, 0, 0);
+        EXPECT_EQ_INT(c->jz, 0);
+    }
     press(G, CK_START, 0);
     // the piano: A plays the key under the hand, the stick moves along the keys
     walk_to(G, ck_spots[SPOT_PIANO].x);

@@ -632,11 +632,24 @@ static void aqua_update(ck_game *G) {
 
 // ---------------------------------------------------------------------------- the garage race
 const ck_racetrack ck_tracks[CK_RACE_TRACKS] = {
-    { "Green Hills", 0x5DBB63, 0x3F9D4E, 0x5A5E6A, 0xE04F4F, 0xFFFFFF, 0xFFF6D8 },
-    { "Desert Dash", 0xE8C77A, 0x6FAF4F, 0xA0805A, 0xFF8A3D, 0xFFF6D8, 0xFFE8B0 },
-    { "Snowy Pass", 0xEEF6FF, 0x3F7D5E, 0x7D8CA3, 0x3A6FC0, 0xFFFFFF, 0xFFFFFF },
-    { "Moon Run", 0x2B2840, 0x8F8AA8, 0x5A566E, 0xFFD23F, 0x3A3650, 0xC9C4E0 },
+    { "Green Hills", 0x5DBB63, 0x3F9D4E, 0x5A5E6A, 0xE04F4F, 0xFFFFFF, 0xFFF6D8, 0x8FD3FF, 0x3F9D4E },
+    { "Desert Dash", 0xE8C77A, 0x6FAF4F, 0xA0805A, 0xFF8A3D, 0xFFF6D8, 0xFFE8B0, 0xFFC27A, 0xC9875A },
+    { "Snowy Pass", 0xEEF6FF, 0x3F7D5E, 0x7D8CA3, 0x3A6FC0, 0xFFFFFF, 0xFFFFFF, 0xBFD9F2, 0x8FA8C8 },
+    { "Moon Run", 0x2B2840, 0x8F8AA8, 0x5A566E, 0xFFD23F, 0x3A3650, 0xC9C4E0, 0x0F0A19, 0x4A4560 },
 };
+float ck_race_curve(int track, float d) {
+    if (d < 500) return 0;   // a straight start
+    static const float amp[CK_RACE_TRACKS] = { 0.8f, 0.7f, 1.0f, 0.6f };
+    float ramp = d < 1200 ? (d - 500) / 700 : 1;
+    float bend = ck_clampf(1.8f * sinf(d * 0.0011f + track * 1.9f), -1, 1);   // bends come and go...
+    float when = ck_clampf(2.2f * sinf(d * 0.00031f + 0.7f + track), -1, 1);   // ...with straights between runs of them
+    return amp[track] * ramp * bend * fabsf(when);
+}
+void ck_race_pad(int track, int i, float *d, float *x, int *kind) {
+    *d = 800 + i * 620 + (track * 37) % 100;
+    *x = ((i * 2 + track) % 3 - 1) * CK_RACE_LANE;
+    *kind = i % 3 == 2 ? PAD_RAMP : PAD_BOOST;
+}
 void ck_race_obst(int track, int i, float clock, float *d, float *x, int *kind, float *w, float *h) {
     static const int kinds[5] = { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CONE, OBST_CAR };
     *kind = kinds[i % 5];
@@ -689,14 +702,30 @@ static void cars_update(ck_game *G) {
     for (int i = 0; i < H->np; i++) {
         ck_hhero *c = &H->gs[i];
         int s = c->slot, steer = dir_x(G, s);
+        bool air = c->jz > 0;
         float want = HELD(G, s, CK_UP) || HELD(G, s, CK_A) ? 3.6f : HELD(G, s, CK_DOWN) || HELD(G, s, CK_B) ? 1.5f : 3.0f;
+        if (fabsf(c->x) > CK_RACE_ROAD + 2 && !air) want = ck_minf(want, 1.8f);   // on the grass
+        if (c->boost > 0) { c->boost--; want = 5.0f; }
         if (c->rep > 0) { c->rep--; want = 1; steer = 0; }
         c->s += (want - c->s) * 0.04f;
         c->vx += (steer * 2.2f - c->vx) * 0.25f;
-        c->x = ck_clampf(c->x + c->vx, -CK_RACE_EDGE, CK_RACE_EDGE);
+        float bend = ck_race_curve(H->track, c->a);
+        c->x = ck_clampf(c->x + c->vx - bend * c->s * 0.3f, -CK_RACE_EDGE, CK_RACE_EDGE);   // a bend pushes you to its outside
+        c->lean += (ck_clampf(c->vx / 2.2f + bend * 0.5f, -1, 1) - c->lean) * 0.2f;
+        c->sky += bend * c->s * 0.25f;
         if (c->laps) c->s = ck_maxf(c->s * 0.97f, 0.5f);   // past the line: coast
         c->a += c->s;
+        if (air || c->jvz > 0) { c->jvz -= 0.14f; c->jz += c->jvz; if (c->jz <= 0) { c->jz = c->jvz = 0; ck_sfx(G, SFX_HOP); } }
+        for (int k = 0; k < CK_RACE_PADS; k++) {
+            float pd, px; int kind;
+            ck_race_pad(H->track, k, &pd, &px, &kind);
+            if (c->pads & (1u << k) || c->jz > 0 || fabsf(c->x - px) > 14 + 9 || fabsf(c->a - pd) > 15 + 12) continue;
+            c->pads |= 1u << k;
+            if (kind == PAD_BOOST) { c->boost = 75; c->s = ck_maxf(c->s, 4.4f); ck_sfx(G, SFX_BOOST); }
+            else { c->jvz = 3.0f; c->jz = 0.01f; ck_sfx(G, SFX_BOING); }
+        }
         for (int k = 0; k < CK_RACE_OBST; k++) {
+            if (c->jz > 2) break;   // flying over it
             float od, ox, w, h; int kind;
             ck_race_obst(H->track, k, H->clock, &od, &ox, &kind, &w, &h);
             if (c->hit & (1ull << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;

@@ -1171,7 +1171,7 @@ function aquaScene(house) {
 // the stick steers. Three laps; with two players the first one home wins.
 function carsScene(house) {
   const R = HOUSEART.RACE, S = { song: 'race', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
-  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; S.pickTrack = true; };
+  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: new Set(), pads: new Set(), done: false, time: 0, jz: 0, jvz: 0, lean: 0, sky: 0, boost: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; S.pickTrack = true; };
   S.track = 0;
   reset();
   S.update = function () {
@@ -1192,14 +1192,27 @@ function carsScene(house) {
     S.cars.forEach((c, i) => {
       const sl = c.m.slot;
       let steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
+      const air = c.jz > 0;
       let want = held(sl, 'up') || held(sl, 'a') ? 3.6 : held(sl, 'down') || held(sl, 'b') ? 1.5 : 3;
+      if (Math.abs(c.x) > R.road + 2 && !air) want = Math.min(want, 1.8);   // on the grass
+      if (c.boost > 0) { c.boost--; want = 5; }
       if (c.spin > 0) { c.spin--; want = 1; steer = 0; }
       c.s += (want - c.s) * 0.04;
       c.vx += (steer * 2.2 - c.vx) * 0.25;
-      c.x = clamp(c.x + c.vx, -R.edge, R.edge);
+      const bend = HOUSEART.raceCurve(S.track, c.d);
+      c.x = clamp(c.x + c.vx - bend * c.s * 0.3, -R.edge, R.edge);   // a bend pushes you to its outside
+      c.lean += (clamp(c.vx / 2.2 + bend * 0.5, -1, 1) - c.lean) * 0.2;
+      c.sky += bend * c.s * 0.25;
       if (c.done) c.s = Math.max(c.s * 0.97, 0.5);   // past the line: coast
       c.d += c.s;
-      for (let k = 0; k < R.obst; k++) {
+      if (air || c.jvz > 0) { c.jvz -= 0.14; c.jz += c.jvz; if (c.jz <= 0) { c.jz = c.jvz = 0; SND.fx.hop(); } }
+      for (let k = 0; k < R.pads; k++) {
+        const o = HOUSEART.racePad(S.track, k);
+        if (c.pads.has(k) || c.jz > 0 || Math.abs(c.x - o.x) > 14 + 9 || Math.abs(c.d - o.d) > 15 + 12) continue;
+        c.pads.add(k);
+        if (o.kind === 'boost') { c.boost = 75; c.s = Math.max(c.s, 4.4); SND.fx.boost(); } else { c.jvz = 3; c.jz = 0.01; SND.fx.boing(); }
+      }
+      for (let k = 0; k < R.obst && c.jz <= 2; k++) {
         const o = HOUSEART.raceObst(S.track, k, S.clock);
         if (c.hit.has(k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
         c.hit.add(k);
@@ -1214,11 +1227,17 @@ function carsScene(house) {
     S.cars.forEach((c, i) => {
       const x0 = i * vw;
       g.save(); g.beginPath(); g.rect(x0, 0, vw, H); g.clip();
-      HOUSEART.raceView(g, S.track, x0, vw, c.d, S.clock);
-      HOUSEART.carTop(g, x0 + vw / 2 + c.x + (c.spin > 0 ? Math.sin(c.spin * 0.6) * 4 : 0), R.carY, c.m.hex);
-      g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(x0 + vw - 12, 20, 5, 150);
-      g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(x0 + vw - 13, 166 - 146 * Math.min(1, c.d / R.len), 7, 4);
-      if (n > 1) text('P' + (c.m.slot + 1), x0 + 8, 14, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', 'left');
+      const hexOf = q => /^#[0-9a-f]{6}$/i.test(q.m.hex) ? parseInt(q.m.hex.slice(1), 16) : 0xE6E6F0;
+      HOUSEART.raceView(g, S.track, x0, vw, c, S.cars.filter(o => o !== c).map(o => ({ d: o.d, x: o.x, jz: o.jz, hex: hexOf(o), lean: o.lean, boost: o.boost > 0 })), S.clock, S.t);
+      const p = HOUSEART.raceProject(S.track, c.d, c.x * 0.7, x0 + vw / 2, vw, R.CAR_Z, c.x), wob = c.spin > 0 ? Math.sin(c.spin * 0.6) * 4 : 0;
+      if (c.jz > 0) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(p.x - 11 * p.s, p.y - 1.5 * p.s, 22 * p.s, 3 * p.s); }
+      HOUSEART.carBack(g, p.x + wob, p.y - c.jz * p.s, p.s, hexOf(c), c.lean, c.boost > 0, S.t);
+      // the progress bar and the player's label sit by the middle of the screen, back to back
+      const left = n > 1 && i === 1, bx = left ? x0 + 7 : x0 + vw - 12;
+      g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(bx, 20, 5, 150);
+      g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(bx - 1, 166 - 146 * Math.min(1, c.d / R.len), 7, 4);
+      if (n > 1) text('P' + (c.m.slot + 1), left ? x0 + 16 : x0 + vw - 16, 14, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', left ? 'left' : 'right');
+      if (c.boost > 0) text('BOOST!', x0 + vw / 2, 112, 8, '#ffd23f');
       g.restore();
     });
     if (n > 1) { g.fillStyle = '#1b1426'; g.fillRect(W / 2 - 1, 0, 2, H); }

@@ -1621,72 +1621,143 @@ static void draw_aqua(const ck_game *G) {
     hint(14, "Stick swim   A up   B feed, grab, throw   START leave");
 }
 
-// The garage race, top down: a half of the screen per player, boxes and circles only (raceView
-// and carTop in web/lib/houseart.js draw the same picture).
-static void car_top(float x, float y, uint32_t hex) {
-    for (int k = 0; k < 4; k++) rect(x + (k % 2 ? 7 : -10), y + (k < 2 ? -11 : 5), 3, 7, 0x1B1426, 1);
-    rect(x - 8, y - 14, 16, 28, hex, 1);
-    rect(x - 6, y - 7, 12, 5, 0xBFF0FF, 1);
-    rect(x - 6, y + 6, 12, 3, 0x000000, 0.25f);
-    rect(x - 7, y - 15, 3, 2, 0xFFE066, 1); rect(x + 4, y - 15, 3, 2, 0xFFE066, 1);
+// The garage race from behind the car: a half of the screen per player. The road is drawn in strips
+// from the bottom up to the horizon, each strip as far ahead as its height says and shifted sideways
+// by the bends ahead; things on the road shrink with distance. Boxes and circles only (raceView in
+// web/lib/houseart.js draws the same picture).
+static uint32_t shade(uint32_t hex, float f) {
+    int r = (int)((hex >> 16 & 255) * f), g = (int)((hex >> 8 & 255) * f), b = (int)((hex & 255) * f);
+    return (uint32_t)(r > 255 ? 255 : r) << 16 | (uint32_t)(g > 255 ? 255 : g) << 8 | (uint32_t)(b > 255 ? 255 : b);
 }
-// one obstacle in a track's look: the kinds behave the same on every track
-static void race_thing(int track, int kind, float x, float y, float t) {
+// a car from behind, standing on (x, y), s px per unit, leaning -1..1 into a turn
+static void car_back(float x, float y, float s, uint32_t hex, float lean, bool boost, float t) {
+    float w = 22 * s, l = lean * 2 * s;
+    rect(x - w / 2, y - 1.5f * s, w, 3 * s, 0x000000, 0.35f);   // shadow
+    rect(x - w / 2, y - 6 * s, 5 * s, 6 * s, 0x1B1426, 1);   // wheels
+    rect(x + w / 2 - 5 * s, y - 6 * s, 5 * s, 6 * s, 0x1B1426, 1);
+    rect(x - w / 2 + s + l * 0.3f, y - 12 * s, w - 2 * s, 7 * s, hex, 1);   // body
+    rect(x - 7 * s + l, y - 17 * s, 14 * s, 6 * s, shade(hex, 0.8f), 1);   // cabin and its back window
+    rect(x - 5.5f * s + l, y - 16 * s, 11 * s, 3.5f * s, 0x8FD3FF, 1);
+    rect(x - w / 2 + 2.5f * s + l * 0.3f, y - 10 * s, 3.5f * s, 2 * s, 0xFF5A5A, 1);   // tail lights
+    rect(x + w / 2 - 6 * s + l * 0.3f, y - 10 * s, 3.5f * s, 2 * s, 0xFF5A5A, 1);
+    rect(x - 4 * s + l * 0.3f, y - 7 * s, 8 * s, 2 * s, 0x2B2833, 1);   // bumper
+    if (boost) for (int k = 0; k < 2; k++) shape(SPR_DOT, x + (k ? 4 : -4) * s, y - 4 * s + sinf(t * 40 + k) * s, (2 + fabsf(sinf(t * 30 + k * 2))) * s, k ? 0xFFD23F : 0xFF8A3D, 1);
+}
+// one obstacle, standing on (x, y), s px per unit
+static void race_thing(int track, int kind, float x, float y, float s, float t) {
     switch (track * 4 + kind) {
-    case TRACK_HILLS * 4 + OBST_CONE: shape(SPR_DOT, x, y, 6, 0xFF8A3D, 1); shape(SPR_DOT, x, y, 2.5f, 0xFFFFFF, 1); break;
-    case TRACK_HILLS * 4 + OBST_CRATE: rect(x - 9, y - 9, 18, 18, 0x8A5A3C, 1); rect(x - 7, y - 7, 14, 14, 0xC98A4B, 1); rect(x - 1, y - 7, 2, 14, 0x8A5A3C, 1); break;
-    case TRACK_HILLS * 4 + OBST_OIL: shape(SPR_DOT, x, y, 10, 0x1B1426, 0.85f); shape(SPR_DOT, x + 3, y - 2, 3, 0x5A4F78, 1); break;
-    case TRACK_HILLS * 4 + OBST_CAR: car_top(x, y, 0x9AA1B0); break;
+    case TRACK_HILLS * 4 + OBST_CONE:
+        rect(x - 6 * s, y - 2 * s, 12 * s, 2 * s, 0xFF8A3D, 1); rect(x - 4 * s, y - 8 * s, 8 * s, 6 * s, 0xFF8A3D, 1);
+        rect(x - 3 * s, y - 6 * s, 6 * s, 2 * s, 0xFFFFFF, 1); rect(x - 2 * s, y - 13 * s, 4 * s, 5 * s, 0xFF8A3D, 1); break;
+    case TRACK_HILLS * 4 + OBST_CRATE:
+        rect(x - 9 * s, y - 18 * s, 18 * s, 18 * s, 0x8A5A3C, 1); rect(x - 7 * s, y - 16 * s, 14 * s, 14 * s, 0xC98A4B, 1); rect(x - s, y - 16 * s, 2 * s, 14 * s, 0x8A5A3C, 1); break;
+    case TRACK_HILLS * 4 + OBST_OIL: rect(x - 10 * s, y - 3 * s, 20 * s, 4 * s, 0x1B1426, 0.85f); rect(x - 4 * s, y - 2.5f * s, 6 * s, 1.5f * s, 0x5A4F78, 1); break;
+    case TRACK_HILLS * 4 + OBST_CAR: car_back(x, y, s * 0.85f, 0x9AA1B0, 0, false, t); break;
     case TRACK_DESERT * 4 + OBST_CONE:   // a cactus
-        shape(SPR_DOT, x, y, 6, 0x4F9A43, 1); shape(SPR_DOT, x - 5, y - 3, 3, 0x6FAF4F, 1); shape(SPR_DOT, x + 5, y + 2, 3, 0x6FAF4F, 1); shape(SPR_DOT, x, y, 2, 0xFF8FC7, 1); break;
+        rect(x - 2.5f * s, y - 18 * s, 5 * s, 18 * s, 0x4F9A43, 1); rect(x - 8 * s, y - 13 * s, 3 * s, 7 * s, 0x6FAF4F, 1); rect(x - 8 * s, y - 7 * s, 6 * s, 2.5f * s, 0x6FAF4F, 1);
+        rect(x + 5 * s, y - 15 * s, 3 * s, 6 * s, 0x6FAF4F, 1); rect(x + 2 * s, y - 10 * s, 6 * s, 2.5f * s, 0x6FAF4F, 1); shape(SPR_DOT, x, y - 18 * s, 1.5f * s, 0xFF8FC7, 1); break;
     case TRACK_DESERT * 4 + OBST_CRATE:   // a boulder
-        shape(SPR_DOT, x, y, 10, 0x8C7A66, 1); shape(SPR_DOT, x - 3, y - 3, 5, 0xB09C84, 1); break;
-    case TRACK_DESERT * 4 + OBST_OIL:   // a sand pit
-        shape(SPR_DOT, x, y, 11, 0xC9A35A, 1); shape(SPR_DOT, x, y, 6, 0xB08A45, 1); break;
+        shape(SPR_DOT, x, y - 8 * s, 10 * s, 0x8C7A66, 1); shape(SPR_DOT, x - 3 * s, y - 11 * s, 5 * s, 0xB09C84, 1); break;
+    case TRACK_DESERT * 4 + OBST_OIL: rect(x - 11 * s, y - 3 * s, 22 * s, 4 * s, 0xB08A45, 1); rect(x - 7 * s, y - 2 * s, 14 * s, 2 * s, 0x9C7A3A, 1); break;   // a sand pit
     case TRACK_DESERT * 4 + OBST_CAR:   // a tumbleweed rolling across
-        shape(SPR_RING, x, y, 7, 0x9C7A4A, 1); shape(SPR_DOT, x + cosf(t * 6) * 3, y + sinf(t * 6) * 3, 2.5f, 0x8A6A3C, 1); shape(SPR_DOT, x - cosf(t * 6) * 3, y - sinf(t * 6) * 3, 2.5f, 0xB08A55, 1); break;
+        shape(SPR_RING, x, y - 7 * s, 7 * s, 0x9C7A4A, 1); shape(SPR_DOT, x + cosf(t * 6) * 3 * s, y - 7 * s + sinf(t * 6) * 3 * s, 2.5f * s, 0x8A6A3C, 1);
+        shape(SPR_DOT, x - cosf(t * 6) * 3 * s, y - 7 * s - sinf(t * 6) * 3 * s, 2.5f * s, 0xB08A55, 1); break;
     case TRACK_SNOW * 4 + OBST_CONE:   // a snowman
-        shape(SPR_DOT, x, y + 2, 7, 0xFFFFFF, 1); shape(SPR_DOT, x, y - 6, 4.5f, 0xFFFFFF, 1); shape(SPR_DOT, x + 3, y - 6, 1.5f, 0xFF8A3D, 1); break;
+        shape(SPR_DOT, x, y - 6 * s, 7 * s, 0xFFFFFF, 1); shape(SPR_DOT, x, y - 16 * s, 4.5f * s, 0xFFFFFF, 1); rect(x - s, y - 16 * s, 3 * s, 1.5f * s, 0xFF8A3D, 1);
+        shape(SPR_DOT, x - 1.5f * s, y - 17.5f * s, 0.8f * s, 0x1B1426, 1); shape(SPR_DOT, x + 1.5f * s, y - 17.5f * s, 0.8f * s, 0x1B1426, 1); break;
     case TRACK_SNOW * 4 + OBST_CRATE:   // a block of ice
-        rect(x - 9, y - 9, 18, 18, 0x7FC4E6, 1); rect(x - 7, y - 7, 14, 14, 0xBFE8FF, 1); rect(x - 5, y - 5, 4, 4, 0xFFFFFF, 1); break;
-    case TRACK_SNOW * 4 + OBST_OIL:   // an ice patch
-        shape(SPR_DOT, x, y, 11, 0xA8DCF5, 0.95f); shape(SPR_DOT, x - 3, y - 3, 3, 0xFFFFFF, 1); break;
+        rect(x - 9 * s, y - 18 * s, 18 * s, 18 * s, 0x7FC4E6, 1); rect(x - 7 * s, y - 16 * s, 14 * s, 14 * s, 0xBFE8FF, 1); rect(x - 5 * s, y - 14 * s, 4 * s, 4 * s, 0xFFFFFF, 1); break;
+    case TRACK_SNOW * 4 + OBST_OIL: rect(x - 11 * s, y - 3 * s, 22 * s, 4 * s, 0xA8DCF5, 0.95f); rect(x - 5 * s, y - 2.5f * s, 4 * s, 1.5f * s, 0xFFFFFF, 1); break;   // an ice patch
     case TRACK_SNOW * 4 + OBST_CAR:   // a penguin waddling across
-        shape(SPR_DOT, x, y, 7, 0x1B1426, 1); shape(SPR_DOT, x, y + 1, 4, 0xFFFFFF, 1); shape(SPR_DOT, x, y - 5, 1.8f, 0xFF8A3D, 1); break;
-    case TRACK_MOON * 4 + OBST_CONE:   // a moon rock
-        shape(SPR_DOT, x, y, 6, 0xA9A4BC, 1); shape(SPR_DOT, x + 2, y + 1, 2, 0x6E6A80, 1); break;
+        shape(SPR_DOT, x, y - 8 * s, 7 * s, 0x1B1426, 1); shape(SPR_DOT, x, y - 7 * s, 4.5f * s, 0xFFFFFF, 1); rect(x - 1.5f * s, y - 13 * s, 3 * s, 2 * s, 0xFF8A3D, 1);
+        rect(x - 4 * s, y - 1.5f * s, 3 * s, 1.5f * s, 0xFF8A3D, 1); rect(x + s, y - 1.5f * s, 3 * s, 1.5f * s, 0xFF8A3D, 1); break;
+    case TRACK_MOON * 4 + OBST_CONE: shape(SPR_DOT, x, y - 5 * s, 6 * s, 0xA9A4BC, 1); shape(SPR_DOT, x + 2 * s, y - 4 * s, 2 * s, 0x6E6A80, 1); break;   // a moon rock
     case TRACK_MOON * 4 + OBST_CRATE:   // a supply pod
-        rect(x - 9, y - 9, 18, 18, 0xC0C4D0, 1); rect(x - 9, y - 2, 18, 4, 0xFFD23F, 1); rect(x - 6, y - 7, 4, 3, 0x5AD1FF, 1); break;
-    case TRACK_MOON * 4 + OBST_OIL:   // a crater
-        shape(SPR_DOT, x, y, 11, 0x8F8AA8, 1); shape(SPR_DOT, x + 1, y + 1, 8, 0x3A3650, 1); break;
-    default: car_top(x, y, 0xE6E6F0); shape(SPR_DOT, x, y, 3, 0xFF5A5A, 1); break;   // a moon rover
+        rect(x - 9 * s, y - 18 * s, 18 * s, 18 * s, 0xC0C4D0, 1); rect(x - 9 * s, y - 11 * s, 18 * s, 4 * s, 0xFFD23F, 1); rect(x - 6 * s, y - 16 * s, 4 * s, 3 * s, 0x5AD1FF, 1); break;
+    case TRACK_MOON * 4 + OBST_OIL: rect(x - 11 * s, y - 3 * s, 22 * s, 4 * s, 0x8F8AA8, 1); rect(x - 8 * s, y - 2 * s, 16 * s, 2.5f * s, 0x3A3650, 1); break;   // a crater
+    default: car_back(x, y, s * 0.85f, 0xE6E6F0, 0, false, t); rect(x - 0.5f * s, y - 24 * s, s, 8 * s, 0x8F8AA8, 1); shape(SPR_DOT, x, y - 24 * s, 1.5f * s, 0xFF5A5A, 1); break;   // a moon rover
     }
 }
-static void race_view(int track, float x0, float vw, float dist, float clock) {
+// where something at depth zr ahead of the camera and x across sits on the screen, and its scale
+static bool race_project(int track, float a, float camx, float cx, float vw, float zr, float x, float *sx, float *sy, float *s) {
+    if (zr < 4) return false;
+    float ppu = CK_RACE_ZC / zr / (H - CK_RACE_HZ) * CK_RACE_PX0 * vw / 320;
+    float dz = fmaxf(0, zr - CK_RACE_CAR_Z);
+    *s = ppu;
+    *sy = CK_RACE_HZ + CK_RACE_ZC / zr;
+    *sx = cx + (x + 0.5f * CK_RACE_BEND * ck_race_curve(track, a + dz / 2) * dz * dz - camx) * ppu;
+    return true;
+}
+typedef struct { float zr, x; int what, kind; uint32_t col; float lean; bool boost; } race_spr;   // what: 0 obstacle, 1 pad, 2 car
+static void race_view(const ck_game *G, int track, float x0, float vw, const ck_hhero *me) {
+    const ck_house *Hs = &G->house;
     const ck_racetrack *T = &ck_tracks[track];
-    float cx = x0 + vw / 2;
-    rect(x0, 0, vw, H, T->ground, 1);
-    for (int k = 0; k < 8; k++) {   // bushes, cacti, pines or craters on the verges, scrolling down
-        float y = fmodf(k * 60 + dist, 480) - 120;
-        float r = track == TRACK_MOON ? 4 : 7;
-        shape(SPR_DOT, x0 + 8 + (k % 2) * 4, y, r, T->deco, 1);
-        shape(SPR_DOT, x0 + vw - 10 - (k % 3) * 3, y + 30, r, T->deco, 1);
+    float cx = x0 + vw / 2, a = me->a, camx = me->x * 0.7f, cam = a - CK_RACE_CAR_Z;
+    // the sky and a skyline that turns with the bends
+    rect(x0, 0, vw, CK_RACE_HZ, T->sky, 1);
+    if (track == TRACK_MOON) for (int k = 0; k < 24; k++) shape(SPR_DOT, x0 + fmodf(k * 47 - me->sky * 0.3f + 4000, vw), 6 + (k * 29) % 70, (k % 3) * 0.4f + 0.4f, 0xFFFFFF, 1);
+    else for (int k = 0; k < 3; k++) shape(SPR_DOT, x0 + fmodf(k * 70 + 20 - me->sky * 0.15f + 4000, vw + 40) - 20, 22 + k * 9, 9, 0xFFFFFF, 0.8f);   // clouds
+    for (int k = 0; k < 8; k++) {
+        float hx = x0 + fmodf(k * 61 - me->sky + 8000, vw + 80) - 40, r = 18 + (k * 7) % 14;
+        shape(SPR_DOT, hx, CK_RACE_HZ + r * 0.35f, r, T->hills, 1);
     }
-    rect(cx - 64, 0, 128, H, T->road, 1);
-    for (float y = fmodf(dist, 24) - 24; y < H; y += 24) {
-        rect(cx - 66, y, 4, 12, T->kerbA, 1); rect(cx - 66, y + 12, 4, 12, T->kerbB, 1);
-        rect(cx + 62, y, 4, 12, T->kerbA, 1); rect(cx + 62, y + 12, 4, 12, T->kerbB, 1);
+    // the ground and road, strip by strip from the bottom up
+    for (int y = H - 2; y >= CK_RACE_HZ; y -= 2) {
+        float zr = CK_RACE_ZC / (y + 1 - CK_RACE_HZ), z = cam + zr, sx, sy, s;
+        race_project(track, a, camx, cx, vw, zr, 0, &sx, &sy, &s);
+        bool band = (int)(z / 32) & 1;
+        float hw = CK_RACE_ROAD * s, kw = 7 * s;
+        rect(x0, y, vw, 2, band ? T->ground : shade(T->ground, 0.9f), 1);
+        rect(sx - hw - kw, y, kw, 2, band ? T->kerbA : T->kerbB, 1);
+        rect(sx + hw, y, kw, 2, band ? T->kerbA : T->kerbB, 1);
+        bool finish = z > CK_RACE_LEN && z < CK_RACE_LEN + 16;
+        if (finish) for (int k = 0; k < 8; k++) rect(sx - hw + k * hw / 4, y, hw / 4, 2, ((int)(z / 8) + k) % 2 ? 0xFFFFFF : 0x1B1426, 1);
+        else {
+            rect(sx - hw, y, hw * 2, 2, band ? T->road : shade(T->road, 1.08f), 1);
+            if (band) { float lw = fmaxf(1, 2 * s); rect(sx - 20 * s - lw / 2, y, lw, 2, T->line, 1); rect(sx + 20 * s - lw / 2, y, lw, 2, T->line, 1); }
+        }
     }
-    for (float y = fmodf(dist, 40) - 40; y < H; y += 40) { rect(cx - 21, y, 2, 20, T->line, 1); rect(cx + 19, y, 2, 20, T->line, 1); }
-    float fy = CK_RACE_CAR_Y - (CK_RACE_LEN - dist);
-    if (fy > -10 && fy < H + 10)
-        for (int r = 0; r < 2; r++) for (int k = 0; k < 16; k++) rect(cx - 64 + k * 8, fy - 8 + r * 4, 8, 4, (k + r) % 2 ? 0xFFFFFF : 0x1B1426, 1);
+    // things on the road, far ones first
+    race_spr list[CK_RACE_OBST + CK_RACE_PADS + 2];
+    int n = 0;
     for (int i = 0; i < CK_RACE_OBST; i++) {
         float od, ox, w, h; int kind;
-        ck_race_obst(track, i, clock, &od, &ox, &kind, &w, &h);
-        float y = CK_RACE_CAR_Y - (od - dist);
-        if (y < -30 || y > H + 30) continue;
-        race_thing(track, kind, cx + ox, y, clock + i);
+        ck_race_obst(track, i, Hs->clock, &od, &ox, &kind, &w, &h);
+        float zr = od - cam;
+        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, ox, 0, kind, 0, 0, false };
+    }
+    for (int i = 0; i < CK_RACE_PADS; i++) {
+        float pd, px; int kind;
+        ck_race_pad(track, i, &pd, &px, &kind);
+        float zr = pd - cam;
+        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, px, 1, kind, 0, 0, false };
+    }
+    for (int i = 0; i < Hs->np; i++) {
+        const ck_hhero *o = &Hs->gs[i];
+        if (o == me) continue;
+        float zr = o->a - cam;
+        int col = skin_col(G, o->slot);
+        if (zr > 6 && zr < 1600) list[n++] = (race_spr){ zr, o->x, 2, (int)o->jz, col < CK_NCOLS ? ck_cols[col] : 0xE6E6F0, o->lean, o->boost > 0 };
+    }
+    for (int i = 1; i < n; i++) for (int j = i; j > 0 && list[j].zr > list[j - 1].zr; j--) { race_spr t = list[j]; list[j] = list[j - 1]; list[j - 1] = t; }
+    for (int i = 0; i < n; i++) {
+        const race_spr *r = &list[i];
+        float sx, sy, s;
+        if (!race_project(track, a, camx, cx, vw, r->zr, r->x, &sx, &sy, &s) || s * 20 < 1.5f) continue;
+        if (r->what == 1) {   // pads lie flat: as tall as their 30 units of road look from here
+            float sx2, sy2, s2;
+            race_project(track, a, camx, cx, vw, r->zr + 30, r->x, &sx2, &sy2, &s2);
+            float h = fmaxf(1, sy - sy2);
+            if (r->kind == PAD_BOOST) {
+                rect(sx - 14 * s, sy - h, 28 * s, h, 0xFF8A3D, 1);
+                for (int k = 0; k < 3; k++) rect(sx - 10 * s, sy - h + h * (k * 0.33f + 0.08f), 20 * s, fmaxf(1, h * 0.14f), 0xFFE066, 1);   // arrows
+            } else {
+                rect(sx - 14 * s, sy - h - 6 * s, 28 * s, h + 6 * s, 0x8A6A4A, 1);   // a ramp rising to its far edge
+                rect(sx - 14 * s, sy - h - 6 * s, 28 * s, fmaxf(1, 2 * s), 0xFFD23F, 1);
+                for (int k = 0; k < 4; k++) rect(sx - 12 * s + k * 7 * s, sy - h - 4 * s, 3 * s, h + 3 * s, 0xA8865E, 1);
+            }
+        } else if (r->what == 2) car_back(sx, sy - r->kind * s, s, r->col, r->lean, r->boost, G->t);
+        else race_thing(track, r->kind, sx, sy, s, G->t + i);
     }
 }
 static void draw_cars(const ck_game *G) {
@@ -1698,16 +1769,22 @@ static void draw_cars(const ck_game *G) {
         const ck_hhero *k = &Hs->gs[i];
         float x0 = i * vw;
         rdpq_set_scissor(x0, 0, x0 + vw, H);
-        race_view(Hs->track, x0, vw, k->a, Hs->clock);
+        race_view(G, Hs->track, x0, vw, k);
         int col = skin_col(G, k->slot);
         uint32_t hex;
         if (col < CK_NCOLS) hex = ck_cols[col];
         else { color_t rc = rainbow_col(G->t * 0.8f, 255); hex = (uint32_t)rc.r << 16 | (uint32_t)rc.g << 8 | rc.b; }
-        float wob = k->rep > 0 ? sinf(k->rep * 0.6f) * 4 : 0;
-        car_top(x0 + vw / 2 + k->x + wob, CK_RACE_CAR_Y, hex);
-        rect(x0 + vw - 12, 20, 5, 150, 0x1B1426, 0.7f);
-        rect(x0 + vw - 13, 166 - 146 * fminf(1, k->a / CK_RACE_LEN), 7, 4, k->slot ? 0x8FD3FF : 0xFFD23F, 1);
-        if (n > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, x0 + 8, 14, ALIGN_LEFT, "P%d", k->slot + 1);
+        float wob = k->rep > 0 ? sinf(k->rep * 0.6f) * 4 : 0, sx, sy, sc;
+        race_project(Hs->track, k->a, k->x * 0.7f, x0 + vw / 2, vw, CK_RACE_CAR_Z, k->x, &sx, &sy, &sc);
+        if (k->jz > 0) rect(sx - 11 * sc, sy - 1.5f * sc, 22 * sc, 3 * sc, 0x000000, 0.3f);   // the shadow stays on the road
+        car_back(sx + wob, sy - k->jz * sc, sc, hex, k->lean, k->boost > 0, G->t);
+        // the progress bar and the player's label sit by the middle of the screen, back to back
+        bool left = n > 1 && i == 1;
+        float bx = left ? x0 + 7 : x0 + vw - 12;
+        rect(bx, 20, 5, 150, 0x1B1426, 0.7f);
+        rect(bx - 1, 166 - 146 * fminf(1, k->a / CK_RACE_LEN), 7, 4, k->slot ? 0x8FD3FF : 0xFFD23F, 1);
+        if (n > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, left ? x0 + 16 : x0 + vw - 16, 14, left ? ALIGN_LEFT : ALIGN_RIGHT, "P%d", k->slot + 1);
+        if (k->boost > 0) txt(F_SMALL, ST_YELLOW, x0 + vw / 2, 112, ALIGN_CENTER, "BOOST!");
     }
     rdpq_set_scissor(0, 0, W, H);
     if (n > 1) rect(W / 2 - 1, 0, 2, H, 0x1B1426, 1);
@@ -1746,32 +1823,75 @@ static void game_over(int score, int best) {
     hint(124, s);
     hint(142, "A play again");
 }
+// a yellow and black hazard stripe along a line, n stripes long
+static void hazard(float x0, float y0, float x1, float y1, float w, int n) {
+    for (int k = 0; k < n; k++) {
+        float a = (float)k / n, b = (float)(k + 1) / n;
+        line(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a, x0 + (x1 - x0) * b, y0 + (y1 - y0) * b, w, k % 2 ? 0x1B1426 : 0xFFD23F, 1);
+    }
+}
+// The Clank-O-Matic: a riveted steel table with gear bumpers, bolt targets and a robot face whose
+// eyes light up with the bolts.
 static void draw_pinball(const ck_game *G) {
     const ck_pinball *P = &G->house.pin;
+    int lit = (P->lit & 1) + (P->lit >> 1 & 1) + (P->lit >> 2 & 1);
+    bool party = P->litT > 0 && (P->litT / 6) % 2;
     rect(0, 0, W, H, 0x2B2240, 1);
     for (int k = 0; k < 24; k++) shape(SPR_DOT, (k * 53) % 320, (k * 37) % 240, 1, 0x5A4F78, 1);
-    rect(70, 16, 180, H - 16, 0x1B2A4A, 1);
-    for (int y = 30; y < H; y += 20) rect(72, y, 158, 1, 0x22355C, 1);
-    for (int k = 0; k < CK_PIN_WALLS; k++) { const ck_seg *w = &ck_pin_walls[k]; line(w->x0, w->y0, w->x1, w->y1, 3, 0xC9C4E0, 1); }
+    txt(F_SMALL, ST_YELLOW, W / 2, 12, ALIGN_CENTER, "CLANK-O-MATIC");
+    rect(70, 16, 180, H - 16, 0x34404F, 1);   // the steel plate, its seams and rivets
+    for (int y = 56; y < H; y += 40) rect(70, y, 180, 1, 0x283240, 1);
+    for (int x = 115; x < 232; x += 45) rect(x, 16, 1, H - 16, 0x283240, 1);
+    for (int y = 56; y < H; y += 40) for (int x = 115; x < 232; x += 45) shape(SPR_DOT, x, y, 1.5f, 0x6A7888, 1);
+    // the robot face painted on the table
+    rect(136, 146, 48, 36, 0x4A5666, 1);
+    rect(139, 149, 42, 30, 0x3E4856, 1);
+    rect(159, 136, 2, 10, 0x8F8AA8, 1);
+    shape(SPR_DOT, 160, 135, 3, party ? 0xFFD23F : 0xE04F4F, 1);
+    for (int e = 0; e < 2; e++) {
+        bool on = party || lit > e;
+        shape(SPR_DOT, 150 + e * 20, 159, 5.5f, 0x1B2A3A, 1);
+        if (on) shape(SPR_DOT, 150 + e * 20, 159, 4, 0x5AD1FF, 1);
+    }
+    rect(147, 168, 26, 6, 0x1B1426, 1);   // the mouth grille glows when all three bolts are lit
+    for (int k = 0; k < 5; k++) rect(149 + k * 5, 169, 2, 4, party || lit >= 3 ? 0xFFD23F : 0x6A7888, 1);
+    hazard(70, 236, 232, 236, 6, 18);   // the drain
+    rect(236, 226, 10, 6, 0xE04F4F, 1);   // the plunger
+    rect(239, 232, 4, 8, 0x8F8AA8, 1);
+    for (int k = 0; k < CK_PIN_WALLS - 2; k++) { const ck_seg *w = &ck_pin_walls[k]; line(w->x0, w->y0, w->x1, w->y1, 3, 0xC9C4E0, 1); }
+    for (int k = CK_PIN_WALLS - 2; k < CK_PIN_WALLS; k++) { const ck_seg *w = &ck_pin_walls[k]; hazard(w->x0, w->y0, w->x1, w->y1, 4, 7); }
     line(ck_pin_gate.x0, ck_pin_gate.y0, ck_pin_gate.x1, ck_pin_gate.y1, 2, 0xFFD23F, 1);
-    for (int k = 0; k < CK_PIN_LIGHTS; k++) {
-        bool on = (P->lit & (1 << k)) || (P->litT > 0 && (P->litT / 6) % 2);
-        shape(SPR_DOT, ck_pin_lights[k][0], ck_pin_lights[k][1], 5, on ? 0xFFD23F : 0x3A3650, 1);
-        shape(SPR_RING, ck_pin_lights[k][0], ck_pin_lights[k][1], 6, 0x8F8AA8, 1);
+    for (int k = 0; k < CK_PIN_LIGHTS; k++) {   // bolt targets
+        bool on = (P->lit & (1 << k)) || party;
+        float x = ck_pin_lights[k][0], y = ck_pin_lights[k][1];
+        shape(SPR_DOT, x, y, 7, 0x1B1426, 1);
+        shape(SPR_RING, x, y, 7, on ? 0xFFD23F : 0x6A7888, 1);
+        blit_o(SPR_BOLT, 0, x, y, (bopt){ .sx = 1.1f, .sy = 1.1f, .rot = on ? G->t * 3 : 0, .tinted = !on, .tint = RGBA32(90, 90, 110, 255) });
     }
     static const uint32_t bcol[CK_PIN_BUMPS] = { 0xFF5A5A, 0x5AD1FF, 0xC28BFF, 0x49D17A, 0x49D17A };
     for (int k = 0; k < CK_PIN_BUMPS; k++) {
         const ck_bump *b = &ck_pin_bumps[k];
-        float r = b->r + (P->flash[k] > 0 ? 2 : 0);
-        shape(SPR_DOT, b->x, b->y, r, P->flash[k] > 0 ? 0xFFFFFF : bcol[k], 1);
-        shape(SPR_DOT, b->x, b->y, r * 0.55f, 0x1B1426, 1);
-        shape(SPR_DOT, b->x, b->y, r * 0.3f, bcol[k], 1);
+        bool hit = P->flash[k] > 0;
+        float r = b->r + (hit ? 2 : 0);
+        if (b->r > 8) {   // big bumpers are gears that spin when hit
+            if (hit) shape(SPR_DOT, b->x, b->y, r + 3, 0xFFFFFF, 0.6f);
+            blit_o(SPR_GEAR, 0, b->x, b->y, (bopt){ .sx = r / 9, .sy = r / 9, .rot = (k % 2 ? -1 : 1) * G->t * (hit ? 6 : 0.8f) });
+            shape(SPR_DOT, b->x, b->y, r * 0.45f, 0x1B1426, 1);
+            shape(SPR_DOT, b->x, b->y, r * 0.3f, hit ? 0xFFFFFF : bcol[k], 1);
+        } else {   // small ones are rubber tyres
+            shape(SPR_DOT, b->x, b->y, r, hit ? 0xFFFFFF : 0x25222C, 1);
+            shape(SPR_DOT, b->x, b->y, r * 0.55f, 0x3C3846, 1);
+            shape(SPR_DOT, b->x, b->y, r * 0.28f, bcol[k], 1);
+        }
     }
-    for (int s = 0; s < 2; s++) {
+    for (int s = 0; s < 2; s++) {   // the flippers are robot arms
         float x0, y0, x1, y1;
         ck_pin_flipper(s, P->flip[s], &x0, &y0, &x1, &y1);
-        line(x0, y0, x1, y1, 6, 0xFFD23F, 1);
-        shape(SPR_DOT, x0, y0, 4, 0xFF8A3D, 1);
+        line(x0, y0, x1, y1, 7, 0x8F8AA8, 1);
+        line(x0, y0, x1, y1, 3, 0xC9C4E0, 1);
+        shape(SPR_DOT, x1, y1, 3.5f, 0xFF8A3D, 1);
+        shape(SPR_DOT, x0, y0, 4.5f, 0x5A5E6A, 1);
+        shape(SPR_DOT, x0, y0, 2, 0xFFD23F, 1);
     }
     if (!P->over || P->balls > 0) {
         shape(SPR_DOT, P->x, P->y, CK_PIN_R, 0xE6E6F0, 1);
