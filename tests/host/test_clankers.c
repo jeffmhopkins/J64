@@ -968,31 +968,43 @@ static void test_house(void) {
     press(G, CK_A, 0);                             // cheese
     EXPECT_EQ_INT(G->house.npan, 2);
     for (int i = 0; i < 12 && !G->house.dish; i++) press(G, CK_B, 0);
-    EXPECT_EQ_INT(G->house.dish, FOOD_OMELETTE + 1);
+    EXPECT_EQ_INT(G->house.dish, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
     EXPECT_EQ_INT(strcmp(G->house.dishName, "Cheesy omelette"), 0);
     press(G, CK_A, 0);
     EXPECT_EQ_INT(G->house.mode, HM_WALK);
-    EXPECT_EQ_INT(G->house.ps[0].hold, FOOD_OMELETTE + 1);
+    EXPECT_EQ_INT(G->house.ps[0].hold, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);
     EXPECT_EQ_INT(G->house.np, 2);
-    EXPECT_EQ_INT(G->house.ps[1].hold, FOOD_OMELETTE + 1);   // everyone playing gets one
+    EXPECT_EQ_INT(G->house.ps[1].hold, FOOD_DISH0 + DISH_CHEESY_OMELETTE + 1);   // everyone playing gets one
     {   // more recipes: the first rule that fits names the dish
         static const struct { int pan[4], n, dish; const char *name; } R[] = {
-            { { FOOD_SAUSAGE, FOOD_BREAD, FOOD_TOMATO }, 3, FOOD_HOTDOG, "Hot dog and ketchup" },
-            { { FOOD_PASTA, FOOD_CHEESE }, 2, FOOD_SPAGHETTI, "Mac and cheese" },
-            { { FOOD_PASTA, FOOD_TOMATO, FOOD_SAUSAGE }, 3, FOOD_SPAGHETTI, "Spaghetti and meatballs" },
-            { { FOOD_RICE, FOOD_EGG }, 2, FOOD_RICEBOWL, "Egg fried rice" },
-            { { FOOD_APPLE, FOOD_BANANA }, 2, FOOD_PIE, "Fruit pie" },
-            { { FOOD_BANANA, FOOD_EGG }, 2, FOOD_PANCAKES, "Banana pancakes" },
-            { { FOOD_POTATO, FOOD_CHEESE }, 2, FOOD_CHIPS, "Cheesy chips" },
-            { { FOOD_POTATO, FOOD_CARROT }, 2, FOOD_SOUP, "Veggie stew" },
-            { { FOOD_EGG, FOOD_SAUSAGE }, 2, FOOD_OMELETTE, "Big breakfast" },
+            { { FOOD_SAUSAGE, FOOD_BREAD, FOOD_TOMATO }, 3, DISH_KETCHUP_HOTDOG, "Hot dog and ketchup" },
+            { { FOOD_PASTA, FOOD_CHEESE }, 2, DISH_MAC_CHEESE, "Mac and cheese" },
+            { { FOOD_PASTA, FOOD_TOMATO, FOOD_SAUSAGE }, 3, DISH_MEATBALLS, "Spaghetti and meatballs" },
+            { { FOOD_RICE, FOOD_EGG }, 2, DISH_FRIED_RICE, "Egg fried rice" },
+            { { FOOD_APPLE, FOOD_BANANA }, 2, DISH_FRUIT_PIE, "Fruit pie" },
+            { { FOOD_BANANA, FOOD_EGG }, 2, DISH_PANCAKES, "Banana pancakes" },
+            { { FOOD_POTATO, FOOD_CHEESE }, 2, DISH_CHEESY_CHIPS, "Cheesy chips" },
+            { { FOOD_POTATO, FOOD_CARROT }, 2, DISH_VEGGIE_STEW, "Veggie stew" },
+            { { FOOD_EGG, FOOD_SAUSAGE }, 2, DISH_BIG_BREAKFAST, "Big breakfast" },
+            { { FOOD_BANANA, FOOD_BREAD }, 2, DISH_BANANA_BREAD, "Banana bread" },
+            { { FOOD_CARROT, FOOD_EGG }, 2, DISH_CARROT_CAKE, "Carrot cake" },
+            { { FOOD_CHEESE }, 1, DISH_CHEESE_PLATE, "Melted cheese" },
         };
         for (size_t i = 0; i < sizeof R / sizeof R[0]; i++) {
             int dish; char name[28];
             ck_cook_dish(R[i].pan, R[i].n, &dish, name, sizeof name);
-            EXPECT_EQ_INT(dish, R[i].dish + 1);
+            EXPECT_EQ_INT(dish, FOOD_DISH0 + R[i].dish + 1);
             EXPECT_EQ_INT(strcmp(name, R[i].name), 0);
         }
+        // every dish can come out of the pan: try every pan of up to three ingredients
+        bool seen[CK_DISHES] = { 0 };
+        for (int a = 0; a < CK_COOK_INGR; a++) for (int b = a; b < CK_COOK_INGR; b++) for (int c = b; c < CK_COOK_INGR; c++)
+            for (int n = 1; n <= 3; n++) {
+                int pan[3] = { ck_cook_ingr[a], ck_cook_ingr[b], ck_cook_ingr[c] }, dish; char name[28];
+                ck_cook_dish(pan, n, &dish, name, sizeof name);
+                seen[dish - 1 - FOOD_DISH0] = true;
+            }
+        for (int k = 0; k < CK_DISHES; k++) { if (!seen[k]) printf("  dish %d never cooks\n", k); EXPECT_EQ_INT(seen[k], 1); }
     }
     press(G, CK_A, 0);   // eat it
     hold(G, 60, 0, 0);

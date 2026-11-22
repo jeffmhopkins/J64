@@ -581,8 +581,18 @@ enum { HM_WALK, HM_SLOTS, HM_SLEEP, HM_FRIDGE, HM_LETTER, HM_COOK };
 // Each is drawn from a few circles and boxes, the same in both frontends.
 enum { FOOD_APPLE, FOOD_BANANA, FOOD_CHEESE, FOOD_CARROT, FOOD_CAKE, FOOD_ICECREAM, FOOD_MILK, FOOD_PIZZA, FOOD_COOKIE,   // the fridge
        FOOD_EGG, FOOD_TOMATO, FOOD_MUSHROOM, FOOD_BREAD, FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA,                 // stove ingredients
-       FOOD_OMELETTE, FOOD_SOUP, FOOD_TOASTIE, FOOD_HOTDOG, FOOD_SPAGHETTI, FOOD_RICEBOWL, FOOD_PIE, FOOD_PANCAKES,       // what the stove cooks
-       FOOD_CHIPS, FOOD_COUNT };
+       FOOD_DISH0, FOOD_COUNT = FOOD_DISH0 + 38 };   // then every dish the stove cooks, in DISH_* order
+// what the stove cooks: food FOOD_DISH0 + DISH_*, each its own name and look
+enum {
+    DISH_OMELETTE, DISH_CHEESY_OMELETTE, DISH_MUSHROOM_OMELETTE, DISH_TOMATO_OMELETTE, DISH_POTATO_OMELETTE,
+    DISH_BIG_BREAKFAST, DISH_TOAST, DISH_CHEESE_TOASTIE, DISH_PIZZA_TOASTIE, DISH_MUSHROOM_TOAST,
+    DISH_TOMATO_SOUP, DISH_MUSHROOM_SOUP, DISH_CARROT_SOUP, DISH_CHEESE_SOUP, DISH_VEGGIE_STEW,
+    DISH_SAUSAGE_STEW, DISH_HOTDOG, DISH_CHEESY_HOTDOG, DISH_KETCHUP_HOTDOG, DISH_SPAGHETTI, DISH_MEATBALLS,
+    DISH_MAC_CHEESE, DISH_MUSHROOM_PASTA, DISH_BUTTER_PASTA, DISH_FRIED_RICE, DISH_SAUSAGE_RICE,
+    DISH_VEGGIE_RICE, DISH_RICE_PUDDING, DISH_RICE_BOWL, DISH_APPLE_PIE, DISH_FRUIT_PIE, DISH_PANCAKES,
+    DISH_CHIPS, DISH_CHEESY_CHIPS, DISH_SAUSAGE_CHIPS, DISH_BANANA_BREAD, DISH_CARROT_CAKE,
+    DISH_CHEESE_PLATE, CK_DISHES
+};
 #define CK_FRIDGE_FOODS 9
 // The stove: twelve ingredients on a shelf in two rows of six (CK_COOK_INGR from ck_cook_ingr), up
 // to four in the pan, B stirs it till the heat bar fills, and out comes a dish named by what went
@@ -594,7 +604,7 @@ extern const int ck_cook_ingr[CK_COOK_INGR];
 // what a pan of n ingredients cooks into: *dish is FOOD_* + 1, name its name
 void ck_cook_dish(const int *pan, int n, int *dish, char *name, int size);
 typedef struct { uint8_t kind; float x, y, w, h; uint32_t col; } ck_fshape;   // kind 0: a circle (w is its radius), 1: a box
-typedef struct { const char *name; int n; ck_fshape s[5]; } ck_foodart;
+typedef struct { const char *name; int n; ck_fshape s[6]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];
 typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
 #define CK_THROWN 6
