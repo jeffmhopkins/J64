@@ -30,6 +30,8 @@ void ck_pin_start(ck_game *G);
 void ck_pin_update(ck_game *G);
 void ck_blast_start(ck_game *G);
 void ck_blast_update(ck_game *G);
+void ck_bolt_start(ck_game *G);
+void ck_bolt_update(ck_game *G);
 void ck_fish_start(ck_game *G);
 void ck_fish_update(ck_game *G);
 void ck_save(ck_game *G);

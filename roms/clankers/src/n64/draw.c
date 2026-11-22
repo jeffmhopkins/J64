@@ -73,7 +73,7 @@ void draw_init(void) {
 // Free the big pictures and hero sheets the next scene does not need.
 static void free_for(const ck_game *G) {
     int sc = G->scene;
-    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
+    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH || sc == SC_BOLT) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
     group = group * 16 + G->worldNum * 4 + (G->scene == SC_CUT ? G->cut % 4 : 0);   // a new world or film needs its own pictures
     waited = false;
     if (group != big_group) {
@@ -2133,6 +2133,90 @@ static void draw_blast(const ck_game *G) {
     hint(H - 6, "Stick move   A or B fire   START leave");
 }
 
+// ---- Bolt Ball: a paddle each side, the ball, the bolt; web/arcade.js boltScene draws the same
+static const char *bolt_name(const ck_game *G, int s, char *buf, int n) {
+    const ck_house *Hs = &G->house;
+    int w = Hs->bolt.who[s];
+    if (w < 0) snprintf(buf, n, "CPU");
+    else if (Hs->np == 1) snprintf(buf, n, "YOU");
+    else snprintf(buf, n, "P%d", Hs->gs[w].slot + 1);
+    return buf;
+}
+static uint32_t bolt_hex(const ck_game *G, int s) {
+    int w = G->house.bolt.who[s];
+    if (w < 0) return 0x9AA4B4;
+    int col = skin_col(G, G->house.gs[w].slot);
+    return col < CK_NCOLS ? ck_cols[col] : 0xFFFFFF;
+}
+static void draw_bolt(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    const ck_boltball *B = &Hs->bolt;
+    char s[48], a[16], b[16];
+    rect(0, 0, W, H, 0x14102A, 1);
+    for (int k = 0; k < 30; k++) shape(SPR_DOT, (k * 97) % 320, CK_BOLT_TOP + (k * 53) % (CK_BOLT_BOT - CK_BOLT_TOP), ((k % 3) + 1) * 0.5f, 0x3A3456, 1);
+    rect(0, CK_BOLT_TOP - 4, W, 4, 0x46386E, 1);
+    rect(0, CK_BOLT_BOT, W, 4, 0x46386E, 1);
+    for (int y = CK_BOLT_TOP + 4; y < CK_BOLT_BOT; y += 16) rect(W / 2 - 1, y, 2, 8, 0x46386E, 1);
+    if (B->bolt) {   // the bolt, a little zigzag with a glow
+        float x = B->boltX, y = B->boltY, gl = 0.25f + 0.15f * sinf(G->t * 6);
+        shape(SPR_DOT, x, y, 11, 0x5AD1FF, gl);
+        line(x + 3, y - 9, x - 3, y + 1, 2.5f, 0xFFD23F, 1);
+        line(x - 3, y + 1, x + 3, y - 1, 2.5f, 0xFFD23F, 1);
+        line(x + 3, y - 1, x - 3, y + 9, 2.5f, 0xFFD23F, 1);
+    }
+    for (int sd = 0; sd < 2; sd++) {   // the paddles: little robots standing on end
+        if (B->state == BOLT_READY) break;
+        float x = sd ? W - CK_BOLT_PX : CK_BOLT_PX - CK_BOLT_PW, y = B->py[sd] - B->ph[sd] / 2;
+        uint32_t hex = bolt_hex(G, sd);
+        if (B->big[sd] > 0) rect(x - 2, y - 2, CK_BOLT_PW + 4, B->ph[sd] + 4, 0x5AD1FF, B->big[sd] < 120 && (B->big[sd] / 8) % 2 ? 0.2f : 0.5f);
+        rect(x, y, CK_BOLT_PW, B->ph[sd], hex, 1);
+        rect(x + (sd ? 3 : 1), y + 3, 2, B->ph[sd] - 6, 0xFFFFFF, 0.35f);
+        float ex = sd ? x - 1 : x + CK_BOLT_PW + 1;
+        rect(sd ? x - 3 : x + CK_BOLT_PW, B->py[sd] - 5, 3, 10, hex, 1);   // its face
+        shape(SPR_DOT, ex, B->py[sd] - 2, 1.2f, B->who[sd] < 0 ? 0xFF5A5A : 0x1B1426, 1);
+        shape(SPR_DOT, ex, B->py[sd] + 2, 1.2f, B->who[sd] < 0 ? 0xFF5A5A : 0x1B1426, 1);
+    }
+    if (B->state == BOLT_PLAY || (B->state == BOLT_SERVE && (B->stateT / 8) % 2)) {
+        uint32_t c = B->rally >= 8 ? 0xFF8A3D : 0xFFD23F;
+        for (int k = 3; k >= 1; k--) shape(SPR_DOT, B->bx - B->vx * k * 1.5f, B->by - B->vy * k * 1.5f, CK_BOLT_R - k * 0.6f, c, 0.12f * (4 - k));
+        shape(SPR_DOT, B->bx, B->by, CK_BOLT_R, c, 1);
+        shape(SPR_DOT, B->bx - 1.2f, B->by - 1.2f, 1.3f, 0xFFF6D8, 1);
+    }
+    particles(G, 0);
+    if (B->state != BOLT_READY) {
+        txt(F_SMALL, B->who[0] < 0 ? ST_GREY : Hs->gs[B->who[0]].slot ? ST_BLUE : ST_YELLOW, 10, 15, ALIGN_LEFT, "%s", bolt_name(G, 0, a, sizeof a));
+        txt(F_SMALL, B->who[1] < 0 ? ST_GREY : Hs->gs[B->who[1]].slot ? ST_BLUE : ST_YELLOW, W - 10, 15, ALIGN_RIGHT, "%s", bolt_name(G, 1, b, sizeof b));
+        txt(F_MED, ST_CREAM, W / 2 - 14, 17, ALIGN_RIGHT, "%d", B->score[0]);
+        txt(F_MED, ST_CREAM, W / 2 + 14, 17, ALIGN_LEFT, "%d", B->score[1]);
+    }
+    if (B->state == BOLT_READY) {
+        banner(F_BIG, ST_YELLOW, 0xFFD23F, 54, 180, 34, 77, "BOLT BALL");
+        hint(104, "First to 7 points wins");
+        for (int i = 0; i < Hs->np; i++) {
+            float cx = Hs->np == 1 ? W / 2 : i ? 240 : 80;
+            int st = Hs->gs[i].slot ? ST_BLUE : ST_YELLOW;
+            panel(cx - 56, 126, 112, 40, 0x1B1426, 0.85f);
+            txt(F_MED, st, cx, 143, ALIGN_CENTER, "P%d", Hs->gs[i].slot + 1);
+            txt(F_SMALL, B->ready[i] ? ST_GREEN : ST_CREAM, cx, 159, ALIGN_CENTER, "%s", B->ready[i] ? "READY!" : "A to play");
+        }
+        if (Hs->np == 2 && B->readyT > 0) {
+            snprintf(s, sizeof s, "P%d vs the computer in %d...", Hs->gs[B->ready[0] ? 0 : 1].slot + 1, B->readyT / 60 + 1);
+            hint(186, s);
+        } else if (Hs->np == 1) hint(186, "You vs the computer");
+        hint(H - 6, "A ready   START leave");
+        return;
+    }
+    if (B->state == BOLT_WON) {
+        snprintf(s, sizeof s, B->who[B->win] >= 0 && Hs->np == 1 ? "YOU WIN!" : "%s WINS!", bolt_name(G, B->win, a, sizeof a));
+        banner(F_BIG, ST_YELLOW, 0xFFD23F, 80, 160, 34, 103, s);
+        snprintf(s, sizeof s, "%d to %d", B->score[B->win], B->score[!B->win]);
+        hint(134, s);
+        if (B->stateT > 60) hint(152, "A play again   START leave");
+        return;
+    }
+    hint(H - 6, "Stick up and down   START leave");
+}
+
 static void pond_fish(int kind, float x, float y, int dir, float t) {
     const ck_catch *c = &ck_catches[kind];
     if (kind == CATCH_BOOT) {
@@ -2338,6 +2422,7 @@ void draw_frame(const ck_game *G, bool scanlines, bool interlaced) {
     case SC_PINBALL: draw_pinball(G); break;
     case SC_BLAST: draw_blast(G); break;
     case SC_FISH: draw_fish(G); break;
+    case SC_BOLT: draw_bolt(G); break;
     }
     if (scanlines) {
         // a hint of a CRT: darken every other line

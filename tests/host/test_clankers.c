@@ -1467,6 +1467,79 @@ static void test_house(void) {
     for (int i = 0; i < 60 * 120 && !B->over; i++) { ck_game_step(G, 0, 0); B->inv[0] = B->inv[1] = 10; }
     EXPECT_EQ_INT(B->over, 1);
     press(G, CK_START, 0);
+    // Bolt Ball: say ready, rally, score, win; one player ready alone plays the computer
+    walk_to(G, ck_spots[SPOT_BOLT].x);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_BOLT);
+    ck_boltball *Bb = &G->house.bolt;
+    EXPECT_EQ_INT(Bb->state, BOLT_READY);
+    EXPECT_EQ_INT(G->song, SONG_BOLTBALL);
+    press(G, 0, CK_A);   // only player 2 says ready
+    EXPECT_EQ_INT(Bb->ready[1], 1);
+    hold(G, CK_BOLT_WAIT - 10, 0, 0);
+    EXPECT_EQ_INT(Bb->state, BOLT_READY);   // still waiting for player 1
+    hold(G, 20, 0, 0);
+    EXPECT_EQ_INT(Bb->state, BOLT_SERVE);
+    EXPECT_EQ_INT(Bb->who[0], -1);   // the computer takes the left
+    EXPECT_EQ_INT(Bb->who[1], 1);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_BOLT);
+    press(G, CK_A, 0); press(G, 0, CK_A);   // both ready: head to head straight away
+    EXPECT_EQ_INT(Bb->state, BOLT_SERVE);
+    EXPECT_EQ_INT(Bb->who[0], 0);
+    EXPECT_EQ_INT(Bb->who[1], 1);
+    hold(G, 60, 0, 0);
+    EXPECT_EQ_INT(Bb->state, BOLT_PLAY);
+    // a ball coming at the left paddle's middle bounces back, quicker
+    Bb->py[0] = 120; Bb->bx = 40; Bb->by = 120; Bb->vx = -3; Bb->vy = 0;
+    hold(G, 10, 0, 0);
+    EXPECT_EQ_INT(Bb->vx > 3, 1);
+    EXPECT_EQ_INT(Bb->rally, 1);
+    EXPECT_EQ_INT(Bb->last, 0);
+    // knocking it through the bolt gives the hitter a long paddle
+    Bb->bolt = true; Bb->boltT = 600; Bb->boltX = Bb->bx + Bb->vx * 2; Bb->boltY = Bb->by;
+    hold(G, 4, 0, 0);
+    EXPECT_EQ_INT(Bb->bolt, 0);
+    EXPECT_EQ_INT(Bb->big[0] > 0, 1);
+    hold(G, 30, 0, 0);
+    EXPECT_EQ_INT(Bb->ph[0] > CK_BOLT_PH + 10, 1);
+    // the right paddle misses: a point to the left
+    Bb->py[1] = CK_BOLT_TOP + 20; Bb->bx = 280; Bb->by = 200; Bb->vx = 4; Bb->vy = 0;
+    hold(G, 20, 0, CK_UP);
+    EXPECT_EQ_INT(Bb->score[0], 1);
+    EXPECT_EQ_INT(Bb->state, BOLT_SERVE);
+    EXPECT_EQ_INT(Bb->serveTo, 1);
+    hold(G, 60, 0, 0);
+    Bb->score[0] = CK_BOLT_WIN - 1;
+    Bb->py[1] = CK_BOLT_TOP + 20; Bb->bx = 280; Bb->by = 200; Bb->vx = 4; Bb->vy = 0;
+    hold(G, 20, 0, CK_UP);
+    EXPECT_EQ_INT(Bb->state, BOLT_WON);
+    EXPECT_EQ_INT(Bb->win, 0);
+    EXPECT_EQ_INT(G->song, SONG_VICTORY);
+    hold(G, 70, 0, 0);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(Bb->state, BOLT_READY);
+    EXPECT_EQ_INT(G->song, SONG_BOLTBALL);
+    // player 1 alone against the computer, not touching the stick: the computer returns balls and wins
+    press(G, CK_A, 0);
+    hold(G, CK_BOLT_WAIT + 5, 0, 0);
+    EXPECT_EQ_INT(Bb->who[0], 0);
+    EXPECT_EQ_INT(Bb->who[1], -1);
+    int cpuHits = 0, out = 0;
+    for (int i = 0; i < 60 * 300 && Bb->state != BOLT_WON; i++) {
+        int r = Bb->rally;
+        ck_game_step(G, 0, 0);
+        if (Bb->rally > r && Bb->last == 1) cpuHits++;
+        if (Bb->by < CK_BOLT_TOP || Bb->by > CK_BOLT_BOT) out++;
+    }
+    printf("  bolt ball: computer won %d-%d, %d returns\n", Bb->score[1], Bb->score[0], cpuHits);
+    EXPECT_EQ_INT(Bb->state, BOLT_WON);
+    EXPECT_EQ_INT(Bb->win, 1);
+    EXPECT_EQ_INT(cpuHits > 0, 1);
+    EXPECT_EQ_INT(out, 0);
+    press(G, CK_START, 0);
     // the pond: cast, wait for a bite, hook it with A, reel it in
     walk_to(G, ck_spots[SPOT_POND].x);
     press(G, CK_A, 0);

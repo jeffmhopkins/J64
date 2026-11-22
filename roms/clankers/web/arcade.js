@@ -1,4 +1,4 @@
-// ---- the arcade room's pinball table and Bug Blaster cabinet, and fishing in the yard's pond.
+// ---- the arcade room's pinball table, Bug Blaster and Bolt Ball cabinets, and fishing in the yard's pond.
 // Mirrors src/core/ck_arcade.c (the same tables, numbers and rules) and the drawing in draw.c.
 const AHX = h => '#' + h.toString(16).padStart(6, '0');
 const aDot = (x, y, r, c, a = 1) => { g.globalAlpha = a; K.circ(x, y, r, typeof c === 'number' ? AHX(c) : c); g.globalAlpha = 1; };
@@ -483,6 +483,131 @@ function fishScene(house) {
     if (S.levelT > 0) rimBanner('Bigger fish in the pond!', 10, 150, 22);
     const st = S.rods[lastIn(house.ps)].state;   // the help follows whoever pressed last
     hint(st === 'charge' ? 'Let go of A to cast!' : st === 'wait' ? '^ v hook depth   B reel in   START leave' : st === 'bite' ? 'A bite! Press A!' : st === 'reel' ? 'Hold A to reel   let go when it goes red' : 'Hold A, let go to cast   START leave', H - 6);
+  };
+  return S;
+}
+
+// ---- Bolt Ball: a paddle each side, first to 7 (ck_arcade.c ck_bolt_update, draw.c draw_bolt)
+const BOLT = { TOP: 26, BOT: 226, PX: 22, PW: 6, PH: 34, BIG: 52, R: 4, WIN: 7, WAIT: 180 };
+function boltScene(house) {
+  const B = BOLT, S = { song: 'boltball', t: 0 }, MID = (B.TOP + B.BOT) / 2;
+  const ready = () => Object.assign(S, { state: 'ready', stateT: 0, ready: [false, false], readyT: 0, who: [-1, -1], py: [MID, MID], ph: [B.PH, B.PH], big: [0, 0],
+    bx: W / 2, by: MID, vx: 0, vy: 0, score: [0, 0], serveTo: 0, rally: 0, last: -1, win: -1, aim: 0, bolt: false, boltX: 0, boltY: 0, boltT: 0 });
+  const serve = to => Object.assign(S, { state: 'serve', stateT: 0, serveTo: to, rally: 0, last: -1, bx: W / 2, by: MID, vx: 0, vy: 0 });
+  const begin = (l, r) => { S.who = [l, r]; S.score = [0, 0]; SND.fx.confirm(); btune('boltball'); serve(Math.random() < 0.5 ? 0 : 1); };
+  const face = s => s ? W - B.PX : B.PX;
+  const btune = n => { S.song = n; if (SND.ready) SND.playSong(n); };
+  ready();
+  S.update = function () {
+    S.t += 1 / 60; stepParticles();
+    if (anyHit('start')) { SND.fx.select(); house.resume(); return; }
+    S.stateT++;
+    const ps = house.ps;
+    if (S.state === 'ready') {
+      ps.forEach((h, i) => { if (hit(h.m.slot, 'a') && !S.ready[i]) { S.ready[i] = true; SND.fx.select(); if (!S.readyT) S.readyT = B.WAIT; } });
+      if (ps.length === 1) { if (S.ready[0]) begin(0, -1); }
+      else if (S.ready[0] && S.ready[1]) begin(0, 1);
+      else if (S.readyT > 0 && --S.readyT === 0) begin(S.ready[0] ? 0 : -1, S.ready[1] ? 1 : -1);   // nobody else came: play the computer
+      return;
+    }
+    if (S.state === 'won') { if (S.stateT > 60 && anyHit('a')) { ready(); SND.fx.confirm(); btune('boltball'); } return; }
+    for (let s = 0; s < 2; s++) {
+      if (S.big[s] > 0 && --S.big[s] === 0) SND.fx.shrink();
+      S.ph[s] += ((S.big[s] > 0 ? B.BIG : B.PH) - S.ph[s]) * 0.15;
+      let v;
+      if (S.who[s] >= 0) { const sl = ps[S.who[s]].m.slot; v = ((held(sl, 'down') ? 1 : 0) - (held(sl, 'up') ? 1 : 0)) * 3.4; }
+      else {
+        const coming = S.state === 'play' && (s ? S.vx > 0 : S.vx < 0), want = coming ? S.by + S.aim : MID, top = Math.min(2.1 + S.rally * 0.06, 3.0);
+        v = clamp((want - S.py[s]) * 0.2, -top, top);
+      }
+      S.py[s] = clamp(S.py[s] + v, B.TOP + S.ph[s] / 2, B.BOT - S.ph[s] / 2);
+    }
+    if (S.state === 'serve') {
+      if (S.stateT < 60) return;
+      const a = (Math.random() - 0.5) * 1.0;
+      S.vx = (S.serveTo ? 1 : -1) * 2.6 * Math.cos(a); S.vy = 2.6 * Math.sin(a); S.aim = 0;
+      S.state = 'play'; S.stateT = 0; SND.fx.blow();
+    }
+    if (S.bolt) { if (--S.boltT <= 0) S.bolt = false; }
+    else if (S.rally >= 3 && Math.random() < 0.004) Object.assign(S, { bolt: true, boltT: 600, boltX: 120 + Math.random() * 80, boltY: B.TOP + 30 + Math.random() * (B.BOT - B.TOP - 60) });
+    for (let sub = 0; sub < 2; sub++) {   // two half steps so a fast ball can't skip a paddle
+      S.bx += S.vx * 0.5; S.by += S.vy * 0.5;
+      if (S.by < B.TOP + B.R) { S.by = B.TOP + B.R; S.vy = Math.abs(S.vy); SND.fx.tick(); }
+      if (S.by > B.BOT - B.R) { S.by = B.BOT - B.R; S.vy = -Math.abs(S.vy); SND.fx.tick(); }
+      for (let s = 0; s < 2; s++) {
+        const f = face(s), d = s ? S.bx + B.R - f : f - (S.bx - B.R);
+        if ((s ? S.vx <= 0 : S.vx >= 0) || d < 0 || d > B.PW + 4) continue;
+        const off = (S.by - S.py[s]) / (S.ph[s] / 2 + B.R);
+        if (Math.abs(off) > 1) continue;
+        const sp = Math.min(Math.hypot(S.vx, S.vy) + 0.2, 6.5), a = off;
+        S.vx = (s ? -1 : 1) * sp * Math.cos(a); S.vy = sp * Math.sin(a);
+        S.bx = s ? f - B.R : f + B.R;
+        S.rally++; S.last = s;
+        S.aim = (Math.random() - 0.5) * S.ph[1 - s] * 0.9;   // the computer won't be perfect
+        SND.fx.boing(); sparks(S.bx, S.by, 4, '#ffd23f');
+      }
+      if (S.bolt && S.last >= 0 && Math.abs(S.bx - S.boltX) < 10 && Math.abs(S.by - S.boltY) < 12) {
+        S.bolt = false; S.big[S.last] = 600; SND.fx.power(); sparks(S.boltX, S.boltY, 10, '#5ad1ff');
+      }
+    }
+    if (S.bx < -10 || S.bx > W + 10) {   // missed: the other side scores
+      const s = S.bx < 0 ? 1 : 0;
+      S.score[s]++;
+      if (S.score[s] >= B.WIN) { S.state = 'won'; S.stateT = 0; S.win = s; SND.fx.flag(); confetti(160, 40, 40); btune('victory'); return; }
+      SND.fx.pop(); serve(1 - s);
+    }
+  };
+  const name = s => S.who[s] < 0 ? 'CPU' : house.ps.length === 1 ? 'YOU' : 'P' + (house.ps[S.who[s]].m.slot + 1);
+  const hexOf = s => S.who[s] < 0 ? 0x9AA4B4 : house.ps[S.who[s]].m.hex;
+  const nameCol = s => S.who[s] < 0 ? '#b8b4c8' : house.ps[S.who[s]].m.slot ? '#8fd3ff' : '#ffd23f';
+  S.draw = function () {
+    K.g = g;
+    aBox(0, 0, W, H, 0x14102A);
+    for (let k = 0; k < 30; k++) aDot((k * 97) % 320, B.TOP + (k * 53) % (B.BOT - B.TOP), ((k % 3) + 1) * 0.5, 0x3A3456);
+    aBox(0, B.TOP - 4, W, 4, 0x46386E); aBox(0, B.BOT, W, 4, 0x46386E);
+    for (let y = B.TOP + 4; y < B.BOT; y += 16) aBox(W / 2 - 1, y, 2, 8, 0x46386E);
+    if (S.bolt) {
+      const x = S.boltX, y = S.boltY;
+      aDot(x, y, 11, 0x5AD1FF, 0.25 + 0.15 * Math.sin(S.t * 6));
+      aLine(x + 3, y - 9, x - 3, y + 1, 2.5, 0xFFD23F); aLine(x - 3, y + 1, x + 3, y - 1, 2.5, 0xFFD23F); aLine(x + 3, y - 1, x - 3, y + 9, 2.5, 0xFFD23F);
+    }
+    if (S.state !== 'ready') for (let s = 0; s < 2; s++) {   // the paddles: little robots standing on end
+      const x = s ? W - B.PX : B.PX - B.PW, y = S.py[s] - S.ph[s] / 2, hex = hexOf(s), eye = S.who[s] < 0 ? 0xFF5A5A : 0x1B1426;
+      if (S.big[s] > 0) aBox(x - 2, y - 2, B.PW + 4, S.ph[s] + 4, 0x5AD1FF, S.big[s] < 120 && Math.floor(S.big[s] / 8) % 2 ? 0.2 : 0.5);
+      aBox(x, y, B.PW, S.ph[s], hex); aBox(x + (s ? 3 : 1), y + 3, 2, S.ph[s] - 6, 0xFFFFFF, 0.35);
+      aBox(s ? x - 3 : x + B.PW, S.py[s] - 5, 3, 10, hex);
+      const ex = s ? x - 1 : x + B.PW + 1; aDot(ex, S.py[s] - 2, 1.2, eye); aDot(ex, S.py[s] + 2, 1.2, eye);
+    }
+    if (S.state === 'play' || (S.state === 'serve' && Math.floor(S.stateT / 8) % 2)) {
+      const c = S.rally >= 8 ? 0xFF8A3D : 0xFFD23F;
+      for (let k = 3; k >= 1; k--) aDot(S.bx - S.vx * k * 1.5, S.by - S.vy * k * 1.5, B.R - k * 0.6, c, 0.12 * (4 - k));
+      aDot(S.bx, S.by, B.R, c); aDot(S.bx - 1.2, S.by - 1.2, 1.3, 0xFFF6D8);
+    }
+    drawParticles(0);
+    if (S.state !== 'ready') {
+      text(name(0), 10, 15, 7, nameCol(0), 'left'); text(name(1), W - 10, 15, 7, nameCol(1), 'right');
+      text(String(S.score[0]), W / 2 - 14, 17, 10, '#fff6d8', 'right'); text(String(S.score[1]), W / 2 + 14, 17, 10, '#fff6d8', 'left');
+    }
+    if (S.state === 'ready') {
+      rimBanner('BOLT BALL', 14, 54, 34); hint('First to 7 points wins', 104);
+      house.ps.forEach((h, i) => {
+        const cx = house.ps.length === 1 ? W / 2 : i ? 240 : 80;
+        panel(cx - 56, 126, 112, 40);
+        text('P' + (h.m.slot + 1), cx, 143, 10, h.m.slot ? '#8fd3ff' : '#ffd23f');
+        text(S.ready[i] ? 'READY!' : 'A to play', cx, 159, 8, S.ready[i] ? '#49d17a' : '#fff6d8');
+      });
+      if (house.ps.length === 2 && S.readyT > 0) hint('P' + (house.ps[S.ready[0] ? 0 : 1].m.slot + 1) + ' vs the computer in ' + (Math.floor(S.readyT / 60) + 1) + '...', 186);
+      else if (house.ps.length === 1) hint('You vs the computer', 186);
+      hint('A ready   START leave', H - 6);
+      return;
+    }
+    if (S.state === 'won') {
+      rimBanner(S.who[S.win] >= 0 && house.ps.length === 1 ? 'YOU WIN!' : name(S.win) + ' WINS!', 14, 80, 34);
+      hint(S.score[S.win] + ' to ' + S.score[1 - S.win], 134);
+      if (S.stateT > 60) hint('A play again   START leave', 152);
+      return;
+    }
+    hint('Stick up and down   START leave', H - 6);
   };
   return S;
 }

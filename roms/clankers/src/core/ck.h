@@ -51,7 +51,7 @@ enum {
     SONG_NONE, SONG_TITLE, SONG_SELECT, SONG_MAP, SONG_LEVEL, SONG_LEVEL2, SONG_LEVEL3,
     SONG_BOSS, SONG_BONUS, SONG_RAINBOW, SONG_JET, SONG_RESCUE, SONG_CLEAR, SONG_LULLABY, SONG_STORM,
     SONG_MAP2, SONG_MAP3, SONG_MAP4, SONG_FACTORY, SONG_MOUNTAIN, SONG_MOON, SONG_TRAVEL, SONG_PARADE,
-    SONG_PINBALL, SONG_BLASTER, SONG_RACE, SONG_VICTORY, SONG_RACE2, SONG_RACE3, SONG_RACE4,
+    SONG_PINBALL, SONG_BLASTER, SONG_RACE, SONG_VICTORY, SONG_RACE2, SONG_RACE3, SONG_RACE4, SONG_BOLTBALL,
     SONG_COUNT
 };
 int ck_song_by_name(const char *name);   // "level2" -> SONG_LEVEL2, unknown -> SONG_NONE
@@ -396,21 +396,21 @@ typedef struct {
 // The shop node on every map is the heroes' house: the yard, then rooms in a row along one floor
 // (web/lib/houseart.js has the same layout). Down at a room's thing uses it; some open a little
 // game of their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO). Rescued baby bots wander about.
-#define CK_HOUSE_W 1720
+#define CK_HOUSE_W 1800
 #define CK_HOUSE_FLOOR 200
 #define CK_HOUSE_CEIL 20
 #define CK_HOUSE_PILLAR 8
 #define CK_HOUSE_DOOR_TOP 120
 #define CK_HOUSE_ROOMS 8
-#define CK_HOUSE_SPOTS 14
+#define CK_HOUSE_SPOTS 15
 #define CK_HOUSE_DECOR 5
 #define CK_HOUSE_BABIES 16
 enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE,
-       SPOT_PINBALL, SPOT_BLAST, SPOT_POND };
+       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT };
 // furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
 enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
        FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN,
-       FURN_PINBALL, FURN_ARCADE, FURN_POND, FURN_COUNT };
+       FURN_PINBALL, FURN_ARCADE, FURN_POND, FURN_PADDLE, FURN_COUNT };
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
 typedef struct { int x, kind, furn; const char *label; } ck_spot;
 typedef struct { int x, furn; } ck_decor;
@@ -594,6 +594,34 @@ typedef struct {
     int overT;
 } ck_blaster;
 void ck_bug_at(const ck_blaster *B, int k, float *x, float *y);
+// ---- the arcade's third cabinet (SC_BOLT): Bolt Ball. A paddle each side, a ball between: miss
+// it and the other side scores, first to CK_BOLT_WIN wins. Everyone playing presses A to say
+// ready; with two players, if only one says ready before the countdown ends, they play the
+// computer. Now and then a bolt floats in the middle: knock the ball through it for a long paddle.
+#define CK_BOLT_TOP 26            // the court's top and bottom walls
+#define CK_BOLT_BOT 226
+#define CK_BOLT_PX 22             // the left paddle's face (the right one mirrors it)
+#define CK_BOLT_PW 6
+#define CK_BOLT_PH 34
+#define CK_BOLT_BIG 52            // a paddle with the bolt's power
+#define CK_BOLT_R 4
+#define CK_BOLT_WIN 7
+#define CK_BOLT_WAIT 180          // frames the ready countdown gives the other player
+enum { BOLT_READY, BOLT_SERVE, BOLT_PLAY, BOLT_WON };
+typedef struct {
+    int state, stateT;
+    bool ready[2];             // by player
+    int readyT;                // the countdown, once one player is ready
+    int who[2];                // each side's player (0 or 1), or -1 for the computer; left first
+    float py[2], ph[2];        // each paddle's middle and height
+    int big[2];                // frames of long paddle left
+    float bx, by, vx, vy;
+    int score[2], serveTo, rally, last, win;
+    float aim;                 // where on its paddle the computer means to hit
+    bool bolt;
+    float boltX, boltY;
+    int boltT;
+} ck_boltball;
 // ---- the yard's pond (SC_FISH): fishing. Hold A to swing the rod back, let go to cast; up and
 // down raise and sink the hook; when a fish bites, A hooks it; then hold A to reel in, letting go
 // when the line gets tight so it does not snap. B reels in an empty line.
@@ -729,6 +757,7 @@ typedef struct {
     bool drums;                // SC_PIANO shows the drum kit instead of the piano
     ck_pinball pin;
     ck_blaster blast;
+    ck_boltball bolt;
     ck_pond pond;
 } ck_house;
 int ck_race_rank(const ck_house *H, const ck_hhero *me);   // a car's place in the race right now (1 is in front)
@@ -737,7 +766,7 @@ typedef struct { bool used; int world, bolts; } ck_slot_info;
 
 // ---------------------------------------------------------------------------- the whole game
 enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU,
-       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH };
+       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH, SC_BOLT };
 enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
 
 // The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine

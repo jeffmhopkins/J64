@@ -530,3 +530,113 @@ void ck_fish_update(ck_game *G) {
         f->y = ck_clampf(f->y, CK_POND_TOP + 12, CK_POND_BED - 8);
     }
 }
+
+// ---------------------------------------------------------------------------- Bolt Ball
+static void bolt_ready(ck_boltball *B) {
+    memset(B, 0, sizeof *B);
+    B->state = BOLT_READY;
+    B->who[0] = B->who[1] = -1;
+    for (int s = 0; s < 2; s++) { B->py[s] = (CK_BOLT_TOP + CK_BOLT_BOT) / 2.0f; B->ph[s] = CK_BOLT_PH; }
+    B->bx = CK_W / 2.0f; B->by = (CK_BOLT_TOP + CK_BOLT_BOT) / 2.0f;
+    B->last = -1; B->win = -1;
+}
+void ck_bolt_start(ck_game *G) { ck_house_game_heroes(G); bolt_ready(&G->house.bolt); ck_go(G, SC_BOLT); }
+static void bolt_serve(ck_boltball *B, int to) {
+    B->state = BOLT_SERVE; B->stateT = 0;
+    B->serveTo = to; B->rally = 0; B->last = -1;
+    B->bx = CK_W / 2.0f; B->by = (CK_BOLT_TOP + CK_BOLT_BOT) / 2.0f;
+    B->vx = B->vy = 0;
+}
+// start the match: who[] says which player has which side
+static void bolt_begin(ck_game *G, int left, int right) {
+    ck_boltball *B = &G->house.bolt;
+    B->who[0] = left; B->who[1] = right;
+    B->score[0] = B->score[1] = 0;
+    ck_sfx(G, SFX_CONFIRM);
+    ck_play(G, SONG_BOLTBALL);
+    bolt_serve(B, ck_rand(G) < 0.5f ? 0 : 1);
+}
+// the paddle on side s: the face the ball bounces off, and which way it faces
+static float bolt_face(int s) { return s ? CK_W - CK_BOLT_PX : CK_BOLT_PX; }
+void ck_bolt_update(ck_game *G) {
+    ck_house *H = &G->house;
+    ck_boltball *B = &H->bolt;
+    ck_step_parts(G);
+    if (ANYHIT(G, CK_START)) { ck_house_back(G); return; }
+    B->stateT++;
+    if (B->state == BOLT_READY) {
+        for (int i = 0; i < H->np; i++)
+            if (HIT(G, H->gs[i].slot, CK_A) && !B->ready[i]) { B->ready[i] = true; ck_sfx(G, SFX_SELECT); if (!B->readyT) B->readyT = CK_BOLT_WAIT; }
+        if (H->np == 1) { if (B->ready[0]) bolt_begin(G, 0, -1); }
+        else if (B->ready[0] && B->ready[1]) bolt_begin(G, 0, 1);
+        else if (B->readyT > 0 && --B->readyT == 0) bolt_begin(G, B->ready[0] ? 0 : -1, B->ready[1] ? 1 : -1);   // nobody else came: play the computer
+        return;
+    }
+    if (B->state == BOLT_WON) {
+        if (B->stateT > 60 && ANYHIT(G, CK_A)) { bolt_ready(B); ck_sfx(G, SFX_CONFIRM); ck_play(G, SONG_BOLTBALL); }
+        return;
+    }
+    // the paddles: players steer, the computer follows the ball when it is coming its way
+    for (int s = 0; s < 2; s++) {
+        if (B->big[s] > 0 && --B->big[s] == 0) ck_sfx(G, SFX_SHRINK);
+        B->ph[s] += ((B->big[s] > 0 ? CK_BOLT_BIG : CK_BOLT_PH) - B->ph[s]) * 0.15f;
+        float v;
+        if (B->who[s] >= 0) v = dir_y(G, H->gs[B->who[s]].slot) * 3.4f;
+        else {
+            bool coming = B->state == BOLT_PLAY && (s ? B->vx > 0 : B->vx < 0);
+            float want = coming ? B->by + B->aim : (CK_BOLT_TOP + CK_BOLT_BOT) / 2.0f;
+            float top = ck_minf(2.1f + B->rally * 0.06f, 3.0f);
+            v = ck_clampf((want - B->py[s]) * 0.2f, -top, top);
+        }
+        B->py[s] = ck_clampf(B->py[s] + v, CK_BOLT_TOP + B->ph[s] / 2, CK_BOLT_BOT - B->ph[s] / 2);
+    }
+    if (B->state == BOLT_SERVE) {
+        if (B->stateT < 60) return;
+        float a = (ck_rand(G) - 0.5f) * 1.0f;
+        B->vx = (B->serveTo ? 1 : -1) * 2.6f * cosf(a); B->vy = 2.6f * sinf(a);
+        B->aim = 0;
+        B->state = BOLT_PLAY; B->stateT = 0;
+        ck_sfx(G, SFX_BLOW);
+    }
+    // the bolt: it floats in the middle for a while once a rally gets going
+    if (B->bolt) { if (--B->boltT <= 0) B->bolt = false; }
+    else if (B->rally >= 3 && ck_rand(G) < 0.004f) {
+        B->bolt = true; B->boltT = 600;
+        B->boltX = 120 + ck_rand(G) * 80; B->boltY = CK_BOLT_TOP + 30 + ck_rand(G) * (CK_BOLT_BOT - CK_BOLT_TOP - 60);
+    }
+    for (int sub = 0; sub < 2; sub++) {   // two half steps so a fast ball can't skip a paddle
+        B->bx += B->vx * 0.5f; B->by += B->vy * 0.5f;
+        if (B->by < CK_BOLT_TOP + CK_BOLT_R) { B->by = CK_BOLT_TOP + CK_BOLT_R; B->vy = fabsf(B->vy); ck_sfx(G, SFX_TICK); }
+        if (B->by > CK_BOLT_BOT - CK_BOLT_R) { B->by = CK_BOLT_BOT - CK_BOLT_R; B->vy = -fabsf(B->vy); ck_sfx(G, SFX_TICK); }
+        for (int s = 0; s < 2; s++) {
+            float face = bolt_face(s), d = s ? B->bx + CK_BOLT_R - face : face - (B->bx - CK_BOLT_R);
+            if ((s ? B->vx <= 0 : B->vx >= 0) || d < 0 || d > CK_BOLT_PW + 4) continue;
+            float off = (B->by - B->py[s]) / (B->ph[s] / 2 + CK_BOLT_R);
+            if (fabsf(off) > 1) continue;
+            // where it hits the paddle sets the angle; every hit is a little quicker
+            float sp = ck_minf(sqrtf(B->vx * B->vx + B->vy * B->vy) + 0.2f, 6.5f), a = off * 1.0f;
+            B->vx = (s ? -1 : 1) * sp * cosf(a); B->vy = sp * sinf(a);
+            B->bx = s ? face - CK_BOLT_R : face + CK_BOLT_R;
+            B->rally++; B->last = s;
+            B->aim = (ck_rand(G) - 0.5f) * B->ph[!s] * 0.9f;   // the computer won't be perfect
+            ck_sfx(G, SFX_BOING);
+            ck_sparks(G, B->bx, B->by, 4, 0xFFD23F);
+        }
+        if (B->bolt && B->last >= 0 && fabsf(B->bx - B->boltX) < 10 && fabsf(B->by - B->boltY) < 12) {
+            B->bolt = false; B->big[B->last] = 600;
+            ck_sfx(G, SFX_POWER);
+            ck_sparks(G, B->boltX, B->boltY, 10, 0x5AD1FF);
+        }
+    }
+    if (B->bx < -10 || B->bx > CK_W + 10) {   // missed: the other side scores
+        int s = B->bx < 0 ? 1 : 0;
+        B->score[s]++;
+        if (B->score[s] >= CK_BOLT_WIN) {
+            B->state = BOLT_WON; B->stateT = 0; B->win = s;
+            ck_sfx(G, SFX_FLAG); ck_confetti(G, 160, 40, 40); ck_play(G, SONG_VICTORY);
+            return;
+        }
+        ck_sfx(G, SFX_POP);
+        bolt_serve(B, !s);   // serve to whoever just lost the point
+    }
+}
