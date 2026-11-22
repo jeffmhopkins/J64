@@ -67,7 +67,7 @@ THEMES.junkyard = (W) => {
     drawExit(g, n, t, ok) {
       g.save(); g.globalAlpha = ok ? 1 : 0.6;
       K.rr(n.x - 8, n.y - 8, 16, 16, 3, ok ? '#49d17a' : '#8c8496'); K.rr(n.x - 6.5, n.y - 6.5, 13, 6, 2, 'rgba(255,255,255,0.3)');
-      g.font = '9px "Titan One", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#2b2230'; g.fillText('W' + (W.num + 1), n.x, n.y + 1); g.textBaseline = 'alphabetic';
+      g.font = '9px "Titan One", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.strokeStyle = '#1b1426'; g.lineWidth = 2.5; g.strokeText('W' + (W.num + 1), n.x, n.y + 1); g.fillStyle = '#fff6d8'; g.fillText('W' + (W.num + 1), n.x, n.y + 1); g.textBaseline = 'alphabetic';
       g.restore();
     },
     drawBoss(g, n, t, fixed) {

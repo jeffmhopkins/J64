@@ -23,10 +23,16 @@ def engine():
     """Everything the game and the editors share, in load order."""
     themes = [read(str(p.relative_to(WEB))) for p in sorted((WEB / 'themes').glob('*.js'))]
     return '\n'.join([read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), *themes,
-                      read('lib/bossart.js'), read('lib/cutart.js'), read('lib/title.js'), read('lib/glitchies.js')])
+                      read('lib/bossart.js'), read('lib/cutart.js'), read('lib/houseart.js'), read('lib/furn34.js'), read('lib/housetop.js'), read('lib/title.js'), read('lib/glitchies.js')])
+
+def game_js():
+    """game.js, with arcade.js inside its closure (just before the closing `})();`) so it shares the helpers."""
+    game = read('game.js').rstrip()
+    end = game.rfind('})();')
+    return game[:end] + read('arcade.js') + '\n' + game[end:] + '\n'
 
 def game_html():
-    return read('index.src.html').replace('/*@GAME*/', '\n'.join([engine(), data_js(), read('game.js')]))
+    return read('index.src.html').replace('/*@GAME*/', '\n'.join([engine(), data_js(), game_js()]))
 
 def main():
     out = pathlib.Path(sys.argv[sys.argv.index('--out') + 1]) if '--out' in sys.argv else DIST / 'clankers.html'

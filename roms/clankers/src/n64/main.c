@@ -13,6 +13,13 @@
 
 static ck_game G;
 static bool scanlines;
+// The picture the console sends. Many modern TVs decode composite poorly from 240p (rainbow
+// fringes, crawling dots) but handle 480i well, so the game sends a 480i signal that shows the
+// same 320x240 picture in both fields. R on the pause screen switches to classic 240p.
+static bool interlaced = true;
+static resolution_t video_res(void) {
+    return (resolution_t){ .width = 320, .height = 240, .interlaced = interlaced ? INTERLACE_HALF : INTERLACE_OFF };
+}
 
 // A whole file from the ROM filesystem, zero-terminated. NULL if it is missing.
 static char *slurp(const char *path) {
@@ -38,29 +45,44 @@ static char *rom_data(const char *path, void *user) {
 
 // ---------------------------------------------------------------------------- saving (EEPROM 4K)
 
-static ck_saves saved;
-static bool have_eeprom;
+// The EEPROM holds CK_SLOTS saves, one per 512-byte block (slot 0 is where the one save used
+// to live, so an old cart keeps its game in slot 1). saved[] is what each block holds now.
+#define SLOT_BYTES 512
+_Static_assert(sizeof(ck_saves) <= SLOT_BYTES, "a save must fit its EEPROM block");
+static ck_saves saved[CK_SLOTS];
+static int eeprom_slots;   // how many slots this cart's EEPROM has room for
+static ck_saves all[CK_SLOTS];   // the slots as read at boot
 
 // An old one-world save is turned into the new layout by ck_saves_read().
 __attribute__((unused)) static void save_load(ck_saves *out) {
-    have_eeprom = eeprom_present() != EEPROM_NONE;
-    if (!have_eeprom) return;
+    eeprom_type_t type = eeprom_present();
+    eeprom_slots = type == EEPROM_16K ? CK_SLOTS : type == EEPROM_4K ? 1 : 0;
     static uint8_t raw[sizeof(ck_saves)];
-    eeprom_read_bytes(raw, 0, sizeof raw);
-    ck_saves_read(out, raw);
-    memcpy(&saved, raw, sizeof saved);
+    memset(all, 0, sizeof all);
+    for (int k = 0; k < eeprom_slots; k++) {
+        eeprom_read_bytes(raw, k * SLOT_BYTES, sizeof raw);
+        memcpy(&saved[k], raw, sizeof saved[k]);
+        ck_saves_read(&all[k], raw);
+    }
+    *out = all[0];
+    for (int k = eeprom_slots; k < CK_SLOTS; k++) all[k].magic = 0;   // no room: these stay empty
 }
 
-// Write the 8-byte blocks that changed. EEPROM writes are slow, so this only runs between scenes.
+// Write the 8-byte blocks that changed, in every slot (switching slots changes two). EEPROM
+// writes are slow, so this only runs between scenes or when someone goes to bed.
 static void save_now(void) {
-    if (!have_eeprom) return;
-    const ck_saves *now = ck_game_saves(&G);
-    const uint8_t *a = (const uint8_t *)now, *b = (const uint8_t *)&saved;
-    for (size_t off = 0; off < sizeof *now; off += 8) {
-        size_t n = sizeof *now - off < 8 ? sizeof *now - off : 8;
-        if (memcmp(a + off, b + off, n)) eeprom_write_bytes(a + off, off, n);
+    if (!eeprom_slots) return;
+    ck_game_saves(&G);
+    for (int k = 0; k < eeprom_slots; k++) {
+        const ck_saves *now = &G.slots[k];
+        if (now->magic != CK_SAVES_MAGIC) continue;
+        const uint8_t *a = (const uint8_t *)now, *b = (const uint8_t *)&saved[k];
+        for (size_t off = 0; off < sizeof *now; off += 8) {
+            size_t n = sizeof *now - off < 8 ? sizeof *now - off : 8;
+            if (memcmp(a + off, b + off, n)) eeprom_write_bytes(a + off, k * SLOT_BYTES + off, n);
+        }
+        saved[k] = *now;
     }
-    saved = *now;
 }
 
 // ---------------------------------------------------------------------------- input
@@ -76,6 +98,9 @@ __attribute__((unused)) static uint16_t read_pad(joypad_port_t port) {
     if (in.btn.a) b |= CK_A;
     if (in.btn.b || in.btn.c_left) b |= CK_B;
     if (in.btn.start) b |= CK_START;
+    if (in.btn.l || in.btn.z) b |= CK_L;
+    if (in.btn.r) b |= CK_R;
+    if (in.btn.c_up || in.btn.c_down || in.btn.c_right) b |= CK_C;
     return b;
 }
 
@@ -114,7 +139,7 @@ int main(void) {
     debugf("Clankers %s booting\n", J64_VERSION);
 
     dfs_init(DFS_DEFAULT_LOCATION);
-    display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
+    display_init(video_res(), DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     rdpq_init();
     joypad_init();
 
@@ -124,6 +149,7 @@ int main(void) {
     save_load(&boot);   // the test build always starts from a fresh save and never writes one
 #endif
     if (!ck_game_boot(&G, rom_data, NULL, &boot)) fatal("rom:/data/w1/world.txt is missing");
+    if (eeprom_slots) ck_game_slots(&G, all);
     char *songs = slurp("rom:/data/songs.txt");
     synth_init(songs);
     free(songs);
@@ -152,19 +178,27 @@ int main(void) {
             uint16_t p1 = read_pad(JOYPAD_PORT_1), p2 = read_pad(JOYPAD_PORT_2);
             joypad_buttons_t hit = joypad_get_buttons_pressed(JOYPAD_PORT_1);
             if (G.scene == SC_PAUSE && hit.z) scanlines = !scanlines;
+            if (G.scene == SC_PAUSE && hit.r) {
+                interlaced = !interlaced;
+                display_change(video_res(), DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
+            }
             ck_game_step(&G, p1, p2);
 #endif
             for (int i = 0; i < G.nsfx; i++) synth_sfx(G.sfx[i]);
+            for (int i = 0; i < G.nnotes; i++) synth_note(G.notes[i]);
             synth_song(G.song);
+#ifndef CK_AUTOTEST
+            if (G.saveNow) { save_now(); G.saveNow = false; G.progDirty = false; }
+#endif
             if (G.scene != prev_scene) {
-                if (G.progDirty && (G.scene == SC_MAP || G.scene == SC_SELECT || G.scene == SC_CUT)) { save_now(); G.progDirty = false; }
+                if (G.progDirty && (G.scene == SC_MAP || G.scene == SC_SELECT || G.scene == SC_CUT || G.scene == SC_HOUSE)) { save_now(); G.progDirty = false; }
                 prev_scene = G.scene;
             }
         }
         synth_poll();
         surface_t *disp = display_get();
         rdpq_attach(disp, NULL);
-        draw_frame(&G, scanlines);
+        draw_frame(&G, scanlines, interlaced);
 #ifdef CK_AUTOTEST
         draw_overlay(overlay);
 #endif

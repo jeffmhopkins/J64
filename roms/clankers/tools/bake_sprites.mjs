@@ -26,7 +26,7 @@ const ASSETS = path.join(ROM, 'assets');
 
 const read = p => fs.readFileSync(path.join(WEB, p), 'utf8');
 const themes = fs.readdirSync(path.join(WEB, 'themes')).filter(f => f.endsWith('.js')).sort().map(f => read('themes/' + f));
-const engine = [read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), ...themes, read('lib/bossart.js'), read('lib/cutart.js'), read('lib/title.js'), read('lib/glitchies.js')].join('\n');
+const engine = [read('lib/draw.js'), read('lib/ow.js'), read('lib/data.js'), read('lib/levelart.js'), ...themes, read('lib/bossart.js'), read('lib/cutart.js'), read('lib/houseart.js'), read('lib/furn34.js'), read('lib/housetop.js'), read('lib/title.js'), read('lib/glitchies.js')].join('\n');
 const files = {};
 (function walk(dir) {
   for (const f of fs.readdirSync(dir).sort()) {
@@ -61,11 +61,11 @@ function bakeAll() {
     g.fillStyle = col; g.fillText(s, x, y);
   };
 
-  // ---- heroes: one sheet per hero and colour, 32 frames of 64x56, feet at (32, 44)
+  // ---- heroes: one sheet per hero and colour, 42 frames of 64x56, feet at (32, 44)
   // Frame list (the N64 renderer uses the same numbers, see src/n64/draw.c):
   //  0-3 idle   4-11 run   12 jump   13-16 jet (robot) / flap (ostrich)   17-18 wobble
   //  19 crouch  20 slide   21-23 B action   24 shoot   25-26 cheer   27 dead   28 in a bubble
-  //  29-30 jetpack zone    31 spare
+  //  29-30 jetpack zone    31 spare   32-35 walk toward us   36-39 walk away   40-41 idle from behind
   function heroFrame(hero, hex, i) {
     const R = hero === 'robot', rs = 0.074, os = 0.071;
     const side = o => R ? K.robotSide(0, 0, rs, hex, Object.assign(o, { dir: 1 })) : K.ostrichSide(0, 0, os, hex, Object.assign(o, { dir: 1 }));
@@ -84,7 +84,7 @@ function bakeAll() {
     if (i < 24) {
       const actT = [19, 14, 9][i - 21], k = Math.sin((22 - actT) / 22 * P);
       if (R) return side({ t: 0.3, grab: true, reach: k * 330, clawOpen: actT > 12 ? 0.7 : 0.05, legF: 0, legB: 0 });
-      return side({ t: 0.3, legF: -100 * k, legB: 10 * k, rot: -0.12 * k, lean: -12 * k, beakOpen: k > 0.5 ? 0.7 : 0 });
+      return side({ t: 0.3, legF: -95 * Math.min(1, k * 2), legLenF: 92 + k * 330, kneeF: 0, toeF: -90, legB: 10 * k, rot: -0.12 * k, lean: -12 * k, beakOpen: k > 0.5 ? 0.7 : 0 });
     }
     if (i === 24) return side(R ? { t: 0.3, armF: -90, eyes: { happy: 0.3 } } : { t: 0.3, beakOpen: 0.9, lean: -6 });
     if (i < 27) { const t = 0.3 + (i - 25) * (R ? P / 18 : P / 12); return front(R ? { t, armL: 150 + Math.sin(t * 9) * 20, armR: -150 - Math.sin(t * 9) * 20, eyes: { happy: 0.8 }, mouth: 'o' } : { t, bob: Math.abs(Math.sin(t * 6)) * 14, eyes: { happy: 0.8 }, beakOpen: 0.8 }); }
@@ -96,11 +96,74 @@ function bakeAll() {
       else { K.rr(-10, fy - 22, 7, 11, 2, '#9aa1b0'); K.flame(-6.5, fy - 10, 30, 14, t); K.ostrichSide(0, fy, 0.071, hex, Object.assign(K.pose('ostrich', 'jump', t), { dir: 1, rot: 0.2 })); }
       return;
     }
+    if (i < 40) {   // the house's walks up and down the screen: a quarter of a stride a frame
+      const k = (i - 32) % 4, t = k / 4 * P * 2 / (R ? 11 : 10);
+      return front(K.pose(hero, i < 36 ? 'walkFront' : 'walkBack', t));
+    }
+    if (i < 42) { const t = 0.3 + (i - 40) * (R ? 0.52 : 0.6); return front(R ? { t, back: true, bob: Math.sin(t * 3) * 3 } : { t, back: true, bob: Math.abs(Math.sin(t * 2.6)) * 8 }); }
     return front({ t: 0.3 });
   }
+  const HERO_FRAMES = 42, isBack = i => i >= 36 && i < 42;
   for (const hero of ['robot', 'ostrich'])
     for (let c = 0; c < COLS.length; c++)
-      strip(`hero_${hero}_${c}`, 64, 56, 32, 44, 32, (g, i) => heroFrame(hero, COLS[c], i), 'rgba16', 8);
+      strip(`hero_${hero}_${c}`, 64, 56, 32, 44, HERO_FRAMES, (g, i) => heroFrame(hero, COLS[c], i), 'rgba16', 8);
+
+  // ---- accessories from the parts shop. The hero views call K.onWear(kind, where) as they draw:
+  // 'head' (hats, face and neck pieces hang off the head's top middle), 'body' (the torso box) and
+  // 'foot' (each foot). Where those land in every hero frame goes into sprites.h as ACC_AT; each
+  // item is drawn once per view (robot front, side and back, then the ostrich's) into a strip
+  // per slot, anchored at the same point, and the N64 places, turns and stretches it to match.
+  // Items that cycle colour are drawn white (K.plain) so the N64 can tint them.
+  const ACC_AT = [], REF = {};
+  const pt = (m, x, y, s0) => { const q = m.transformPoint(new DOMPoint(x, y)); return { x: q.x, y: q.y, rot: Math.atan2(m.b, m.a), sx: Math.hypot(m.a, m.b) / s0, sy: Math.hypot(m.c, m.d) / s0 }; };
+  for (const hero of ['robot', 'ostrich']) {
+    const s0 = hero === 'robot' ? 0.074 : 0.071, rows = [];
+    for (let i = 0; i < HERO_FRAMES; i++) {
+      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 56;
+      const g = cv.getContext('2d'); g.translate(32, 44); K.g = g;
+      const base = g.getTransform().inverse(), at = { head: null, body: null, feet: [], arms: [], side: 0 };
+      K.onWear = (kind, a) => {
+        const m = base.multiply(g.getTransform()), side = isBack(i) ? 2 : a.side ? 1 : 0, key = hero + side;
+        REF[key] = REF[key] || {};
+        if (kind === 'head') { at.head = pt(m, a.cx, a.top, s0); at.side = side; REF[key].head = REF[key].head || a; }
+        else if (kind === 'body') { at.body = pt(m, a.x + a.w / 2, a.y + a.h / 2, s0); REF[key].body = REF[key].body || a; }
+        else if (kind === 'arm' && at.arms.length < 2) {
+          // a sleeve: the same stroke K.wearSleeve draws, from the shoulder 72% down the arm
+          const r = a.deg * Math.PI / 180, l = a.ln * 0.72, p0 = m.transformPoint(new DOMPoint(a.x, a.y)), p1 = m.transformPoint(new DOMPoint(a.x - Math.sin(r) * l, a.y + Math.cos(r) * l));
+          at.arms.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, w: a.w * 1.3 * Math.hypot(m.a, m.b), far: a.far ? 1 : 0 });
+        }
+        else if (kind === 'foot' && at.feet.length < 2) { at.feet.push(Object.assign(pt(m, a.x, a.y, s0), { far: a.far ? 1 : 0 })); REF[key].foot = REF[key].foot || a; }
+      };
+      heroFrame(hero, COLS[0], i);
+      K.onWear = null;
+      rows.push(at);
+    }
+    ACC_AT.push(rows);
+  }
+  // one strip per slot: frame = view * (items in the slot) + item, view = hero * 3 + side (0 front, 1 side, 2 back)
+  const SLOT_FRAME = { head: [32, 20, 16, 15], face: [28, 16, 14, 0], neck: [28, 24, 14, 0], body: [18, 16, 9, 8], feet: [12, 10, 6, 5] };
+  for (const slot of K.ACC_SLOTS) {
+    const items = K.ACC.filter(it => it.slot === slot), [fw, fh, ax, ay] = SLOT_FRAME[slot];
+    strip('acc_' + slot, fw, fh, ax, ay, 6 * items.length, (g, i) => {
+      const it = items[i % items.length], view = Math.floor(i / items.length), hero = view < 3 ? 'robot' : 'ostrich', R = REF[hero + (view % 3)];
+      if (!R) return;
+      K.back = view % 3 === 2;
+      if (K.back && slot === 'face') { K.back = false; return; }   // no face pieces from behind
+      const s0 = hero === 'robot' ? 0.074 : 0.071;
+      K.plain = !!it.rainbow;
+      g.scale(s0, s0);
+      if (slot === 'body') { const b = R.body; g.translate(-(b.x + b.w / 2), -(b.y + b.h / 2)); K.wearBody(it.id, b, 0.3, !!b.side); }
+      else if (slot === 'feet') { const f = R.foot; g.translate(-f.x, -f.y); K.wearFoot(it.id, f.x, f.y, f.s, 0.3, f.side, false); }
+      else {
+        const a = R.head; g.translate(-a.cx, -a.top);
+        if (slot === 'head') K.wearHead(it.id, a.cx, a.top, a.w, 0.3, a.side);
+        else if (slot === 'face') K.wearFace(it.id, a.eyes, a.side);
+        else K.wearNeck(it.id, a.neck[0], a.neck[1], a.neck[2], a.side ? 1 : 0);
+      }
+      K.plain = false; K.back = false;
+    }, 'rgba16', items.length);
+  }
+  out.accAt = ACC_AT;
 
   // ---- Glitchies: 8 frames per row of 32x36, feet at (16, 32)
   // rows: bumble, sprocket, grumble (frames 0-5 glitchy, 6-7 happy), then the shut Grumble Crate
@@ -131,9 +194,16 @@ function bakeAll() {
 
   // ---- things in a level. Anchors put (0,0) at the entity's top-left corner, like the game's boxes.
   strip('bolt', 14, 14, 7, 7, 1, () => K.nut(0, 0, 4.2, 0, '#ffd23f'));   // anchored at the centre, so it can spin
-  strip('gear', 20, 20, 10, 10, 1, () => K.gear(0, 0, 7, 10, 0, '#ffd23f', '#b8860b'));
+  // The gear is a plain hexagon on the N64: fine teeth turn into a blurry sun at this size on a TV.
+  strip('gear', 20, 20, 10, 10, 1, (g) => {
+    const hex = (r) => { g.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); };
+    hex(9); g.fillStyle = '#7a5600'; g.fill();
+    hex(7.6); g.fillStyle = '#ffd23f'; g.fill();
+    g.fillStyle = '#fff1a8'; g.beginPath(); g.moveTo(-3.8, -6.6); g.lineTo(3.8, -6.6); g.lineTo(2.6, -4.6); g.lineTo(-2.6, -4.6); g.closePath(); g.fill();
+    g.fillStyle = '#7a5600'; g.beginPath(); g.arc(0, 0, 2.8, 0, Math.PI * 2); g.fill();
+  });
   strip('power', 16, 16, 2, 2, 4, (g, i) => { K.rr(0, 0, 12, 12, 5, '#e8e4f0'); K.rr(1, 1, 10, 10, 4, '#3b2a5c'); powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet'][i], 6, 6, 0); });
-  strip('picon', 14, 14, 7, 7, 4, (g, i) => powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet'][i], 0, 0, 0));
+  strip('picon', 14, 14, 7, 7, 5, (g, i) => powerIcon(g, ['mega', 'rainbow', 'bubble', 'magnet', 'gun'][i], 0, 0, 0));
   strip('tyre', 16, 10, 0, 1, 3, (g, i) => { const sq = i / 2, hh = 9 * (1 - sq * 0.4); K.rr(0, 9 - hh, 16, hh, hh / 2, '#2b2833'); K.rr(4, 9 - hh + hh * 0.3, 8, hh * 0.4, 2, '#4a4652'); g.fillStyle = '#5b5666'; g.fillRect(2, 9 - hh + 1, 12, 1); });
   strip('lever', 24, 26, 7, 12, 2, (g, i) => {
     K.rr(-1, 8, 12, 6, 1.5, '#5d566a');
@@ -229,7 +299,9 @@ function bakeAll() {
   const node = (world, kind) => world.nodes.find(n => n.kind === kind);
   worlds.forEach((world, k) => strip('map_boss_' + (k + 1), 48, 52, 24, 44, 2, (g, i) => world.drawBoss(g, { x: 0, y: 0 }, 0.4, i === 1)));
   strip('map_shop', 32, 24, 16, 20, 2, (g, i) => { g.globalAlpha = i ? 0.5 : 1; K.rr(-11, -9, 22, 14, 2, '#7a5aa6'); g.fillStyle = '#5b3f86'; g.beginPath(); g.moveTo(-14, -8); g.lineTo(0, -19); g.lineTo(14, -8); g.fill(); K.rr(-4, -3, 8, 8, 1, '#2b2230'); K.gear(0, -13, 4, 8, 0, '#ffd23f', '#5b3f86'); g.globalAlpha = 1; }, 'rgba32');
-  worlds.forEach((world, k) => strip('map_exit_' + (k + 1), 20, 20, 10, 10, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0)));
+  worlds.forEach((world, k) => strip('map_exit_' + (k + 1), 40, 56, 20, 34, 2, (g, i) => world.drawExit(g, { x: 0, y: 0 }, 0, i === 0)));
+  // the start building, drawn over the roads that lead out of it
+  worlds.forEach((world, k) => strip('map_home_' + (k + 1), 40, 52, 20, 34, 1, g => world.drawHome(g, { x: 0, y: 0 }, 0)));
 
   // ---- full-screen pictures (RGBA16)
   function picture(name, w, h, draw) { strip(name, w, h, 0, 0, 1, draw, 'rgba16'); }
@@ -239,11 +311,36 @@ function bakeAll() {
   THEME_ORDER.forEach((th, k) => picture('bg_far_boss_' + k, 640, 240, g => LTHEMES[th].far(g, true)));
   THEME_ORDER.forEach((th, k) => strip('bg_mid_' + k, 640, 80, 0, -160, 1, g => LTHEMES[th].mid(g), 'rgba16'));
   worlds.forEach((world, k) => picture('map_w' + (k + 1), 320, 240, g => {
-    world.drawGround(g); world.drawLive(g, 0.6);
-    const home = node(world, 'home'); if (home) world.drawHome(g, home, 0);
+    world.drawGround(g); world.drawLive(g, 0.6);   // the home building is map_home_N, drawn over the roads
   }));
   // ---- the films between worlds (web/lib/cutart.js): a backdrop each, and the things that move
   [1, 2, 3, 4].forEach(k => picture('cut_bg_' + k, 320, 240, g => CUTART.bg(g, k)));
+  // ---- the house (web/lib/houseart.js): the furniture, the aquarium and race-track backdrops,
+  // and the little creatures; the rooms themselves are plain boxes the N64 fills in
+  // the house seen from above (web/lib/housetop.js): every look of furniture in HOUSETOP.ARTS
+  // order, cropped to what it draws (the N64 adds the soft shadow and the fish in the tank), and
+  // the house's static picture cut into 160 x 120 tiles, row by row
+  HOUSETOP.ARTS.forEach((a, i) => {
+    const cv = document.createElement('canvas'); cv.width = 320; cv.height = 320;
+    const g = cv.getContext('2d'); g.translate(160, 260); K.g = g; HOUSETOP.drawArt(g, a, 0, true);
+    const d = g.getImageData(0, 0, 320, 320).data;
+    let x0 = 320, y0 = 320, x1 = -1, y1 = -1;
+    for (let y = 0; y < 320; y++) for (let x = 0; x < 320; x++) if (d[(y * 320 + x) * 4 + 3] > 8) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    if (x1 < 0) { x0 = 160; x1 = 161; y0 = 259; y1 = 260; }
+    x0 -= 1; y0 -= 1; x1 += 2; y1 += 2;
+    strip('hart_' + i, x1 - x0, y1 - y0, 160 - x0, 260 - y0, 1, g2 => HOUSETOP.drawArt(g2, a, 0, true), 'rgba16');
+  });
+  {
+    const W = HOUSETOP.WORLD.W, H = HOUSETOP.WORLD.H, bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+    const g = bg.getContext('2d'); HOUSETOP.drawStatic(g); K.g = g; for (const r of HOUSETOP.rooms) HOUSETOP.plate(g, r);
+    for (let ty = 0; ty * 120 < H; ty++) for (let tx = 0; tx * 160 < W; tx++)
+      strip('hbg_' + (ty * Math.ceil(W / 160) + tx), 160, 120, 0, 0, 1, g2 => g2.drawImage(bg, -tx * 160, -ty * 120), 'rgba16');
+  }
+  picture('aqua_bg', 320, 240, g => HOUSEART.aquaBg(g, true));
+  picture('aqua_water', 320, 240, g => HOUSEART.aquaBg(g, false));
+  strip('house_fish', 28, 16, 14, 8, 6, (g, i) => HOUSEART.fish(g, i >> 1, (i & 1) * 0.16), 'rgba32');
+  strip('house_shrimp', 20, 16, 9, 10, 2, (g, i) => HOUSEART.shrimp(g, i * 0.13), 'rgba32');
+  strip('house_crab', 32, 22, 16, 16, 2, (g, i) => HOUSEART.crab(g, 0, i === 1), 'rgba32');
   strip('cut_gate', CUTART.GATE.w, CUTART.GATE.h, 0, 0, 1, g => CUTART.gate(g));
   strip('cut_cage', 48, 76, 24, 72, 2, (g, i) => CUTART.cage(g, i === 1));
   strip('cut_rocket', 48, 100, 24, 98, 1, g => CUTART.rocket(g));
@@ -307,15 +404,41 @@ function bakeAll() {
   });
   // a white sleepy "z" the N64 tints and sizes
   strip('zee', 16, 16, 8, 12, 1, g => text(g, 'z', 0, 0, 12, '#ffffff', null));
+  // the two heroes, small and white, for the parts shop's grid (the N64 tints them the player's colour)
+  strip('shop_hero', 24, 30, 12, 28, 2, (g, i) => { K.g = g; if (i) K.ostrich(0, 1, 0.062, 0xF5F1E8, { t: 0 }); else K.robot(0, 0, 0.07, 0xF5F1E8, { t: 0 }); }, 'rgba16');
 
   function powerIcon(g, kind, x, y, t) {
     if (kind === 'mega') { K.rr(x - 3.5, y - 4.5, 7, 10, 1.5, '#2b2833'); K.rr(x - 1.5, y - 6, 3, 2, 0.5, '#2b2833'); K.rr(x - 2.2, y - 3.2, 4.4, 7.4, 1, '#49f08a');
       g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(x + 0.8, y - 3); g.lineTo(x - 1.6, y + 0.8); g.lineTo(x, y + 0.8); g.lineTo(x - 0.8, y + 3.6); g.lineTo(x + 1.8, y - 0.4); g.lineTo(x + 0.2, y - 0.4); g.fill(); }
     else if (kind === 'rainbow') K.star(x, y, 5.5, '#ffd23f');
     else if (kind === 'bubble') { g.globalAlpha = 0.35; K.circ(x, y, 4.5, '#bff0ff'); g.globalAlpha = 1; g.strokeStyle = '#8fd3ff'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 4.5, 0, P * 2); g.stroke(); K.circ(x - 1.6, y - 1.6, 1.2, '#fff'); K.circ(x + 4.5, y - 4, 1.3, '#bff0ff'); }
+    else if (kind === 'gun') { K.rr(x - 5, y - 2, 8, 4, 1.5, '#9aa1b0'); K.rr(x - 4, y, 3, 4, 1, '#5d566a'); g.globalAlpha = 0.5; K.circ(x + 4, y - 3, 2.6, '#bff0ff'); g.globalAlpha = 1; K.circ(x + 3.4, y - 3.6, 0.8, '#fff'); }
     else if (kind === 'magnet') { g.strokeStyle = '#e04f4f'; g.lineWidth = 3; g.beginPath(); g.arc(x, y - 0.5, 3.5, 0, P); g.stroke(); g.fillStyle = '#e8e4f0'; g.fillRect(x - 5, y - 3.5, 3, 3); g.fillRect(x + 2, y - 3.5, 3, 3); }
   }
-  return out;
+  // the plan of the house for src/core/ck_house_map.c (the N64 walks the same one)
+  const T = HOUSETOP, R = a => '{ ' + a.join(', ') + ' }';
+  const houseMap = [
+    '// Generated by roms/clankers/tools/bake_sprites.mjs from web/lib/housetop.js. Do not edit; re-run the tool.',
+    '// The house seen from above: its rooms, where you can stand, the things in it, where the babies play.',
+    '#include "ck_internal.h"', '',
+    `const int ck_td_world[2] = { ${T.WORLD.W}, ${T.WORLD.H} };`,
+    `const int ck_td_start[2][2] = { ${T.START.map(R).join(', ')} };`,
+    `const int ck_td_gate[3] = { ${T.GATE.x}, ${T.GATE.hw}, ${T.GATE.y} };`,
+    `const int ck_td_leash[2] = { ${T.LEASH.join(', ')} };`,
+    `const ck_troom ck_trooms[${T.rooms.length}] = {`, ...T.rooms.map(r => `    { ${r.x}, ${r.y}, ${r.w}, ${r.h}, "${r.name}" },`), '};',
+    `const int ck_ntrooms = ${T.rooms.length};`,
+    `const ck_trect ck_twalk[${T.walk.length}] = {`, ...T.walk.map(w => `    ${R(w)},`), '};',
+    `const int ck_ntwalk = ${T.walk.length};`,
+    '// x, y (the front edge on the floor), footprint half width and depth, look (HOUSETOP.ARTS), spot (SPOT_*, -1 none), flat on the ground',
+    `const ck_thing ck_things[${T.things.length}] = {`, ...T.things.map(t => `    { ${t.x}, ${t.y}, ${t.foot[0]}, ${t.foot[1]}, ${t.ai}, ${t.spot === undefined ? -1 : t.spot}, ${t.flat ? 1 : 0} },`), '};',
+    `const int ck_nthings = ${T.things.length};`,
+    '// the looks: how much smaller they are drawn (tall things by a back wall), the footprint, fish in it, a soft shadow under it',
+    `const ck_tart ck_tarts[${T.ARTS.length}] = {`, ...T.ARTS.map(a => `    { ${(T.SCALE[a.art] || 1).toFixed(2)}f, ${a.foot[0]}, ${a.foot[1]}, ${a.art === 'tank' ? 1 : 0}, ${a.foot[0] && a.art !== 'pond' ? 1 : 0} },   // ${a.key.replace(/"/g, "'")}`), '};',
+    `const int ck_ntarts = ${T.ARTS.length};`,
+    `const ck_trect ck_tareas[${T.AREAS.length}] = {`, ...T.AREAS.map(w => `    ${R(w.map(Math.round))},`), '};',
+    `const int ck_ntareas = ${T.AREAS.length};`, '',
+  ].join('\n');
+  return { sheets: out, accAt: out.accAt, houseMap };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -328,7 +451,7 @@ await page.evaluate(async (b64) => {
   await f.load(); document.fonts.add(f);
 }, font);
 await page.addScriptTag({ content: engine + '\nconst DATA = ' + JSON.stringify(files) + ';\n' + bakeAll.toString() });
-const sheets = await page.evaluate(() => bakeAll());
+const { sheets, accAt, houseMap } = await page.evaluate(() => bakeAll());
 await browser.close();
 
 fs.mkdirSync(path.join(ASSETS, 'rgba16'), { recursive: true });
@@ -345,7 +468,20 @@ const lines = [
   'enum {', ...sheets.map(s => `    ${id(s.name)},`), '    SPR_COUNT', '};', '',
   'static const spr_info SPR_INFO[SPR_COUNT] = {',
   ...sheets.map(s => `    [${id(s.name)}] = { "rom:/${s.name}.sprite", ${s.fw}, ${s.fh}, ${s.cols}, ${s.n}, ${s.ax}, ${s.ay} },`),
+  '};', '',
+  '// Where each hero frame (robot, ostrich) wears its accessories, from the feet anchor: the head\'s',
+  '// top middle (hats, face and neck pieces), the middle of the body, and up to two feet (the far',
+  '// one marked), each with its turn in radians and stretch; side is 0 front, 1 side, 2 back. Arms are the',
+  '// sleeve strokes of body items: shoulder, end, width (the far arm marked).',
+  'typedef struct { float x, y, rot, sx, sy; } acc_pt;',
+  'typedef struct { float x0, y0, x1, y1, w; unsigned char far; } acc_arm;',
+  'typedef struct { acc_pt head, body, foot[2]; unsigned char side, has_body, nfeet, far[2]; unsigned char narms; acc_arm arm[2]; } acc_at;',
+  `static const acc_at ACC_AT[2][${accAt[0].length}] = {`,
+  ...accAt.map(rows => '    {\n' + rows.map(a => { const P = (p) => `{ ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, ${p.rot.toFixed(3)}f, ${p.sx.toFixed(3)}f, ${p.sy.toFixed(3)}f }`, Z = { x: 0, y: -30, rot: 0, sx: 1, sy: 1 };
+    const f = [a.feet[0] || Z, a.feet[1] || Z];
+    return `        { ${P(a.head || Z)}, ${P(a.body || Z)}, { ${P(f[0])}, ${P(f[1])} }, ${a.side}, ${a.body ? 1 : 0}, ${a.feet.length}, { ${a.feet[0]?.far ? 1 : 0}, ${a.feet[1]?.far ? 1 : 0} }, ${a.arms.length}, { ${[0, 1].map(k => { const r = a.arms[k] || { x0: 0, y0: 0, x1: 0, y1: 0, w: 0, far: 0 }; return `{ ${r.x0.toFixed(2)}f, ${r.y0.toFixed(2)}f, ${r.x1.toFixed(2)}f, ${r.y1.toFixed(2)}f, ${r.w.toFixed(2)}f, ${r.far} }`; }).join(', ')} } },`; }).join('\n') + '\n    },'),
   '};', '', '#endif', '',
 ];
 fs.writeFileSync(path.join(ROM, 'src', 'n64', 'sprites.h'), lines.join('\n'));
+fs.writeFileSync(path.join(ROM, 'src', 'core', 'ck_house_map.c'), houseMap);
 console.log(`baked ${sheets.length} sprite strips into ${path.relative(process.cwd(), ASSETS)}`);

@@ -8,7 +8,7 @@ babies: 3BF0FF FF8FC7 49F08A FFD23F
 boss-msg: Fixed! The parade is ready
 
 # node <id> <col> <row> <kind> "<label>" [level=<file>] [gate=<gears needed>]
-node home   2 11  home   "Rocket landing pad"
+node home   2 11  home   "Our house"
 node l1     6 11  level  "Moon Bounce"                level=4-1
 node l2     6 7   level  "Airlock Doors"              level=4-2
 node shop   2 7   shop   "Parts shop"
