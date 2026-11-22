@@ -18,7 +18,7 @@ const ck_room ck_rooms[CK_HOUSE_ROOMS] = {
 };
 // indexed by SPOT_*; the bedroom is first so saving is quick
 const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
-    { 535, SPOT_SNACK, FURN_FRIDGE, "Have a snack" },
+    { 535, SPOT_SNACK, FURN_FRIDGE, "Open the fridge" },
     { 770, SPOT_PAINT, FURN_EASEL, "Paint the mural" },
     { 925, SPOT_PIANO, FURN_PIANO, "Play the piano" },
     { 1130, SPOT_AQUA, FURN_TANK, "Swim with the fish" },
@@ -28,10 +28,43 @@ const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
     { 262, SPOT_MAIL, FURN_MAILBOX, "Check the mail" },
     { 120, SPOT_TREE, FURN_TREE, "Pick an apple" },
     { 44, SPOT_BACK, FURN_SIGN, "Back a world" },
+    { 605, SPOT_STOVE, FURN_STOVE, "Cook something" },
 };
 const ck_decor ck_decors[CK_HOUSE_DECOR] = {
-    { 605, FURN_STOVE }, { 648, FURN_TABLE }, { 840, FURN_PLANT }, { 1205, FURN_PLANT }, { 475, FURN_LAMP }, { 1410, FURN_TOOLS },
+    { 648, FURN_TABLE }, { 840, FURN_PLANT }, { 1205, FURN_PLANT }, { 475, FURN_LAMP }, { 1410, FURN_TOOLS },
 };
+#define C(x, y, r, c) { 0, x, y, r, 0, c }
+#define R(x, y, w, h, c) { 1, x, y, w, h, c }
+const ck_foodart ck_foods[FOOD_COUNT] = {
+    { "apple", 4, { C(0, 0, 4, 0xE04F4F), C(-1.5f, -1.5f, 1.2f, 0xFF8A8A), R(-0.5f, -6, 1, 3, 0x6F4630), R(0.5f, -6, 3, 1.5f, 0x49D17A) } },
+    { "banana", 3, { R(-5, -1, 10, 3, 0xFFE066), R(-6, -2, 2, 2, 0x6F4630), R(4, -3, 2, 3, 0xFFE066) } },
+    { "cheese", 3, { R(-5, -3, 10, 6, 0xFFD23F), C(-2, -1, 1, 0xE0A92B), C(2, 1, 1.2f, 0xE0A92B) } },
+    { "carrot", 3, { R(-1.5f, -3, 3, 9, 0xFF8A3D), R(-2.5f, -6, 2, 3, 0x49D17A), R(0.5f, -6, 2, 3, 0x49D17A) } },
+    { "cake", 3, { R(-5, -2, 10, 6, 0xFF8FC7), R(-5, -3, 10, 2, 0xFFF6E6), C(0, -5, 1.5f, 0xE04F4F) } },
+    { "ice cream", 3, { R(-2, 0, 4, 6, 0xC98A4B), C(0, -1, 3.5f, 0xFF8FC7), C(-1, -2, 1, 0xFFFFFF) } },
+    { "milk", 3, { R(-3, -5, 6, 10, 0xFFFFFF), R(-3, -1, 6, 3, 0x5AD1FF), R(-2, -7, 4, 2, 0xFFFFFF) } },
+    { "pizza", 4, { R(-5, -3, 10, 6, 0xE8B46A), R(-5, -3, 10, 1.5f, 0xC98A4B), C(-2, 0, 1.2f, 0xE04F4F), C(2, 1, 1.2f, 0xE04F4F) } },
+    { "cookie", 3, { C(0, 0, 4, 0xC98A4B), C(-1, -1, 0.8f, 0x6F4630), C(1.5f, 1, 0.8f, 0x6F4630) } },
+    { "egg", 2, { C(0, 0, 3.5f, 0xFFF6E6), C(-1, -1, 1, 0xFFFFFF) } },
+    { "tomato", 3, { C(0, 0, 4, 0xE04F4F), R(-1.5f, -5, 3, 1.5f, 0x49D17A), C(-1.5f, -1.5f, 1, 0xFF8A8A) } },
+    { "mushroom", 3, { R(-1.5f, -1, 3, 5, 0xFFF6E6), R(-5, -4, 10, 3.5f, 0xC98A4B), C(-2, -3, 0.8f, 0xFFF6E6) } },
+    { "bread", 3, { R(-4, -4, 8, 8, 0xE8B46A), R(-4, -5, 8, 2, 0xC98A4B), R(-3, -3, 6, 6, 0xFFE2A8) } },
+    { "omelette", 3, { C(0, 0, 5, 0xFFE066), C(-2, -1, 1.5f, 0xFFF6A0), C(2, 1, 1, 0xE0A92B) } },
+    { "soup", 4, { R(-5, -1, 10, 5, 0x5AD1FF), C(0, -1, 4.5f, 0xE04F4F), C(-1.5f, -2, 1, 0xFF8A3D), C(1.5f, -1, 1, 0x49D17A) } },
+    { "toastie", 3, { R(-5, -3, 10, 6, 0xC98A4B), R(-5, -1, 10, 2, 0xFFD23F), R(-4, -2.5f, 8, 1, 0xE8B46A) } },
+};
+const int ck_cook_ingr[CK_COOK_INGR] = { FOOD_EGG, FOOD_TOMATO, FOOD_CHEESE, FOOD_MUSHROOM, FOOD_CARROT, FOOD_BREAD };
+#undef C
+#undef R
+const ck_letter ck_letters[CK_LETTERS] = {
+    { "the babies", { "We love our new house!", "Thank you for saving us.", "Hugs and beeps!" } },
+    { "Clanky Crane", { "Sorry I swung at you.", "My magnet was all glitchy.", "Friends now?" } },
+    { "the garage", { "The cars are fuelled up.", "Race a friend and", "jump the cones!" } },
+    { "the fish", { "Blub blub blub.", "(That means: please", "feed us more flakes.)" } },
+    { "the paint studio", { "The wall is waiting.", "Fly up high and", "paint us a picture!" } },
+    { "the parts shop", { "New hats in stock!", "Bolts buy cool things.", "See you soon!" } },
+};
+const float ck_aqua_chest_x[CK_AQUA_CHESTS] = { 119, 439 };
 const uint32_t ck_mural_pal[CK_MURAL_PAL] = { 0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230 };
 
 #define HOUSE_SPEED 1.7f
@@ -95,6 +128,9 @@ void ck_house_enter(ck_game *G, bool fromShop) {
     }
     H->mode = HM_WALK;
     H->msgT = 0;
+    H->nthrown = 0;
+    H->fpick[0] = 0; H->fpick[1] = 2;
+    H->cpick[0] = 0; H->cpick[1] = 2;
     H->cam = ck_clampf(x - CK_W / 2, 0, CK_HOUSE_W - CK_W);
     ck_go(G, SC_HOUSE);
 }
@@ -121,28 +157,25 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
     ck_house *H = &G->house;
     switch (ck_spots[k].kind) {
     case SPOT_BACK: ck_sfx(G, SFX_CONFIRM); ck_save(G); ck_game_enter_world(G, G->worldNum - 1, CK_NODE_EXIT); break;
-    case SPOT_SNACK: {
-        p->eat = 70; p->col = 0;
-        ck_sfx(G, SFX_SPROUT);
-        ck_sparks(G, p->x - H->cam, p->y - 20, 8, 0xFFD23F);
-        bool full = G->prog.lives >= 3;
-        G->prog.lives = 3;
-        ck_save(G);
-        say(H, full ? "Yum! Crunchy bolts!" : "Yum! Batteries full!");
-        break;
-    }
-    case SPOT_MAIL: {
-        static const char *letters[] = { "Love from the babies!", "Clanky Crane says sorry", "Race you in the garage!",
-                                         "The fish say blub blub", "Paint us a picture!", "Bolts buy cool hats!" };
+    case SPOT_SNACK:   // the fridge opens: pick something to hold
         ck_sfx(G, SFX_OPEN);
-        say(H, letters[H->letter++ % 6]);
+        H->mode = HM_FRIDGE;
         break;
-    }
+    case SPOT_STOVE:   // the stove: cook something
+        ck_sfx(G, SFX_OPEN);
+        H->mode = HM_COOK;
+        H->npan = 0; H->heat = 0; H->dish = 0;
+        break;
+    case SPOT_MAIL:
+        ck_sfx(G, SFX_OPEN);
+        H->letter = H->letter % CK_LETTERS + 1;
+        H->mode = HM_LETTER;
+        break;
     case SPOT_TREE:
-        p->eat = 50; p->col = 1;   // col 1: an apple, not a cookie
+        p->hold = FOOD_APPLE + 1;
         ck_sfx(G, SFX_SPROUT);
-        ck_sparks(G, p->x - H->cam, p->y - 30, 6, 0xFF5A5A);
-        say(H, "Crunch! A juicy apple!");
+        ck_sparks(G, p->x - H->cam, p->y - 50, 6, 0x49D17A);
+        say(H, "You picked an apple!");
         break;
     case SPOT_PAINT: ck_sfx(G, SFX_OPEN); paint_start(G); break;
     case SPOT_PIANO: ck_sfx(G, SFX_OPEN); piano_start(G, false); break;
@@ -155,6 +188,50 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
 
 static void back_to_house(ck_game *G) { ck_sfx(G, SFX_SELECT); G->scene = SC_HOUSE; G->t = 0; ck_play(G, SONG_SELECT); }
 
+// The stove: the dish is named by what went in the pan.
+static void cook_name(ck_house *H) {
+    bool has[FOOD_COUNT] = { 0 };
+    for (int i = 0; i < H->npan; i++) has[H->pan[i]] = true;
+    const char *n;
+    if (has[FOOD_EGG]) { H->dish = FOOD_OMELETTE + 1; n = has[FOOD_CHEESE] ? "Cheesy omelette" : has[FOOD_MUSHROOM] ? "Mushroom omelette" : has[FOOD_TOMATO] ? "Tomato omelette" : "Omelette"; }
+    else if (has[FOOD_BREAD]) { H->dish = FOOD_TOASTIE + 1; n = has[FOOD_CHEESE] && has[FOOD_TOMATO] ? "Pizza toastie" : has[FOOD_CHEESE] ? "Cheese toastie" : "Toast"; }
+    else { H->dish = FOOD_SOUP + 1; n = has[FOOD_TOMATO] ? "Tomato soup" : has[FOOD_MUSHROOM] ? "Mushroom soup" : has[FOOD_CARROT] ? "Carrot soup" : "Cheese soup"; }
+    snprintf(H->dishName, sizeof H->dishName, "%s", n);
+}
+static void cook_update(ck_game *G) {
+    ck_house *H = &G->house;
+    for (int i = 0; i < H->np; i++) {
+        ck_hhero *p = &H->ps[i];
+        int s = p->slot, *c = &H->cpick[i];
+        if (HIT(G, s, CK_LEFT) && *c > 0) { (*c)--; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_RIGHT) && *c < CK_COOK_INGR - 1) { (*c)++; ck_sfx(G, SFX_SELECT); }
+        if (H->dish) {   // done: A takes the dish
+            if (HIT(G, s, CK_A)) {
+                p->hold = H->dish;
+                char m[32];
+                snprintf(m, sizeof m, "%s!", H->dishName);
+                say(H, m);
+                ck_sfx(G, SFX_BUY);
+                H->mode = HM_WALK;
+                return;
+            }
+            continue;
+        }
+        if (HIT(G, s, CK_A) && H->npan < CK_COOK_PAN) {   // into the pan
+            H->pan[H->npan++] = ck_cook_ingr[*c];
+            ck_sfx(G, SFX_HOP);
+        }
+        if (HIT(G, s, CK_B) && H->npan > 0) {   // stir: it cooks a bit more each time
+            H->heat += 9;
+            ck_sfx(G, SFX_HOVER);
+            for (int k = 0; k < 2; k++) ck_puff(G, 150 + ck_rand(G) * 20, 120, 1, 0xFFFFFF, 160);
+            if (H->heat >= 100) { H->heat = 100; cook_name(H); ck_sfx(G, SFX_GEAR); ck_sparks(G, 160, 140, 12, 0xFFD23F); }
+        }
+    }
+    if (H->heat > 0 && !H->dish && (int)(G->t * 60) % 20 == 0) ck_puff(G, 140 + ck_rand(G) * 40, 125, 1, 0xFFFFFF, 120);   // a gentle sizzle
+    if (ANYHIT(G, CK_START) || (!H->dish && H->npan == 0 && ANYHIT(G, CK_B))) { H->mode = HM_WALK; ck_sfx(G, SFX_SELECT); }
+}
+
 void ck_house_update(ck_game *G) {
     ck_house *H = &G->house;
     if (H->msgT > 0) H->msgT--;
@@ -166,6 +243,31 @@ void ck_house_update(ck_game *G) {
         else if (ANYHIT(G, CK_A)) { ck_save_to_slot(G, H->pick); H->mode = HM_SLEEP; H->sleepT = 0; ck_sfx(G, SFX_RECORD); }
         return;
     }
+    if (H->mode == HM_LETTER) {
+        if (ANYHIT(G, CK_A) || ANYHIT(G, CK_B) || ANYHIT(G, CK_START)) { H->mode = HM_WALK; ck_sfx(G, SFX_SELECT); }
+        return;
+    }
+    if (H->mode == HM_FRIDGE) {   // a 3 x 3 shelf of food, a cursor each
+        for (int i = 0; i < H->np; i++) {
+            ck_hhero *p = &H->ps[i];
+            int s = p->slot, *c = &H->fpick[i];
+            if (HIT(G, s, CK_LEFT) && *c % 3 > 0) { (*c)--; ck_sfx(G, SFX_SELECT); }
+            if (HIT(G, s, CK_RIGHT) && *c % 3 < 2) { (*c)++; ck_sfx(G, SFX_SELECT); }
+            if (HIT(G, s, CK_UP) && *c >= 3) { *c -= 3; ck_sfx(G, SFX_SELECT); }
+            if (HIT(G, s, CK_DOWN) && *c < 6) { *c += 3; ck_sfx(G, SFX_SELECT); }
+            if (HIT(G, s, CK_A)) {
+                p->hold = *c + 1;
+                ck_sfx(G, SFX_BUY);
+                char m[32];
+                snprintf(m, sizeof m, "Got some %s!", ck_foods[*c].name);
+                say(H, m);
+                H->mode = HM_WALK;
+            }
+        }
+        if (H->mode == HM_FRIDGE && (ANYHIT(G, CK_B) || ANYHIT(G, CK_START))) { H->mode = HM_WALK; ck_sfx(G, SFX_SELECT); }
+        return;
+    }
+    if (H->mode == HM_COOK) { cook_update(G); return; }
     if (H->mode == HM_SLEEP) {
         H->sleepT += 1.0f / 60;
         if (H->sleepT > 2.6f) { H->mode = HM_WALK; snprintf(H->msg, sizeof H->msg, "Saved in slot %d!", G->slot + 1); H->msgT = 120; }
@@ -179,9 +281,25 @@ void ck_house_update(ck_game *G) {
         else {
             p->vx += (want * HOUSE_SPEED - p->vx) * 0.3f;
             if (want) p->face = want;
+            // holding food: A eats it, B throws it the way you face
+            int k = p->ground && !p->hold ? ck_house_near(G, p) : -1;
+            if (p->hold && HIT(G, s, CK_A)) {
+                p->col = p->hold - 1; p->hold = 0; p->eat = 50;
+                ck_sfx(G, SFX_SPROUT);
+                ck_sparks(G, p->x - H->cam, p->y - 22, 8, 0xFFD23F);
+                bool full = G->prog.lives >= 3;
+                G->prog.lives = 3;
+                ck_save(G);
+                char m[32];
+                snprintf(m, sizeof m, full ? "Yum, %s!" : "Yum! Batteries full!", ck_foods[p->col].name);
+                say(H, m);
+            } else if (p->hold && HIT(G, s, CK_B)) {
+                if (H->nthrown < CK_THROWN) H->thrown[H->nthrown++] = (ck_thrown){ p->x + p->face * 8, p->y - 22, p->face * 3.2f + p->vx * 0.5f, -2.6f, p->hold - 1, 150 };
+                p->hold = 0;
+                ck_sfx(G, SFX_BLOW);
+            }
             // A (or down) at a room's thing uses it; A anywhere else jumps
-            int k = p->ground ? ck_house_near(G, p) : -1;
-            if (k >= 0 && (HIT(G, s, CK_A) || HIT(G, s, CK_DOWN))) { use_spot(G, k, p); if (G->scene != SC_HOUSE || H->mode != HM_WALK) return; }
+            else if (k >= 0 && (HIT(G, s, CK_A) || HIT(G, s, CK_DOWN))) { use_spot(G, k, p); if (G->scene != SC_HOUSE || H->mode != HM_WALK) return; }
             else if (HIT(G, s, CK_A) && p->ground) { p->vy = HOUSE_JUMP; p->ground = false; ck_sfx(G, SFX_JUMP); }
         }
         p->vy += HOUSE_GRAV; p->x += p->vx; p->y += p->vy;
@@ -195,6 +313,19 @@ void ck_house_update(ck_game *G) {
     mid /= H->np > 0 ? H->np : 1;
     H->cam = ck_clampf(mid - CK_W / 2, 0, CK_HOUSE_W - CK_W);
     if (H->np > 1) for (int i = 0; i < H->np; i++) H->ps[i].x = ck_clampf(H->ps[i].x, H->cam > 0 ? H->cam + 8 : -4, H->cam + CK_W - 8);   // at the far left you can still walk out to the map
+    int nt = 0;
+    for (int i = 0; i < H->nthrown; i++) {
+        ck_thrown *f = &H->thrown[i];
+        f->vy += 0.2f; f->x += f->vx; f->y += f->vy;
+        if (f->y >= CK_HOUSE_FLOOR - 4) { f->y = CK_HOUSE_FLOOR - 4; f->vy *= -0.45f; f->vx *= 0.75f; if (fabsf(f->vy) < 0.6f) f->vy = 0; }
+        if (f->x < 4 || f->x > CK_HOUSE_W - 4) f->vx = -f->vx;
+        bool gone = --f->life <= 0;
+        for (int k = 0; k < H->nbabies && !gone; k++)   // a baby catches it and munches it
+            if (fabsf(H->babies[k].x - f->x) < 10 && f->y > CK_HOUSE_FLOOR - 20) { H->babies[k].vy = -2.2f; H->babies[k].y = -0.1f; gone = true; ck_sfx(G, SFX_HOP); ck_sparks(G, f->x - H->cam, f->y, 5, 0xFF8FC7); }
+        if (gone) { if (f->life <= 0) ck_puff(G, f->x - H->cam, f->y, 4, 0xFFFFFF, 200); }
+        else H->thrown[nt++] = *f;
+    }
+    H->nthrown = nt;
     for (int i = 0; i < H->nbabies; i++) {
         ck_hbaby *b = &H->babies[i];
         if (b->wait > 0) { b->wait--; continue; }
@@ -232,7 +363,8 @@ static void paint_update(ck_game *G) {
         ck_hhero *p = &H->gs[i];
         int s = p->slot, want = dir_x(G, s);
         p->vx += (want * 1.8f - p->vx) * 0.25f;
-        if (want) p->face = want;
+        // turning round flops the hero to the other side of the brush, so the brush barely moves
+        if (want && want != p->face) { p->x += p->face * 16; p->face = want; p->bx += p->face * 2; }
         // no gravity: A (or up) flies up, down flies down, and letting go hovers in place
         int wy = HELD(G, s, CK_A) || HELD(G, s, CK_UP) ? -1 : HELD(G, s, CK_DOWN) ? 1 : 0;
         p->jet = wy < 0;
@@ -242,10 +374,17 @@ static void paint_update(ck_game *G) {
         p->y += p->vy;
         if (p->y > CK_MURAL_FLOOR) { p->y = CK_MURAL_FLOOR; p->vy = 0; }
         if (p->y < CK_MURAL_Y + 28) { p->y = CK_MURAL_Y + 28; p->vy = 0; }
-        if (HIT(G, s, CK_C) || HIT(G, s, CK_R)) { p->col = (p->col + 1) % (CK_MURAL_PAL + 1); ck_sfx(G, SFX_SELECT); }
-        if (HIT(G, s, CK_L)) { p->col = (p->col + CK_MURAL_PAL) % (CK_MURAL_PAL + 1); ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_C) || HIT(G, s, CK_R)) { p->col = (p->col + 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
+        if (HIT(G, s, CK_L)) { p->col = (p->col + CK_MURAL_CHOICES - 1) % CK_MURAL_CHOICES; ck_sfx(G, SFX_SELECT); }
         float bx = p->x + p->face * 9, by = p->y - 16;
-        if (HELD(G, s, CK_B)) {
+        if (p->col == CK_MURAL_CLEAR) {   // the wipe-all choice: B clears the wall
+            if (HIT(G, s, CK_B)) {
+                memset(H->mural, 0, sizeof H->mural);
+                ck_sfx(G, SFX_WHOOSH);
+                for (int k = 0; k < 12; k++) ck_puff(G, 20 + k * 25, CK_MURAL_Y + 40 + (k % 3) * 50, 2, 0xFFFFFF, 220);
+            }
+            p->brush = false;
+        } else if (HELD(G, s, CK_B)) {
             if (!p->brush) { p->bx = bx; p->by = by; p->brush = true; }
             int n = (int)ceilf(hypotf(bx - p->bx, by - p->by) / 2);
             if (n < 1) n = 1;
@@ -269,15 +408,17 @@ static void aqua_start(ck_game *G) {
     for (int i = 0; i < CK_AQUA_FISH; i++) {
         ck_fish *f = &H->fish[i];
         f->kind = i % 3; f->x = 20 + hrng() * (CK_AQUA_BEACH_X - 60); f->y = 70 + hrng() * 130;
-        f->vx = (hrng() < 0.5f ? -1 : 1) * (0.4f + hrng() * 0.5f); f->scare = 0; f->happy = 0; f->ph = hrng() * 6;
+        f->vx = (hrng() < 0.5f ? -1 : 1) * (0.4f + hrng() * 0.5f); f->scare = 0; f->happy = 0; f->follow = 0; f->who = 0; f->ph = hrng() * 6;
     }
     for (int i = 0; i < CK_AQUA_SHRIMP; i++) {
         ck_shrimp *s = &H->shrimp[i];
         s->x = 20 + hrng() * (CK_AQUA_BEACH_X - 70); s->y = CK_AQUA_SEABED - 2; s->vx = s->vy = 0; s->face = hrng() < 0.5f ? -1 : 1; s->rest = (int)(hrng() * 200);
     }
-    for (int i = 0; i < CK_AQUA_CRABS; i++) { H->crabs[i].x = CK_AQUA_BEACH_X + 14 + i * 22; H->crabs[i].vx = (i % 2 ? -1 : 1) * 0.5f; H->crabs[i].snap = H->crabs[i].wait = 0; }
+    for (int i = 0; i < CK_AQUA_CRABS; i++) { H->crabs[i] = (ck_crab){ .x = CK_AQUA_BEACH_X + 14 + i * 22, .vx = (i % 2 ? -1 : 1) * 0.5f }; }
     H->nfood = 0;
     H->gcam = 0;
+    H->chestT[0] = H->chestT[1] = 0;
+    H->chestGot = 0;
     ck_go(G, SC_AQUA);
 }
 static void bubble(ck_game *G, float x, float y, float vx, float vy, float r, int life) {
@@ -304,11 +445,30 @@ static void aqua_update(ck_game *G) {
             p->vy = ck_clampf((p->vy + dy * 0.14f) * 0.95f + 0.01f, -2.4f, 2);
             if (HIT(G, s, CK_A)) { p->vy -= 1.6f; ck_sfx(G, SFX_FLAP); for (int k = 0; k < 3; k++) bubble(G, p->x + (ck_rand(G) - 0.5f) * 6, p->y - 26, (ck_rand(G) - 0.5f), -0.8f, 2, 30); }
         }
-        // B sprinkles fish food from the hand; the fish come and eat it
-        if (HIT(G, s, CK_B)) {
+        // B: by a chest, open it; by a crab on the beach, poke it; anywhere else in the water, sprinkle fish food
+        int chest = -1, crab = -1;
+        for (int k = 0; k < CK_AQUA_CHESTS; k++) if (fabsf(p->x - ck_aqua_chest_x[k]) < 26 && p->y > CK_AQUA_SEABED - 40) chest = k;
+        for (int k = 0; k < CK_AQUA_CRABS; k++) if (p->land && fabsf(p->x - H->crabs[k].x) < 24) crab = k;
+        if (HIT(G, s, CK_B) && chest >= 0) {
+            if (H->chestT[chest] <= 0) {
+                H->chestT[chest] = 240;
+                ck_sfx(G, SFX_OPEN);
+                for (int k = 0; k < 8; k++) bubble(G, ck_aqua_chest_x[chest] + (ck_rand(G) - 0.5f) * 14, CK_AQUA_SEABED - 14, (ck_rand(G) - 0.5f) * 0.6f, -0.6f - ck_rand(G), 2 + ck_rand(G) * 2, 90);
+                if (!(H->chestGot & (1 << chest))) {   // the first time each visit: treasure!
+                    H->chestGot |= 1 << chest;
+                    G->prog.bolts += 5;
+                    ck_save(G);
+                    ck_sfx(G, SFX_GEAR);
+                    ck_sparks(G, ck_aqua_chest_x[chest], CK_AQUA_SEABED - 24, 10, 0xFFD23F);
+                }
+            }
+        } else if (HIT(G, s, CK_B) && crab >= 0) {
+            ck_crab *c = &H->crabs[crab];
+            if (c->y == 0) { c->vy = -3.2f; c->snap = 40; c->run = 90; c->wait = 0; c->vx = (c->x > p->x ? 1 : -1) * 1.8f; ck_sfx(G, SFX_BOING); }
+        } else if (HIT(G, s, CK_B) && !p->land) {
             ck_sfx(G, SFX_POP);
             for (int k = 0; k < 3 && H->nfood < CK_AQUA_FOOD; k++)
-                H->food[H->nfood++] = (ck_food){ p->x + p->face * (8 + k * 4), p->y - 20 + k * 2, 600 };
+                H->food[H->nfood++] = (ck_flake){ p->x + p->face * (8 + k * 4), p->y - 20 + k * 2, 600 };
         }
         p->x = ck_clampf(p->x + p->vx, 10, CK_AQUA_W - 10);
         p->y += p->vy;
@@ -328,7 +488,7 @@ static void aqua_update(ck_game *G) {
     // food sinks slowly to the seabed and goes after a while
     int nf = 0;
     for (int i = 0; i < H->nfood; i++) {
-        ck_food *f = &H->food[i];
+        ck_flake *f = &H->food[i];
         if (f->y < CK_AQUA_SEABED - 3) f->y += 0.25f;
         if (--f->life > 0) H->food[nf++] = *f;
     }
@@ -339,21 +499,31 @@ static void aqua_update(ck_game *G) {
         float bd = 120;
         for (int k = 0; k < H->nfood; k++) { float d = hypotf(H->food[k].x - f->x, H->food[k].y - f->y); if (d < bd) { bd = d; best = k; } }
         if (best >= 0) {   // swim to the nearest flake and gobble it
-            ck_food *fd = &H->food[best];
+            ck_flake *fd = &H->food[best];
             f->vx = ck_clampf((fd->x - f->x) * 0.08f, -1.4f, 1.4f);
             if (fabsf(f->vx) < 0.2f) f->vx = f->vx < 0 ? -0.2f : 0.2f;
             f->y += ck_clampf((fd->y - f->y) * 0.08f, -1, 1);
             if (bd < 6) {
                 H->food[best] = H->food[--H->nfood];
                 f->happy = 40;
+                // a fed fish follows the nearest diver for a while
+                f->follow = 600; f->who = 0;
+                for (int k = 1; k < H->np; k++) if (hypotf(H->gs[k].x - f->x, H->gs[k].y - f->y) < hypotf(H->gs[f->who].x - f->x, H->gs[f->who].y - f->y)) f->who = k;
                 ck_sfx(G, SFX_BOLT);
                 ck_sparks(G, f->x, f->y, 4, 0xFF8FC7);
             }
+        } else if (f->follow > 0 && f->who < H->np && !H->gs[f->who].land) {   // swim along behind your friend
+            const ck_hhero *p = &H->gs[f->who];
+            float tx = p->x - p->face * (20 + (i % 3) * 8), ty = p->y - 20 + (i % 3) * 6 - 6;
+            f->vx = ck_clampf((tx - f->x) * 0.05f, -1.8f, 1.8f);
+            if (fabsf(f->vx) < 0.15f) f->vx = p->face * 0.15f;
+            f->y += ck_clampf((ty - f->y) * 0.05f, -1.2f, 1.2f);
+            f->follow--;
         } else if (f->scare > 0 && --f->scare == 0) f->vx = (f->vx > 0 ? 1 : -1) * 0.6f;
         // swimming into a fish boops it: a wiggle and a bubble
         for (int k = 0; k < H->np; k++) {
             const ck_hhero *p = &H->gs[k];
-            if (p->land || f->happy > 0 || hypotf(p->x - f->x, p->y - 18 - f->y) > 14) continue;
+            if (p->land || f->happy > 0 || f->follow > 0 || hypotf(p->x - f->x, p->y - 18 - f->y) > 14) continue;
             f->happy = 40; f->vx = (f->x > p->x ? 1 : -1) * 1.2f; f->scare = 30;
             ck_sfx(G, SFX_BOING);
             bubble(G, f->x, f->y - 6, 0, -0.8f, 3, 50);
@@ -385,30 +555,35 @@ static void aqua_update(ck_game *G) {
         for (int k = 0; k < H->np; k++) if (H->gs[k].land && fabsf(H->gs[k].x - c->x) < 22) close = true;
         if (close && c->snap <= 0) { c->snap = 30; ck_sfx(G, SFX_TICK); }
         if (c->snap > 0) c->snap--;
+        if (c->y < 0 || c->vy < 0) { c->vy += 0.25f; c->y += c->vy; if (c->y >= 0) { c->y = 0; c->vy = 0; } }   // a poked crab hops
+        if (c->run > 0 && --c->run == 0) c->vx = (c->vx > 0 ? 1 : -1) * 0.5f;   // then calms down
         if (c->wait > 0) { c->wait--; continue; }
         c->x += c->vx;
-        if (c->x < CK_AQUA_BEACH_X + 10 || c->x > CK_AQUA_W - 12) c->vx = -c->vx;
-        if (ck_rand(G) < 0.01f) c->wait = 30 + (int)(ck_rand(G) * 60);
+        if (c->x < CK_AQUA_BEACH_X + 10 || c->x > CK_AQUA_W - 12) { c->vx = -c->vx; c->x = ck_clampf(c->x, CK_AQUA_BEACH_X + 10, CK_AQUA_W - 12); }
+        if (c->run <= 0 && ck_rand(G) < 0.01f) c->wait = 30 + (int)(ck_rand(G) * 60);
+    }
+    for (int k = 0; k < CK_AQUA_CHESTS; k++) {
+        if (H->chestT[k] > 0) H->chestT[k]--;
+        if (H->chestT[k] > 60 && H->chestT[k] % 12 == 0) bubble(G, ck_aqua_chest_x[k] + (ck_rand(G) - 0.5f) * 10, CK_AQUA_SEABED - 16, 0, -0.9f, 1.6f, 80);
     }
 }
 
 // ---------------------------------------------------------------------------- the garage race
-void ck_race_obst(int i, float *x, int *kind, float *w, float *h) {
-    *x = 360 + i * 170 + (i * 53 % 4) * 25;
-    *kind = (i * 7) % 3 == 0 ? OBST_CRATE : OBST_CONE;
-    *w = *kind == OBST_CRATE ? 20 : 14;
-    *h = *kind == OBST_CRATE ? 20 : 14;
+void ck_race_obst(int i, float clock, float *d, float *x, int *kind, float *w, float *h) {
+    static const int kinds[5] = { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CONE, OBST_CAR };
+    *kind = kinds[i % 5];
+    *d = 320 + i * 90 + (*kind == OBST_CAR ? clock * 60 : 0);   // slow cars drive at 1 px a frame
+    *x = ((i * 7 + i / 4) % 3 - 1) * CK_RACE_LANE;
+    *w = *kind == OBST_OIL ? 20 : *kind == OBST_CAR ? 18 : *kind == OBST_CRATE ? 18 : 12;
+    *h = *kind == OBST_OIL ? 14 : *kind == OBST_CAR ? 28 : *kind == OBST_CRATE ? 18 : 12;
 }
-#define RACE_TOP 3.0f
-#define RACE_JUMP (-5.0f)
-#define RACE_GRAV 0.28f
 static void cars_reset(ck_game *G) {
     ck_house *H = &G->house;
     for (int i = 0; i < H->np; i++) {
         ck_hhero *c = &H->gs[i];
         int slot = c->slot;
         memset(c, 0, sizeof *c);
-        c->slot = slot; c->face = 1; c->ground = true;
+        c->slot = slot; c->face = 1;
     }
     H->count = 3; H->win = -1; H->endT = 0; H->clock = 0;
 }
@@ -432,22 +607,23 @@ static void cars_update(ck_game *G) {
     H->clock += 1.0f / 60;
     for (int i = 0; i < H->np; i++) {
         ck_hhero *c = &H->gs[i];
-        int s = c->slot;
-        if (c->rep > 0) { c->rep--; c->s = 0.8f; }
-        else c->s += (RACE_TOP - c->s) * 0.03f;
-        if (HIT(G, s, CK_A) && c->ground) { c->vy = RACE_JUMP; c->ground = false; ck_sfx(G, SFX_JUMP); }
-        c->vy += RACE_GRAV; c->y += c->vy;
-        if (c->y >= 0) { c->y = 0; c->vy = 0; c->ground = true; }
-        c->x += c->s;
+        int s = c->slot, steer = dir_x(G, s);
+        float want = HELD(G, s, CK_UP) || HELD(G, s, CK_A) ? 4.2f : HELD(G, s, CK_DOWN) || HELD(G, s, CK_B) ? 1.5f : 3.0f;
+        if (c->rep > 0) { c->rep--; want = 1; steer = 0; }
+        c->s += (want - c->s) * 0.04f;
+        c->vx += (steer * 2.2f - c->vx) * 0.25f;
+        c->x = ck_clampf(c->x + c->vx, -CK_RACE_EDGE, CK_RACE_EDGE);
+        if (c->laps) c->s = ck_maxf(c->s * 0.97f, 0.5f);   // past the line: coast
+        c->a += c->s;
         for (int k = 0; k < CK_RACE_OBST; k++) {
-            float ox, w, h; int kind;
-            ck_race_obst(k, &ox, &kind, &w, &h);
-            if (c->key & (1 << k) || fabsf(c->x - ox) > w / 2 + 12 || -c->y > h) continue;
-            c->key |= 1 << k;
-            c->rep = 40; c->s = 0.5f;
-            ck_sfx(G, SFX_CLANK);
+            float od, ox, w, h; int kind;
+            ck_race_obst(k, H->clock, &od, &ox, &kind, &w, &h);
+            if (c->key & (1u << k) || fabsf(c->x - ox) > w / 2 + 9 || fabsf(c->a - od) > h / 2 + 12) continue;
+            c->key |= 1u << k;
+            if (kind == OBST_OIL) { c->rep = 40; c->s *= 0.6f; ck_sfx(G, SFX_SLIDE); }
+            else { c->rep = 50; c->s = 0.6f; ck_sfx(G, SFX_CLANK); }
         }
-        if (c->laps == 0 && c->x >= CK_RACE_LEN) {
+        if (c->laps == 0 && c->a >= CK_RACE_LEN) {
             c->laps = 1; c->best = H->clock;
             ck_sfx(G, SFX_GEAR);
             if (H->win < 0) { H->win = i; ck_sfx(G, SFX_FLAG); ck_confetti(G, 160, 40, 40); }

@@ -22,7 +22,7 @@ const HOUSEART = (() => {
     ],
     // x, kind, what A does there, in SPOT_* order (the bedroom is first so saving is quick)
     spots: [
-      [535, 'snack', 'Have a snack'],
+      [535, 'snack', 'Open the fridge'],
       [770, 'paint', 'Paint the mural'],
       [925, 'piano', 'Play the piano'],
       [1130, 'aqua', 'Swim with the fish'],
@@ -32,9 +32,10 @@ const HOUSEART = (() => {
       [262, 'mail', 'Check the mail'],
       [120, 'tree', 'Pick an apple'],
       [44, 'back', 'Back a world'],
+      [605, 'stove', 'Cook something'],
     ],
     // decorations that are only looked at: x, furniture frame
-    decor: [[605, 'stove'], [648, 'table'], [840, 'plant'], [1205, 'plant'], [475, 'lamp'], [1410, 'tools']],
+    decor: [[648, 'table'], [840, 'plant'], [1205, 'plant'], [475, 'lamp'], [1410, 'tools']],
   };
   // furniture, by name; each fits in 96x96 standing on (0, 0)
   const F = {};
@@ -108,7 +109,7 @@ const HOUSEART = (() => {
   F.sign = g => { K.rr(-2, -40, 4, 40, 1, '#8a5a3c'); K.rr(-20, -44, 36, 14, 3, '#c98a4b'); K.rr(-26, -42, 8, 10, 2, '#c98a4b'); K.rr(-17, -41, 30, 2, 1, '#e8b46a'); K.rr(-14, -37, 22, 2, 1, '#6f4630'); };
   F.tools = g => { K.rr(-26, -60, 52, 46, 3, '#8a7a6a'); for (let i = 0; i < 6; i++) K.circ(-20 + i * 8, -52, 1.2, '#5a4e42'); K.rr(-20, -48, 4, 18, 1, '#e04f4f'); K.rr(-12, -46, 12, 4, 1, '#9aa1b0'); K.rr(4, -50, 3, 20, 1, '#ffd23f'); K.rr(12, -44, 8, 8, 4, '#9aa1b0'); K.rr(-28, -14, 56, 14, 3, '#e04f4f'); K.rr(-28, -14, 56, 3, 1, '#ff8a8a'); };
   const NAMES = ['tree', 'mailbox', 'counter', 'fridge', 'stove', 'table', 'easel', 'piano', 'tank', 'bed', 'car', 'plant', 'drum', 'lamp', 'tools', 'sign'];
-  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign' };
+  const SPOT_FURN = { shop: 'counter', snack: 'fridge', paint: 'easel', piano: 'piano', aqua: 'tank', bed: 'bed', cars: 'car', drums: 'drum', mail: 'mailbox', tree: 'tree', back: 'sign', stove: 'stove' };
   function furn(g, name, x, y) { g.save(); g.translate(x, y); F[name](g); g.restore(); }
 
   // ---- the little creatures (drawn around (0, 0), facing right)
@@ -147,46 +148,47 @@ const HOUSEART = (() => {
       K.rr(BX, AQUA.BEACH_Y, 84, 3, 1, '#ffe2a8');
       for (const [x, y, r] of [[258, 182, 9], [300, 184, 12], [70, 222, 10], [160, 224, 8]]) { g.fillStyle = '#9a8f84'; g.beginPath(); g.ellipse(x, y, r, r * 0.7, 0, P, 0); g.fill(); }
       K.rr(300, 120, 6, 62, 3, '#8a5a3c'); for (const a of [-2.6, -2.0, -1.2, -0.5]) { g.save(); g.translate(303, 122); g.rotate(a); K.rr(0, -3, 26, 6, 3, '#3f9d4e'); g.restore(); }
-    } else {       // rocks, a treasure chest and a sunken bolt on the seabed
+    } else {       // rocks and a sunken bolt on the seabed (the treasure chests are drawn by the game: they open)
       for (const [x, y, r] of [[40, 222, 12], [210, 223, 9], [290, 222, 14]]) { g.fillStyle = '#9a8f84'; g.beginPath(); g.ellipse(x, y, r, r * 0.7, 0, P, 0); g.fill(); }
-      K.rr(108, 208, 22, 14, 3, '#a8672f'); K.rr(108, 206, 22, 6, 3, '#c98a4b'); K.rr(117, 210, 4, 4, 1, '#ffd23f');
       K.rr(250, 214, 14, 6, 2, '#c9b8c7'); K.rr(255, 210, 4, 12, 1, '#c9b8c7');
     }
     // the glass of the tank: a frame along the water's top
     K.rr(0, AQUA.WATER_TOP - 6, Math.min(320, BX + 10), 4, 1, 'rgba(255,255,255,0.5)');
   }
 
-  // ---- the garage race, side on: a lane per player (RACE.len long), cones and crates to jump.
-  // Only boxes and circles, so the N64 (draw_cars) draws the same picture.
-  const RACE = { len: 2400, obst: 12, carX: 80 };
-  const raceObst = i => { const kind = (i * 7) % 3 === 0 ? 'crate' : 'cone'; return { x: 360 + i * 170 + (i * 53 % 4) * 25, kind, w: kind === 'crate' ? 20 : 14, h: kind === 'crate' ? 20 : 14 }; };
-  const box = (g, x, y, w, h, c) => { g.fillStyle = typeof c === 'number' ? hx(c) : c; g.fillRect(x, y, w, h); };
-  const dot = (g, x, y, r, c) => { g.fillStyle = hx(c); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
-  function raceLane(g, top, h, cam) {
-    const ground = top + h - 22;
-    box(g, 0, top, 320, h, 0x8FD3FF);
-    for (let k = 0; k < 4; k++) { const x = ((k * 140 - cam * 0.3) % 560 + 560) % 560 - 70; dot(g, x, ground, 46, 0x7FCF86); }
-    box(g, 0, ground, 320, top + h - ground, 0x5A5E6A);
-    box(g, 0, ground, 320, 2, 0xFFF6D8);
-    for (let x = -(cam % 40); x < 320; x += 40) box(g, x, ground + 11, 20, 2, 0xFFF6D8);
-    const fx = RACE.len - cam + RACE.carX;
-    if (fx > -10 && fx < 330) {
-      box(g, fx - 1, ground - 46, 2, 46, 0xC9B8C7); box(g, fx + 1, ground - 46, 16, 10, 0xE04F4F);
-      for (let y = ground; y < top + h; y += 4) for (let k = 0; k < 2; k++) box(g, fx - 4 + k * 4, y, 4, 4, ((y - ground) / 4 + k) % 2 ? 0xFFFFFF : 0x1B1426);
-    }
-    for (let i = 0; i < RACE.obst; i++) {
-      const o = raceObst(i), x = o.x - cam + RACE.carX;
-      if (x < -20 || x > 340) continue;
-      if (o.kind === 'cone') { for (let r = 0; r < o.h; r += 2) box(g, x - o.w / 2 * (1 - r / o.h), ground - r - 2, o.w * (1 - r / o.h), 2, r === 6 ? 0xFFFFFF : 0xFF8A3D); box(g, x - o.w / 2 - 2, ground - 2, o.w + 4, 2, 0xFF8A3D); }
-      else { box(g, x - o.w / 2, ground - o.h, o.w, o.h, 0x8A5A3C); box(g, x - o.w / 2 + 2, ground - o.h + 2, o.w - 4, o.h - 4, 0xC98A4B); box(g, x - 1, ground - o.h + 2, 2, o.h - 4, 0x8A5A3C); }
-    }
-    return ground;
+  // ---- the garage race, top down: the road scrolls down, three lanes, things to dodge. Boxes and
+  // circles only, so the N64 (draw_cars) draws the same picture.
+  const RACE = { len: 3200, obst: 32, lane: 40, edge: 52, carY: 190 };
+  const raceObst = (i, clock) => {
+    const kind = ['cone', 'crate', 'oil', 'cone', 'car'][i % 5];
+    return { d: 320 + i * 90 + (kind === 'car' ? clock * 60 : 0), x: ((i * 7 + Math.floor(i / 4)) % 3 - 1) * RACE.lane, kind,
+             w: kind === 'oil' ? 20 : kind === 'car' ? 18 : kind === 'crate' ? 18 : 12, h: kind === 'oil' ? 14 : kind === 'car' ? 28 : kind === 'crate' ? 18 : 12 };
+  };
+  const box = (g, x, y, w, h, c, a = 1) => { g.globalAlpha = a; g.fillStyle = typeof c === 'number' ? hx(c) : c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };
+  const dot = (g, x, y, r, c, a = 1) => { g.globalAlpha = a; g.fillStyle = hx(c); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; };
+  const fmod = (a, b) => ((a % b) + b) % b;
+  function carTop(g, x, y, hex) {
+    for (let k = 0; k < 4; k++) box(g, x + (k % 2 ? 7 : -10), y + (k < 2 ? -11 : 5), 3, 7, 0x1B1426);
+    box(g, x - 8, y - 14, 16, 28, hex); box(g, x - 6, y - 7, 12, 5, 0xBFF0FF); box(g, x - 6, y + 6, 12, 3, 0x000000, 0.25);
+    box(g, x - 7, y - 15, 3, 2, 0xFFE066); box(g, x + 4, y - 15, 3, 2, 0xFFE066);
   }
-  // a car side on, facing right, standing on (x, y)
-  function carSide(g, x, y, hex) {
-    box(g, x - 17, y - 16, 34, 10, hex); box(g, x - 8, y - 24, 14, 8, hex);
-    box(g, x - 5, y - 22, 9, 5, 0xBFF0FF); box(g, x + 14, y - 14, 3, 3, 0xFFE066);
-    for (const wx of [-10, 10]) { dot(g, x + wx, y - 5, 5, 0x1B1426); dot(g, x + wx, y - 5, 2, 0xC9B8C7); }
+  function raceView(g, x0, vw, dist, clock) {
+    const cx = x0 + vw / 2;
+    box(g, x0, 0, vw, 240, 0x5DBB63);
+    for (let k = 0; k < 8; k++) { const y = fmod(k * 60 + dist, 480) - 120; dot(g, x0 + 8 + (k % 2) * 4, y, 7, 0x3F9D4E); dot(g, x0 + vw - 10 - (k % 3) * 3, y + 30, 7, 0x3F9D4E); }
+    box(g, cx - 64, 0, 128, 240, 0x5A5E6A);
+    for (let y = fmod(dist, 24) - 24; y < 240; y += 24) { box(g, cx - 66, y, 4, 12, 0xE04F4F); box(g, cx - 66, y + 12, 4, 12, 0xFFFFFF); box(g, cx + 62, y, 4, 12, 0xE04F4F); box(g, cx + 62, y + 12, 4, 12, 0xFFFFFF); }
+    for (let y = fmod(dist, 40) - 40; y < 240; y += 40) { box(g, cx - 21, y, 2, 20, 0xFFF6D8); box(g, cx + 19, y, 2, 20, 0xFFF6D8); }
+    const fy = RACE.carY - (RACE.len - dist);
+    if (fy > -10 && fy < 250) for (let r = 0; r < 2; r++) for (let k = 0; k < 16; k++) box(g, cx - 64 + k * 8, fy - 8 + r * 4, 8, 4, (k + r) % 2 ? 0xFFFFFF : 0x1B1426);
+    for (let i = 0; i < RACE.obst; i++) {
+      const o = raceObst(i, clock), x = cx + o.x, y = RACE.carY - (o.d - dist);
+      if (y < -30 || y > 270) continue;
+      if (o.kind === 'cone') { dot(g, x, y, 6, 0xFF8A3D); dot(g, x, y, 2.5, 0xFFFFFF); }
+      else if (o.kind === 'crate') { box(g, x - 9, y - 9, 18, 18, 0x8A5A3C); box(g, x - 7, y - 7, 14, 14, 0xC98A4B); box(g, x - 1, y - 7, 2, 14, 0x8A5A3C); }
+      else if (o.kind === 'oil') { dot(g, x, y, 10, 0x1B1426, 0.85); dot(g, x + 3, y - 2, 3, 0x5A4F78); }
+      else carTop(g, x, y, 0x9AA1B0);
+    }
   }
   // ---- the piano keyboard for the music game: 2 octaves from C4, 14 white keys
   const KEYS = { x: 20, y: 150, w: 20, h: 80, bw: 12, bh: 48, n: 14 };
@@ -216,5 +218,36 @@ const HOUSEART = (() => {
     g.fillStyle = '#1b1426'; g.fillRect(d.x - 8, d.y + r + 4, 16, 13);
     g.fillStyle = '#fff6d8'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.fillText(d.label, d.x, d.y + r + 14);
   };
-  return { DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, RACE, raceObst, raceLane, carSide, KEYS, hx };
+  // food (ck_foods in ck_house.c): [kind 0 circle (w = radius) / 1 box, x, y, w, h, colour]
+  const FOODS = [
+    ['apple', [[0, 0, 0, 4, 0, 0xE04F4F], [0, -1.5, -1.5, 1.2, 0, 0xFF8A8A], [1, -0.5, -6, 1, 3, 0x6F4630], [1, 0.5, -6, 3, 1.5, 0x49D17A]]],
+    ['banana', [[1, -5, -1, 10, 3, 0xFFE066], [1, -6, -2, 2, 2, 0x6F4630], [1, 4, -3, 2, 3, 0xFFE066]]],
+    ['cheese', [[1, -5, -3, 10, 6, 0xFFD23F], [0, -2, -1, 1, 0, 0xE0A92B], [0, 2, 1, 1.2, 0, 0xE0A92B]]],
+    ['carrot', [[1, -1.5, -3, 3, 9, 0xFF8A3D], [1, -2.5, -6, 2, 3, 0x49D17A], [1, 0.5, -6, 2, 3, 0x49D17A]]],
+    ['cake', [[1, -5, -2, 10, 6, 0xFF8FC7], [1, -5, -3, 10, 2, 0xFFF6E6], [0, 0, -5, 1.5, 0, 0xE04F4F]]],
+    ['ice cream', [[1, -2, 0, 4, 6, 0xC98A4B], [0, 0, -1, 3.5, 0, 0xFF8FC7], [0, -1, -2, 1, 0, 0xFFFFFF]]],
+    ['milk', [[1, -3, -5, 6, 10, 0xFFFFFF], [1, -3, -1, 6, 3, 0x5AD1FF], [1, -2, -7, 4, 2, 0xFFFFFF]]],
+    ['pizza', [[1, -5, -3, 10, 6, 0xE8B46A], [1, -5, -3, 10, 1.5, 0xC98A4B], [0, -2, 0, 1.2, 0, 0xE04F4F], [0, 2, 1, 1.2, 0, 0xE04F4F]]],
+    ['cookie', [[0, 0, 0, 4, 0, 0xC98A4B], [0, -1, -1, 0.8, 0, 0x6F4630], [0, 1.5, 1, 0.8, 0, 0x6F4630]]],
+    ['egg', [[0, 0, 0, 3.5, 0, 0xFFF6E6], [0, -1, -1, 1, 0, 0xFFFFFF]]],
+    ['tomato', [[0, 0, 0, 4, 0, 0xE04F4F], [1, -1.5, -5, 3, 1.5, 0x49D17A], [0, -1.5, -1.5, 1, 0, 0xFF8A8A]]],
+    ['mushroom', [[1, -1.5, -1, 3, 5, 0xFFF6E6], [1, -5, -4, 10, 3.5, 0xC98A4B], [0, -2, -3, 0.8, 0, 0xFFF6E6]]],
+    ['bread', [[1, -4, -4, 8, 8, 0xE8B46A], [1, -4, -5, 8, 2, 0xC98A4B], [1, -3, -3, 6, 6, 0xFFE2A8]]],
+    ['omelette', [[0, 0, 0, 5, 0, 0xFFE066], [0, -2, -1, 1.5, 0, 0xFFF6A0], [0, 2, 1, 1, 0, 0xE0A92B]]],
+    ['soup', [[1, -5, -1, 10, 5, 0x5AD1FF], [0, 0, -1, 4.5, 0, 0xE04F4F], [0, -1.5, -2, 1, 0, 0xFF8A3D], [0, 1.5, -1, 1, 0, 0x49D17A]]],
+    ['toastie', [[1, -5, -3, 10, 6, 0xC98A4B], [1, -5, -1, 10, 2, 0xFFD23F], [1, -4, -2.5, 8, 1, 0xE8B46A]]],
+  ].map(([name, s]) => ({ name, s }));
+  // the mailbox's letters (ck_letters)
+  const LETTERS = [
+    ['the babies', ['We love our new house!', 'Thank you for saving us.', 'Hugs and beeps!']],
+    ['Clanky Crane', ['Sorry I swung at you.', 'My magnet was all glitchy.', 'Friends now?']],
+    ['the garage', ['The cars are fuelled up.', 'Race a friend and', 'jump the cones!']],
+    ['the fish', ['Blub blub blub.', '(That means: please', 'feed us more flakes.)']],
+    ['the paint studio', ['The wall is waiting.', 'Fly up high and', 'paint us a picture!']],
+    ['the parts shop', ['New hats in stock!', 'Bolts buy cool things.', 'See you soon!']],
+  ].map(([from, lines]) => ({ from, lines }));
+  const CHESTS = [119, 439];
+  const FRIDGE_FOODS = 9;
+  const COOK_INGR = [9, 10, 2, 11, 3, 12];   // egg, tomato, cheese, mushroom, carrot, bread (ck_cook_ingr)   // the aquarium's treasure chests (ck_aqua_chest_x)
+  return { FOODS, FRIDGE_FOODS, COOK_INGR, LETTERS, CHESTS, DRUMS, drumPiece, LAYOUT, F, NAMES, SPOT_FURN, furn, fish, shrimp, crab, weed, FISH, AQUA, aquaBg, RACE, raceObst, raceView, carTop, KEYS, hx };
 })();

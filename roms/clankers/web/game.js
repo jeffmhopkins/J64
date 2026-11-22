@@ -283,6 +283,12 @@ function panel(x, y, w, h, c = 'rgba(27,20,38,0.86)') { K.rr(x, y, w, h, 5, c); 
 function textW(s, size) { g.font = `${size}px ${FONT}`; return Math.ceil(g.measureText(s).width); }
 // a box centred on the screen at least w wide, wider if the words need it
 function fitPanel(s, size, w, y, h, c) { const ww = Math.min(W - 6, Math.max(w, textW(s, size) + 20)); panel((W - ww) / 2, y, ww, h, c); }
+// a line of help in a game: light words on a dark strip, readable on anything (the N64's hint())
+function hint(s, y) { const w = textW(s, 7) + 14; panel((W - w) / 2, y - 9, w, 13); text(s, W / 2, y, 7, '#fff6d8', 'center', null); }
+// a message: a dark box with a bright rim, light words (the N64's banner(); dark words on yellow blur on a TV)
+function rimBanner(s, size, y, h, rim = '#ffd23f', col = '#ffd23f') { const ww = Math.min(W - 6, Math.max(120, textW(s, size) + 20)); K.rr((W - ww) / 2, y, ww, h, 5, rim); K.rr((W - ww) / 2 + 2, y + 2, ww - 4, h - 4, 4, '#1b1426'); text(s, W / 2, y + h / 2 + size * 0.36, size, col, 'center', null); }
+// a food from HOUSEART.FOODS (ck_foods) at (x, y), sc times its size
+function foodArt(k, x, y, sc = 1) { for (const [kind, fx, fy, w, h, c] of HOUSEART.FOODS[k].s) { if (kind === 0) K.circ(x + fx * sc, y + fy * sc, w * sc, hexStr(c)); else { g.fillStyle = hexStr(c); g.fillRect(x + fx * sc, y + fy * sc, w * sc, h * sc); } } }
 
 // ----------------------------------------------------------------------------- TITLE
 const TITLE = makeTitle(g, W, H, reduce);
@@ -668,10 +674,10 @@ function houseBabies() {
 // a little rng the N64 copies exactly, so the babies start in the same places
 const hrng = s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x80000000;
 function houseScene(from) {
-  const S = { song: 'select', t: 0, cam: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, snack: [false, false] };
+  const S = { song: 'select', t: 0, cam: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, fpick: [0, 2], cpick: [0, 2], pan: [], heat: 0, dish: 0, dishName: '', thrown: [] };
   const team = activeParty(), q = hrng(7);
   const spawnX = 200;
-  S.ps = team.map((m, i) => ({ m, x: spawnX - 10 + i * 20, y: HL.FLOOR, vx: 0, vy: 0, face: 1, ground: true, anim: 0, eatT: 0 }));
+  S.ps = team.map((m, i) => ({ m, x: spawnX - 10 + i * 20, y: HL.FLOOR, vx: 0, vy: 0, face: 1, ground: true, anim: 0, eatT: 0, hold: 0, food: 0 }));
   S.babies = houseBabies().map((hex, i) => {
     const r = i % (HL.rooms.length), [x0, x1] = HL.rooms[r];
     return { hex, x: x0 + 30 + q() * (x1 - x0 - 60), x0: x0 + 14, x1: x1 - 14, vx: (q() < 0.5 ? -1 : 1) * (0.3 + q() * 0.3), hopT: 0, vy: 0, y: 0, wait: Math.floor(q() * 120) };
@@ -682,17 +688,10 @@ function houseScene(from) {
   function useSpot(k, p, i) {
     const kind = HL.spots[k][1];
     if (kind === 'back') { SND.fx.confirm(); saveProg(); enterWorld(worldNum - 1, 'exit'); }
-    else if (kind === 'mail') {
-      SND.fx.open();
-      const letters = ['Love from the babies!', 'Clanky Crane says sorry', 'Race you in the garage!', 'The fish say blub blub', 'Paint us a picture!', 'Bolts buy cool hats!'];
-      S.msg = { text: letters[S.letter++ % 6], t: 100 };
-    }
-    else if (kind === 'tree') { p.eatT = 50; p.apple = true; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 30, 6, '#ff5a5a'); S.msg = { text: 'Crunch! A juicy apple!', t: 100 }; }
-    else if (kind === 'snack') {
-      p.eatT = 70; p.apple = false; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 20, 8, '#ffd23f');
-      const full = (prog.lives ?? 3) >= 3; prog.lives = 3; saveProg();
-      S.msg = { text: full ? 'Yum! Crunchy bolts!' : 'Yum! Batteries full!', t: 100 };
-    }
+    else if (kind === 'mail') { SND.fx.open(); S.letter = S.letter % HOUSEART.LETTERS.length + 1; S.mode = 'letter'; }
+    else if (kind === 'tree') { p.hold = 1; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
+    else if (kind === 'snack') { SND.fx.open(); S.mode = 'fridge'; }
+    else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.heat = 0; S.dish = 0; }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
     else if (kind === 'piano') { SND.fx.open(); go(pianoScene(S)); }
     else if (kind === 'drums') { SND.fx.open(); go(drumScene(S)); }
@@ -713,6 +712,42 @@ function houseScene(from) {
       else if (anyHit('a')) { saveToSlot(S.pick + 1); S.mode = 'sleep'; S.sleepT = 0; SND.fx.record(); }
       return;
     }
+    if (S.mode === 'letter') { if (anyHit('a') || anyHit('b') || anyHit('start')) { S.mode = 'walk'; SND.fx.select(); } return; }
+    if (S.mode === 'cook') {   // the stove: add ingredients, stir till the heat bar fills, take the dish
+      const ING = HOUSEART.COOK_INGR;
+      for (const [i, p] of S.ps.entries()) {
+        const sl = p.m.slot;
+        if (hit(sl, 'left') && S.cpick[i] > 0) { S.cpick[i]--; SND.fx.select(); }
+        if (hit(sl, 'right') && S.cpick[i] < ING.length - 1) { S.cpick[i]++; SND.fx.select(); }
+        if (S.dish) { if (hit(sl, 'a')) { p.hold = S.dish; S.msg = { text: S.dishName + '!', t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
+        if (hit(sl, 'a') && S.pan.length < 4) { S.pan.push(ING[S.cpick[i]]); SND.fx.hop(); }
+        if (hit(sl, 'b') && S.pan.length) {
+          S.heat += 9; SND.fx.hover(); for (let k = 0; k < 2; k++) puff(150 + Math.random() * 20, 120, 1, 'rgba(255,255,255,0.63)');
+          if (S.heat >= 100) {
+            S.heat = 100; const has = f => S.pan.includes(f);
+            if (has(9)) { S.dish = 14; S.dishName = has(2) ? 'Cheesy omelette' : has(11) ? 'Mushroom omelette' : has(10) ? 'Tomato omelette' : 'Omelette'; }
+            else if (has(12)) { S.dish = 16; S.dishName = has(2) && has(10) ? 'Pizza toastie' : has(2) ? 'Cheese toastie' : 'Toast'; }
+            else { S.dish = 15; S.dishName = has(10) ? 'Tomato soup' : has(11) ? 'Mushroom soup' : has(3) ? 'Carrot soup' : 'Cheese soup'; }
+            SND.fx.gear(); sparks(160, 140, 12, '#ffd23f');
+          }
+        }
+      }
+      if (S.heat > 0 && !S.dish && Math.floor(S.t * 60) % 20 === 0) puff(140 + Math.random() * 40, 125, 1, 'rgba(255,255,255,0.47)');
+      if (anyHit('start') || (!S.dish && !S.pan.length && anyHit('b'))) { S.mode = 'walk'; SND.fx.select(); }
+      return;
+    }
+    if (S.mode === 'fridge') {   // a 3 x 3 shelf of food, a cursor each
+      S.ps.forEach((p, i) => {
+        const sl = p.m.slot;
+        if (hit(sl, 'left') && S.fpick[i] % 3 > 0) { S.fpick[i]--; SND.fx.select(); }
+        if (hit(sl, 'right') && S.fpick[i] % 3 < 2) { S.fpick[i]++; SND.fx.select(); }
+        if (hit(sl, 'up') && S.fpick[i] >= 3) { S.fpick[i] -= 3; SND.fx.select(); }
+        if (hit(sl, 'down') && S.fpick[i] < 6) { S.fpick[i] += 3; SND.fx.select(); }
+        if (hit(sl, 'a')) { p.hold = S.fpick[i] + 1; SND.fx.buy(); S.msg = { text: 'Got some ' + HOUSEART.FOODS[S.fpick[i]].name + '!', t: 100 }; S.mode = 'walk'; }
+      });
+      if (S.mode === 'fridge' && (anyHit('b') || anyHit('start'))) { S.mode = 'walk'; SND.fx.select(); }
+      return;
+    }
     if (S.mode === 'sleep') { S.sleepT += 1 / 60; if (S.sleepT > 2.6) { S.mode = 'walk'; S.msg = { text: 'Saved in slot ' + saveSlot + '!', t: 120 }; } return; }
     if (anyHit('start')) { leave(); return; }
     for (const [i, p] of S.ps.entries()) {
@@ -720,9 +755,18 @@ function houseScene(from) {
       if (p.eatT > 0) { p.eatT--; p.vx = 0; }
       else {
         p.vx += (want * HOUSE_SPEED - p.vx) * 0.3; if (want) p.face = want;
+        // holding food: A eats it, B throws it the way you face
+        const k = p.ground && !p.hold ? near(p) : -1;
+        if (p.hold && hit(sl, 'a')) {
+          p.food = p.hold - 1; p.hold = 0; p.eatT = 50; SND.fx.sprout(); sparks(p.x - S.cam, p.y - 22, 8, '#ffd23f');
+          const full = (prog.lives ?? 3) >= 3; prog.lives = 3; saveProg();
+          S.msg = { text: full ? 'Yum, ' + HOUSEART.FOODS[p.food].name + '!' : 'Yum! Batteries full!', t: 100 };
+        } else if (p.hold && hit(sl, 'b')) {
+          if (S.thrown.length < 6) S.thrown.push({ x: p.x + p.face * 8, y: p.y - 22, vx: p.face * 3.2 + p.vx * 0.5, vy: -2.6, kind: p.hold - 1, life: 150 });
+          p.hold = 0; SND.fx.blow();
+        }
         // A (or down) at a room's thing uses it; A anywhere else jumps
-        const k = p.ground ? near(p) : -1;
-        if (k >= 0 && (hit(sl, 'a') || hit(sl, 'down'))) { useSpot(k, p, i); if (scene !== S || S.mode !== 'walk') return; }
+        else if (k >= 0 && (hit(sl, 'a') || hit(sl, 'down'))) { useSpot(k, p, i); if (scene !== S || S.mode !== 'walk') return; }
         else if (hit(sl, 'a') && p.ground) { p.vy = HOUSE_JUMP; p.ground = false; SND.fx.jump(); }
       }
       p.vy += HOUSE_GRAV; p.x += p.vx; p.y += p.vy;
@@ -734,6 +778,15 @@ function houseScene(from) {
     const mid = S.ps.reduce((a, p) => a + p.x, 0) / S.ps.length;
     S.cam = clamp(mid - W / 2, 0, HL.W - W);
     if (S.ps.length > 1) for (const p of S.ps) p.x = clamp(p.x, S.cam > 0 ? S.cam + 8 : -4, S.cam + W - 8);
+    for (const f of S.thrown) {   // thrown food bounces; a baby catches it and munches it
+      f.vy += 0.2; f.x += f.vx; f.y += f.vy;
+      if (f.y >= HL.FLOOR - 4) { f.y = HL.FLOOR - 4; f.vy *= -0.45; f.vx *= 0.75; if (Math.abs(f.vy) < 0.6) f.vy = 0; }
+      if (f.x < 4 || f.x > HL.W - 4) f.vx = -f.vx;
+      if (--f.life <= 0) { f.gone = true; puff(f.x - S.cam, f.y, 4, 'rgba(255,255,255,0.8)'); continue; }
+      const b = S.babies.find(b => Math.abs(b.x - f.x) < 10 && f.y > HL.FLOOR - 20);
+      if (b) { b.vy = -2.2; b.y = -0.1; f.gone = true; SND.fx.hop(); sparks(f.x - S.cam, f.y, 5, '#ff8fc7'); }
+    }
+    S.thrown = S.thrown.filter(f => !f.gone);
     for (const b of S.babies) {
       if (b.wait > 0) { b.wait--; continue; }
       b.x += b.vx;
@@ -750,21 +803,63 @@ function houseScene(from) {
       const x = p.x - S.cam, t = S.t + p.m.slot * 0.7;
       const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : !p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle';
       drawHeroPose(p.m, x, p.y, st, st === 'run' ? p.anim / 11 : t, p.face);
-      if (p.eatT > 0 && p.apple) { K.circ(x + 6, p.y - 22, 4, '#e04f4f'); K.rr(x + 5.5, p.y - 28, 1.2, 3, 0.5, '#6f4630'); }
-      else if (p.eatT > 0) { K.circ(x + 6, p.y - 22, 4, '#c98a4b'); K.circ(x + 6, p.y - 22, 2.4, '#e8b46a'); }
+      if (p.eatT > 0) foodArt(p.food, x + 6, p.y - 24, 0.4 + 0.6 * p.eatT / 50);   // shrinking as it is eaten
+      else if (p.hold) foodArt(p.hold - 1, x + p.face * 9, p.y - 20);
     }
+    for (const f of S.thrown) foodArt(f.kind, f.x - S.cam, f.y);
     // what Down does where you stand
     const shown = new Set();
     for (const p of S.ps) { const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k); const [x, kind, label] = HL.spots[k], s = 'A  ' + (kind === 'back' ? 'Back to World ' + (worldNum - 1) : label), w = textW(s, 8) + 14; panel(x - S.cam - w / 2, 120, w, 15); text(s, x - S.cam, 131, 8, '#fff6d8', 'center', null); }
     drawParticles(0);
     if (S.cam < 40) text('← Map', 18 - S.cam, 186, 8, '#fff6d8', 'left');
     livesHud(4, 4, S.t);
-    if (S.msg) { fitPanel(S.msg.text, 10, 0, 26, 18, '#ffd23f'); text(S.msg.text, W / 2, 39, 10, '#2b2230', 'center', null); }
+    if (S.msg) rimBanner(S.msg.text, 10, 26, 20);
     if (S.mode === 'sleep') {
       g.fillStyle = 'rgba(12,8,30,' + Math.min(0.75, S.sleepT * 0.6) + ')'; g.fillRect(0, 0, W, H);
       for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', HL.spots[4][0] - S.cam + 10 + u * 20, 150 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
     }
     if (S.mode === 'slots') drawSlotPicker('SLEEP AND SAVE', 'Which save slot?', S.pick);
+    if (S.mode === 'fridge') {   // the fridge door open: three shelves of food, a cursor each
+      g.fillStyle = 'rgba(15,10,25,0.55)'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#d9dee6'; g.fillRect(76, 14, 168, 212); g.fillStyle = '#f4f8fc'; g.fillRect(82, 20, 156, 200);
+      g.fillStyle = '#bfc8d4'; for (let r = 0; r < 3; r++) g.fillRect(84, 80 + r * 62, 152, 4);
+      HOUSEART.FOODS.slice(0, HOUSEART.FRIDGE_FOODS).forEach((f, k) => {
+        const fx = 110 + (k % 3) * 50, fy = 56 + Math.floor(k / 3) * 62;
+        S.ps.forEach((p, j) => { if (S.fpick[j] === k) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 20 + j * 3, 0, P * 2); g.stroke(); } });
+        foodArt(k, fx, fy, 3);
+      });
+      S.ps.forEach((p, j) => text(HOUSEART.FOODS[S.fpick[j]].name, j ? 300 : 20, 228, 8, p.m.slot ? '#8fd3ff' : '#ffd23f', j ? 'right' : 'left'));
+      hint('Stick choose   A take it   B close', 10);
+    }
+    if (S.mode === 'cook') {   // the stove: a shelf of ingredients, the pan, the heat bar
+      const ING = HOUSEART.COOK_INGR;
+      g.fillStyle = 'rgba(15,10,25,0.55)'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#8a5a3c'; g.fillRect(30, 24, 260, 50); g.fillStyle = '#c98a4b'; g.fillRect(34, 28, 252, 42);
+      ING.forEach((f, k) => {
+        const fx = 56 + k * 42, fy = 49;
+        S.ps.forEach((p, j) => { if (S.cpick[j] === k && !S.dish) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 17 + j * 3, 0, P * 2); g.stroke(); } });
+        foodArt(f, fx, fy, 2.4);
+      });
+      g.fillStyle = '#3a3f4a'; g.fillRect(50, 150, 220, 80); g.fillStyle = '#5a5e6a'; g.fillRect(56, 156, 208, 6);
+      K.circ(160, 160, 34, S.heat > 0 && !S.dish ? '#ff8a3d' : '#2b2833');
+      K.circ(160, 132, 50, '#5a5e6a'); K.circ(160, 132, 44, '#2b2833'); g.fillStyle = '#3a2618'; g.fillRect(206, 128, 60, 8);
+      if (S.dish) foodArt(S.dish - 1, 160, 132, 6);
+      else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 132 + Math.sin(a) * 14, 2.2); });
+      g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
+      if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint('A take it', 226); }
+      else { text(HOUSEART.FOODS[ING[S.cpick[0]]].name, W / 2, 222, 8, '#fff6d8'); hint(S.pan.length ? '< > choose   A add   B stir   START done' : '< > choose   A add to the pan   B close', 14); }
+    }
+    if (S.mode === 'letter') {   // a big letter to read
+      const L = HOUSEART.LETTERS[(S.letter + HOUSEART.LETTERS.length - 1) % HOUSEART.LETTERS.length];
+      g.fillStyle = 'rgba(15,10,25,0.55)'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#c9b79a'; g.fillRect(40, 34, 240, 172); g.fillStyle = '#fff6e6'; g.fillRect(42, 36, 236, 168);
+      g.fillStyle = '#d9c9ae'; for (let r = 0; r < 6; r++) g.fillRect(56, 96 + r * 18, 208, 1);
+      K.circ(252, 58, 12, '#e04f4f'); K.star(252, 58, 6, '#ffd23f');
+      text('Dear heroes,', 58, 64, 10, '#ff8a8a', 'left');
+      L.lines.forEach((s, r) => text(s, 60, 96 + r * 22, 10, '#fff6d8', 'left'));
+      text('Love, ' + L.from, 262, 188, 10, '#ffd23f', 'right');
+      hint('A close', 226);
+    }
   };
   return S;
 }
@@ -826,7 +921,7 @@ function drumScene(house) {
     DR.forEach((dr, k) => HOUSEART.drumPiece(g, dr, S.lit[k] / 10));
     for (const n of S.notes) { g.globalAlpha = Math.min(1, n.life / 20); K.circ(n.x, n.y, 3.5, hexStr(n.col)); K.rr(n.x + 2.5, n.y - 12, 1.6, 12, 0.5, hexStr(n.col)); g.globalAlpha = 1; }
     for (const [j, p] of S.ps.entries()) drawHeroPose(p.m, j ? 296 : 24, 222 - (p.bounce > 0 ? Math.sin(p.bounce / 10 * P) * 6 : 0), p.bounce > 0 ? 'cheer' : 'idle', S.t + j);
-    text('Every button is a drum   START done', W / 2, 14, 7, '#fff6d8', 'center', '#1b1426');
+    hint('Every button is a drum   START done', 14);
   };
   return S;
 }
@@ -854,7 +949,7 @@ function drawSlotPicker(title, sub, pick) {
 // ---- the paint studio: a big wall to paint on. Fly with the jetpack (hold A), hold B to paint,
 // L and R (or C) change the colour. Both players paint together; the wall is kept.
 const MURAL = { W: 80, H: 48, CELL: 4, Y: 16, FLOOR: 220,
-  PAL: [0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230], ERASER: 10 };
+  PAL: [0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230], ERASER: 10, CLEAR: 11 };
 let mural = (() => { const s = store.get('mural', ''); const a = new Uint8Array(MURAL.W * MURAL.H); if (typeof s === 'string' && s.length === a.length) for (let i = 0; i < a.length; i++) a[i] = Math.min(10, s.charCodeAt(i) - 48); return a; })();
 const saveMural = () => store.set('mural', String.fromCharCode(...mural.map(v => v + 48)));
 function muralDab(px, py, c) {
@@ -872,7 +967,9 @@ function paintScene(house) {
     if (anyHit('start')) { saveMural(); SND.fx.select(); house.resume(); return; }
     for (const p of S.ps) {
       const sl = p.m.slot, want = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
-      p.vx += (want * 1.8 - p.vx) * 0.25; if (want) p.face = want;
+      p.vx += (want * 1.8 - p.vx) * 0.25;
+      // turning round flops the hero to the other side of the brush, so the brush barely moves
+      if (want && want !== p.face) { p.x += p.face * 16; p.face = want; if (p.bx != null) p.bx += p.face * 2; }
       // no gravity: A (or up) flies up, down flies down, and letting go hovers in place
       const wy = held(sl, 'a') || held(sl, 'up') ? -1 : held(sl, 'down') ? 1 : 0;
       p.jet = wy < 0;
@@ -881,11 +978,14 @@ function paintScene(house) {
       p.x = clamp(p.x + p.vx, 10, W - 10); p.y += p.vy;
       if (p.y > MURAL.FLOOR) { p.y = MURAL.FLOOR; p.vy = 0; }
       if (p.y < MURAL.Y + 28) { p.y = MURAL.Y + 28; p.vy = 0; }
-      if (hit(sl, 'c') || hit(sl, 'r')) { p.col = (p.col + 1) % (MURAL.PAL.length + 1); SND.fx.select(); }
-      if (hit(sl, 'l')) { p.col = (p.col + MURAL.PAL.length) % (MURAL.PAL.length + 1); SND.fx.select(); }
+      if (hit(sl, 'c') || hit(sl, 'r')) { p.col = (p.col + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
+      if (hit(sl, 'l')) { p.col = (p.col + MURAL.PAL.length + 1) % (MURAL.PAL.length + 2); SND.fx.select(); }
       // the brush is the hero's front hand; a fast stroke fills in between frames
       const bx = p.x + p.face * 9, by = p.y - 16;
-      if (held(sl, 'b')) {
+      if (p.col === MURAL.CLEAR) {   // the wipe-all choice: B clears the wall
+        if (hit(sl, 'b')) { mural.fill(0); SND.fx.whoosh(); for (let k = 0; k < 12; k++) puff(20 + k * 25, MURAL.Y + 40 + (k % 3) * 50, 2, 'rgba(255,255,255,0.86)'); }
+        p.bx = null;
+      } else if (held(sl, 'b')) {
         if (p.bx == null) { p.bx = bx; p.by = by; }
         const n = Math.max(1, Math.ceil(Math.hypot(bx - p.bx, by - p.by) / 2));
         for (let k = 1; k <= n; k++) muralDab(p.bx + (bx - p.bx) * k / n, p.by + (by - p.by) * k / n, p.col);
@@ -899,9 +999,11 @@ function paintScene(house) {
     for (let y = 0; y < MURAL.H; y++) { let x = 0; while (x < MURAL.W) { const v = mural[y * MURAL.W + x]; let e = x + 1; while (e < MURAL.W && mural[y * MURAL.W + e] === v) e++; if (v) { g.fillStyle = hexStr(MURAL.PAL[v - 1]); g.fillRect(x * MURAL.CELL, MURAL.Y + y * MURAL.CELL, (e - x) * MURAL.CELL, MURAL.CELL); } x = e; } }
     g.fillStyle = '#9c7552'; g.fillRect(0, MURAL.Y + MURAL.H * MURAL.CELL, W, H);
     // the palette along the bottom; each player's colour is ringed
-    for (let k = 0; k <= MURAL.PAL.length; k++) {
-      const x = 30 + k * 24, y = 228;
-      if (k < MURAL.PAL.length) K.circ(x, y, 7, hexStr(MURAL.PAL[k])); else { K.circ(x, y, 7, '#fff6e6'); text('x', x, y + 3, 8, '#e04f4f', 'center', null); }
+    for (let k = 0; k <= MURAL.PAL.length + 1; k++) {
+      const x = 26 + k * 24, y = 228;
+      if (k < MURAL.PAL.length) K.circ(x, y, 7, hexStr(MURAL.PAL[k]));
+      else if (k === MURAL.ERASER) { K.circ(x, y, 7, '#fff6e6'); text('x', x, y + 3, 8, '#e04f4f', 'center', null); }
+      else { K.circ(x, y, 7, '#e04f4f'); text('ALL', x, y + 2.5, 5, '#ffffff', 'center', '#1b1426'); }
       S.ps.forEach((p, j) => { if (p.col === k) { g.strokeStyle = p.m.slot ? '#8fd3ff' : '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 9 + j * 2, 0, P * 2); g.stroke(); } });
     }
     for (const p of S.ps) {
@@ -912,7 +1014,7 @@ function paintScene(house) {
       K.circ(bx, by, 4, '#1b1426'); K.circ(bx, by, 3, c);
     }
     drawParticles(0);
-    text('A up   v down   B paint   L R colour   START done', W / 2, 11, 7, '#fff6d8', 'center', '#3a2618');
+    hint('A up  v down  B paint  L R colour  ALL wipes  START done', 11);
   };
   return S;
 }
@@ -920,11 +1022,11 @@ function paintScene(house) {
 // ---- the aquarium: swim round the tank with the fish and shrimp in a diving bubble, or climb out
 // onto the sandy beach where the crabs live. A swims up, B blows a bubble, START gets out.
 function aquaScene(house) {
-  const A = HOUSEART.AQUA, S = { song: 'select', t: 0, cam: 0, food: [] }, q = hrng(11);
+  const A = HOUSEART.AQUA, S = { song: 'select', t: 0, cam: 0, food: [], chestT: [0, 0], chestGot: 0 }, q = hrng(11);
   S.ps = house.ps.map((h, i) => ({ m: h.m, x: 60 + i * 40, y: 120, vx: 0, vy: 0, face: 1, land: false, ground: false, bubT: 0 }));
-  S.fish = Array.from({ length: 14 }, (_, i) => ({ kind: i % 3, x: 20 + q() * (A.BEACH_X - 60), y: 70 + q() * 130, vx: (q() < 0.5 ? -1 : 1) * (0.4 + q() * 0.5), scare: 0, happy: 0, ph: q() * 6 }));
+  S.fish = Array.from({ length: 14 }, (_, i) => ({ kind: i % 3, x: 20 + q() * (A.BEACH_X - 60), y: 70 + q() * 130, vx: (q() < 0.5 ? -1 : 1) * (0.4 + q() * 0.5), scare: 0, happy: 0, follow: 0, who: 0, ph: q() * 6 }));
   S.shrimp = Array.from({ length: 8 }, () => ({ x: 20 + q() * (A.BEACH_X - 70), y: A.SEABED - 2, vx: 0, vy: 0, face: q() < 0.5 ? -1 : 1, rest: Math.floor(q() * 200) }));
-  S.crabs = Array.from({ length: 3 }, (_, i) => ({ x: A.BEACH_X + 14 + i * 22, vx: (i % 2 ? -1 : 1) * 0.5, snap: 0, wait: 0 }));
+  S.crabs = Array.from({ length: 3 }, (_, i) => ({ x: A.BEACH_X + 14 + i * 22, vx: (i % 2 ? -1 : 1) * 0.5, y: 0, vy: 0, snap: 0, wait: 0, run: 0 }));
   const floorAt = x => x >= A.BEACH_X ? A.BEACH_Y : x > A.BEACH_X - 30 ? A.SEABED - (x - (A.BEACH_X - 30)) / 30 * (A.SEABED - A.BEACH_Y) : A.SEABED;
   S.update = function () {
     S.t += 1 / 60; stepParticles();
@@ -941,8 +1043,18 @@ function aquaScene(house) {
         p.vx = clamp((p.vx + dx * 0.14) * 0.95, -2, 2); p.vy = clamp((p.vy + dy * 0.14) * 0.95 + 0.01, -2.4, 2);
         if (hit(sl, 'a')) { p.vy -= 1.6; SND.fx.flap(); puff(p.x, p.y - 26, 3, 'rgba(220,250,255,0.9)'); }
       }
-      // B sprinkles fish food from the hand; the fish come and eat it
-      if (hit(sl, 'b')) { SND.fx.pop(); for (let k = 0; k < 3 && S.food.length < 12; k++) S.food.push({ x: p.x + p.face * (8 + k * 4), y: p.y - 20 + k * 2, life: 600 }); }
+      // B: by a chest, open it; by a crab on the beach, poke it; anywhere else in the water, sprinkle fish food
+      const chest = HOUSEART.CHESTS.findIndex(cx => Math.abs(p.x - cx) < 26 && p.y > A.SEABED - 40);
+      const crab = S.crabs.find(c => p.land && Math.abs(p.x - c.x) < 24);
+      if (hit(sl, 'b') && chest >= 0) {
+        if (S.chestT[chest] <= 0) {
+          S.chestT[chest] = 240; SND.fx.open();
+          for (let k = 0; k < 8; k++) particles.push({ x: HOUSEART.CHESTS[chest] + (Math.random() - 0.5) * 14, y: A.SEABED - 14, vx: (Math.random() - 0.5) * 0.6, vy: -0.6 - Math.random(), life: 90, max: 90, r: 2 + Math.random() * 2, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
+          if (!(S.chestGot & (1 << chest))) { S.chestGot |= 1 << chest; prog.bolts = (prog.bolts || 0) + 5; saveProg(); SND.fx.gear(); sparks(HOUSEART.CHESTS[chest], A.SEABED - 24, 10, '#ffd23f'); }
+        }
+      } else if (hit(sl, 'b') && crab) {
+        if (crab.y === 0) { crab.vy = -3.2; crab.snap = 40; crab.run = 90; crab.wait = 0; crab.vx = (crab.x > p.x ? 1 : -1) * 1.8; SND.fx.boing(); }
+      } else if (hit(sl, 'b') && !p.land) { SND.fx.pop(); for (let k = 0; k < 3 && S.food.length < 12; k++) S.food.push({ x: p.x + p.face * (8 + k * 4), y: p.y - 20 + k * 2, life: 600 }); }
       p.x = clamp(p.x + p.vx, 10, A.W - 10); p.y += p.vy;
       const fl = floorAt(p.x);
       p.ground = false; if (p.y >= fl) { p.y = fl; p.vy = 0; p.ground = true; }
@@ -963,11 +1075,19 @@ function aquaScene(house) {
         const fd = S.food[best];
         f.vx = clamp((fd.x - f.x) * 0.08, -1.4, 1.4); if (Math.abs(f.vx) < 0.2) f.vx = f.vx < 0 ? -0.2 : 0.2;
         f.y += clamp((fd.y - f.y) * 0.08, -1, 1);
-        if (bd < 6) { S.food.splice(best, 1); f.happy = 40; SND.fx.bolt(); sparks(f.x, f.y, 4, '#ff8fc7'); }
+        if (bd < 6) {
+          S.food.splice(best, 1); f.happy = 40; SND.fx.bolt(); sparks(f.x, f.y, 4, '#ff8fc7');
+          // a fed fish follows the nearest diver for a while
+          f.follow = 600; f.who = 0; S.ps.forEach((p, k) => { if (Math.hypot(p.x - f.x, p.y - f.y) < Math.hypot(S.ps[f.who].x - f.x, S.ps[f.who].y - f.y)) f.who = k; });
+        }
+      } else if (f.follow > 0 && S.ps[f.who] && !S.ps[f.who].land) {   // swim along behind your friend
+        const p = S.ps[f.who], i = S.fish.indexOf(f), tx = p.x - p.face * (20 + (i % 3) * 8), ty = p.y - 20 + (i % 3) * 6 - 6;
+        f.vx = clamp((tx - f.x) * 0.05, -1.8, 1.8); if (Math.abs(f.vx) < 0.15) f.vx = p.face * 0.15;
+        f.y += clamp((ty - f.y) * 0.05, -1.2, 1.2); f.follow--;
       } else if (f.scare > 0 && --f.scare === 0) f.vx = Math.sign(f.vx) * 0.6;
       // swimming into a fish boops it: a wiggle and a bubble
       for (const p of S.ps) {
-        if (p.land || f.happy > 0 || Math.hypot(p.x - f.x, p.y - 18 - f.y) > 14) continue;
+        if (p.land || f.happy > 0 || f.follow > 0 || Math.hypot(p.x - f.x, p.y - 18 - f.y) > 14) continue;
         f.happy = 40; f.vx = (f.x > p.x ? 1 : -1) * 1.2; f.scare = 30; SND.fx.boing();
         particles.push({ x: f.x, y: f.y - 6, vx: 0, vy: -0.8, life: 50, max: 50, r: 3, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
       }
@@ -986,20 +1106,31 @@ function aquaScene(house) {
       const close = S.ps.some(p => p.land && Math.abs(p.x - c.x) < 22);
       if (close && c.snap <= 0) { c.snap = 30; SND.fx.tick(); }
       if (c.snap > 0) c.snap--;
+      if (c.y < 0 || c.vy < 0) { c.vy += 0.25; c.y += c.vy; if (c.y >= 0) { c.y = 0; c.vy = 0; } }   // a poked crab hops
+      if (c.run > 0 && --c.run === 0) c.vx = Math.sign(c.vx) * 0.5;   // then calms down
       if (c.wait > 0) { c.wait--; continue; }
-      c.x += c.vx; if (c.x < A.BEACH_X + 10 || c.x > A.W - 12) c.vx = -c.vx;
-      if (Math.random() < 0.01) c.wait = 30 + Math.floor(Math.random() * 60);
+      c.x += c.vx; if (c.x < A.BEACH_X + 10 || c.x > A.W - 12) { c.vx = -c.vx; c.x = clamp(c.x, A.BEACH_X + 10, A.W - 12); }
+      if (c.run <= 0 && Math.random() < 0.01) c.wait = 30 + Math.floor(Math.random() * 60);
     }
+    S.chestT.forEach((t, k) => {
+      if (t > 0) S.chestT[k]--;
+      if (t > 60 && t % 12 === 0) particles.push({ x: HOUSEART.CHESTS[k] + (Math.random() - 0.5) * 10, y: A.SEABED - 16, vx: 0, vy: -0.9, life: 80, max: 80, r: 1.6, col: 'rgba(220,250,255,0.9)', kind: 'puff' });
+    });
   };
   S.draw = function () {
     K.g = g;
     for (let k = 0; k < 3; k++) { g.save(); g.translate(k * W - S.cam, 0); HOUSEART.aquaBg(g, k === 2); g.restore(); }
     g.save(); g.translate(-S.cam, 0);
     for (let k = 0; k < 8; k++) { const x = 30 + k * 110 + (k % 2) * 22; if (x > A.BEACH_X - 40) continue; g.save(); g.translate(x, A.SEABED); HOUSEART.weed(g, S.t, 28 + (k * 37 % 3) * 9); g.restore(); }
+    HOUSEART.CHESTS.forEach((x, k) => {   // treasure chests: B opens them
+      const y = A.SEABED; g.fillStyle = '#a8672f'; g.fillRect(x - 11, y - 14, 22, 14);
+      if (S.chestT[k] > 0) { g.fillStyle = '#3a2618'; g.fillRect(x - 9, y - 13, 18, 4); K.circ(x - 4, y - 13, 3, '#ffd23f'); K.circ(x + 3, y - 14, 3, '#ffd23f'); g.fillStyle = '#c98a4b'; g.fillRect(x - 11, y - 24, 22, 6); if (Math.floor(S.t * 6) % 2) K.star(x + 2, y - 18, 3, '#fff6a0'); }
+      else { g.fillStyle = '#c98a4b'; g.fillRect(x - 11, y - 18, 22, 6); g.fillStyle = '#ffd23f'; g.fillRect(x - 2, y - 14, 4, 4); }
+    });
     for (const f of S.food) K.circ(f.x, f.y, 1.6, '#e8b46a');
     for (const s of S.shrimp) { g.save(); g.translate(s.x, s.y - 3); g.scale(s.face, 1); HOUSEART.shrimp(g, S.t); g.restore(); }
     for (const f of S.fish) { g.save(); g.translate(f.x, f.y); g.rotate(f.happy > 0 ? Math.sin(f.happy * 0.8) * 0.25 : 0); g.scale(f.vx > 0 ? 1 : -1, 1); HOUSEART.fish(g, f.kind, (S.t + f.ph) * (f.happy > 0 ? 2.3 : 1)); g.restore(); if (f.happy > 20) K.star(f.x, f.y - 12, 3, '#ff8fc7'); }
-    for (const c of S.crabs) { g.save(); g.translate(c.x, A.BEACH_Y - 5); HOUSEART.crab(g, c.wait > 0 ? 0 : S.t, c.snap > 0 && Math.floor(c.snap / 5) % 2 === 0); g.restore(); }
+    for (const c of S.crabs) { g.save(); g.translate(c.x, A.BEACH_Y - 5 + c.y); HOUSEART.crab(g, c.wait > 0 ? 0 : S.t, c.snap > 0 && Math.floor(c.snap / 5) % 2 === 0); g.restore(); }
     for (const p of S.ps) {
       const t = S.t + p.m.slot * 0.7, st = p.land ? (!p.ground ? 'jump' : Math.abs(p.vx) > 0.3 ? 'run' : 'idle') : 'jump';
       drawHeroPose(p.m, p.x, p.y, st, st === 'run' ? S.t * 1.6 : t, p.face);
@@ -1007,7 +1138,7 @@ function aquaScene(house) {
     }
     g.restore();
     drawParticles(S.cam);
-    text('Stick swim   A up   B feed the fish   START out', W / 2, 14, 7, '#2b2230', 'center', null);
+    hint('Stick swim   A up   B food, open chests, poke crabs   START out', 14);
   };
   return S;
 }
@@ -1016,7 +1147,7 @@ function aquaScene(house) {
 // the stick steers. Three laps; with two players the first one home wins.
 function carsScene(house) {
   const R = HOUSEART.RACE, S = { song: 'select', t: 0, count: 3, win: -1, endT: 0, clock: 0 };
-  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, y: 0, vy: 0, s: 0, ground: true, bump: 0, hit: 0, done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
+  const reset = () => { S.cars = house.ps.map(h => ({ m: h.m, x: 0, vx: 0, d: 0, s: 0, spin: 0, hit: 0, done: false, time: 0 })); S.count = 3; S.win = -1; S.endT = 0; S.clock = 0; };
   reset();
   S.update = function () {
     S.t += 1 / 60; stepParticles();
@@ -1029,36 +1160,43 @@ function carsScene(house) {
     S.clock += 1 / 60;
     S.cars.forEach((c, i) => {
       const sl = c.m.slot;
-      if (c.bump > 0) { c.bump--; c.s = 0.8; } else c.s += (3 - c.s) * 0.03;
-      if (hit(sl, 'a') && c.ground) { c.vy = -5; c.ground = false; SND.fx.jump(); }
-      c.vy += 0.28; c.y += c.vy;
-      if (c.y >= 0) { c.y = 0; c.vy = 0; c.ground = true; }
-      c.x += c.s;
+      let steer = (held(sl, 'right') ? 1 : 0) - (held(sl, 'left') ? 1 : 0);
+      let want = held(sl, 'up') || held(sl, 'a') ? 4.2 : held(sl, 'down') || held(sl, 'b') ? 1.5 : 3;
+      if (c.spin > 0) { c.spin--; want = 1; steer = 0; }
+      c.s += (want - c.s) * 0.04;
+      c.vx += (steer * 2.2 - c.vx) * 0.25;
+      c.x = clamp(c.x + c.vx, -R.edge, R.edge);
+      if (c.done) c.s = Math.max(c.s * 0.97, 0.5);   // past the line: coast
+      c.d += c.s;
       for (let k = 0; k < R.obst; k++) {
-        const o = HOUSEART.raceObst(k);
-        if (c.hit & (1 << k) || Math.abs(c.x - o.x) > o.w / 2 + 12 || -c.y > o.h) continue;
-        c.hit |= 1 << k; c.bump = 40; c.s = 0.5; SND.fx.clank();
+        const o = HOUSEART.raceObst(k, S.clock);
+        if (c.hit & (2 ** k) || Math.abs(c.x - o.x) > o.w / 2 + 9 || Math.abs(c.d - o.d) > o.h / 2 + 12) continue;
+        c.hit |= 2 ** k;
+        if (o.kind === 'oil') { c.spin = 40; c.s *= 0.6; SND.fx.slide(); } else { c.spin = 50; c.s = 0.6; SND.fx.clank(); }
       }
-      if (!c.done && c.x >= R.len) { c.done = true; c.time = S.clock; SND.fx.gear(); if (S.win < 0) { S.win = i; SND.fx.flag(); confetti(160, 40, 40); } }
+      if (!c.done && c.d >= R.len) { c.done = true; c.time = S.clock; SND.fx.gear(); if (S.win < 0) { S.win = i; SND.fx.flag(); confetti(160, 40, 40); } }
     });
   };
   S.draw = function () {
     K.g = g;
-    const n = S.cars.length, LH = n > 1 ? H / 2 : H;
+    const n = S.cars.length, vw = n > 1 ? W / 2 : W;
     S.cars.forEach((c, i) => {
-      const top = i * LH, ground = HOUSEART.raceLane(g, top, LH, c.x);
-      if (c.bump <= 0 || Math.floor(S.t * 15) % 2) HOUSEART.carSide(g, R.carX, ground + c.y, c.m.hex);
-      g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(10, top + 4, 300, 5);
-      g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(10 + 296 * Math.min(1, c.x / R.len), top + 3, 4, 7);
-      if (n > 1) text('P' + (c.m.slot + 1), 14, top + 22, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', 'left');
+      const x0 = i * vw;
+      g.save(); g.beginPath(); g.rect(x0, 0, vw, H); g.clip();
+      HOUSEART.raceView(g, x0, vw, c.d, S.clock);
+      HOUSEART.carTop(g, x0 + vw / 2 + c.x + (c.spin > 0 ? Math.sin(c.spin * 0.6) * 4 : 0), R.carY, c.m.hex);
+      g.fillStyle = 'rgba(27,20,38,0.7)'; g.fillRect(x0 + vw - 12, 20, 5, 150);
+      g.fillStyle = c.m.slot ? '#8fd3ff' : '#ffd23f'; g.fillRect(x0 + vw - 13, 166 - 146 * Math.min(1, c.d / R.len), 7, 4);
+      if (n > 1) text('P' + (c.m.slot + 1), x0 + 8, 14, 8, c.m.slot ? '#8fd3ff' : '#ffd23f', 'left');
+      g.restore();
     });
-    if (n > 1) { g.fillStyle = '#1b1426'; g.fillRect(0, LH - 1, W, 2); }
+    if (n > 1) { g.fillStyle = '#1b1426'; g.fillRect(W / 2 - 1, 0, 2, H); }
     drawParticles(0);
-    if (n === 1) { panel(W / 2 - 34, 14, 68, 16); text(clock(Math.round(S.clock * 60)), W / 2, 25, 8, '#fff6d8', 'center', null); }
-    if (S.count > 0) { const k = Math.ceil(S.count); fitPanel(String(k), 20, 60, 100, 34, '#ffd23f'); text(String(k), W / 2, 126, 20, '#2b2230', 'center', null); }
-    else if (S.win < 0 && S.clock < 0.8) { fitPanel('GO!', 20, 80, 100, 34, '#49d17a'); text('GO!', W / 2, 126, 20, '#ffffff', 'center', null); }
-    if (S.win >= 0) { const s = n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)); fitPanel(s, 14, 120, 98, 30, '#ffd23f'); text(s, W / 2, 119, 14, '#2b2230', 'center', null); }
-    text('A jump   START out', W / 2, H - 4, 7, '#fff6d8', 'center', '#1b1426');
+    if (n === 1) { panel(W / 2 - 34, 4, 68, 16); text(clock(Math.round(S.clock * 60)), W / 2, 15, 8, '#fff6d8', 'center', null); }
+    if (S.count > 0) rimBanner(String(Math.ceil(S.count)), 20, 100, 34);
+    else if (S.win < 0 && S.clock < 0.8) rimBanner('GO!', 20, 100, 34, '#49d17a', '#49d17a');
+    if (S.win >= 0) rimBanner(n > 1 ? 'P' + (S.cars[S.win].m.slot + 1) + ' WINS!' : 'FINISHED  ' + clock(Math.round(S.cars[0].time * 60)), 14, 98, 30);
+    hint('Stick steer   A faster   B brake   START out', H - 12);
   };
   return S;
 }
@@ -1108,7 +1246,7 @@ function pianoScene(house) {
       const c = p.m.slot ? '#8fd3ff' : '#ffd23f', y = k.black ? KY.y + KY.bh - 10 : KY.y + KY.h - 12;
       g.fillStyle = c; g.beginPath(); g.moveTo(k.x, y - 8); g.lineTo(k.x - 5, y); g.lineTo(k.x + 5, y); g.fill();
     }
-    text('Stick move   A play   B other octave   START done', W / 2, 14, 7, '#fff6d8', 'center', '#1b1426');
+    hint('Stick move   A play   B other octave   START done', 14);
   };
   return S;
 }

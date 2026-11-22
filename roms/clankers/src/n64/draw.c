@@ -54,9 +54,11 @@ static color_t hexc(uint32_t hex, int a) { return RGBA32((hex >> 16) & 255, (hex
 
 void draw_init(void) {
     static const struct { uint32_t col, out; int outA; } styles[ST_COUNT] = {
-        { 0xFFF6D8, 0x1B1426, 255 }, { 0xFFD23F, 0x1B1426, 255 }, { 0x2B2230, 0, 0 }, { 0xFF8A8A, 0x1B1426, 255 },
-        { 0x8FD3FF, 0x1B1426, 255 }, { 0xD9D2E6, 0, 0 }, { 0xFFF6D8, 0, 0 }, { 0x49D17A, 0x1B1426, 255 },
-        { 0xFFFFFF, 0, 0 }, { 0xA49DB4, 0, 0 },
+        // every style is light with a dark outline, so words read on any background (ST_DARK is kept
+        // for old callers but drawn light too: dark words blur away on a TV)
+        { 0xFFF6D8, 0x1B1426, 255 }, { 0xFFD23F, 0x1B1426, 255 }, { 0xFFF6D8, 0x1B1426, 255 }, { 0xFF8A8A, 0x1B1426, 255 },
+        { 0x8FD3FF, 0x1B1426, 255 }, { 0xD9D2E6, 0x1B1426, 255 }, { 0xFFF6D8, 0x1B1426, 255 }, { 0x49D17A, 0x1B1426, 255 },
+        { 0xFFFFFF, 0x1B1426, 255 }, { 0xA49DB4, 0x1B1426, 255 },
     };
     static const char *files[4] = { "rom:/titan8.font64", "rom:/titan10.font64", "rom:/titan14.font64", "rom:/titan18.font64" };
     for (int f = 0; f < 4; f++) {
@@ -277,6 +279,12 @@ static void banner(int font, int style, uint32_t rim, float y, float minW, float
     txt(font, style, W / 2, textY, ALIGN_CENTER, "%s", s);
 }
 
+// A line of help at the bottom or top of a game: light words on a dark strip, readable on anything.
+static void hint(float y, const char *s) {
+    float w = txt_w(F_SMALL, s) + 14;
+    dark_panel((W - w) / 2, y - 9, w, 13);
+    txt(F_SMALL, ST_CREAM, W / 2, y, ALIGN_CENTER, "%s", s);
+}
 static const char *clock_str(int frames, char *buf) {
     int sec = frames / 60;
     sprintf(buf, "%d:%02d", sec / 60, sec % 60);
@@ -1308,6 +1316,16 @@ static void draw_cut(const ck_game *G) {
 
 // A hero in one of the house's poses: idle and cheer face the front, the rest are side frames.
 enum { HP_IDLE, HP_RUN, HP_JUMP, HP_JET, HP_CHEER };
+// A food from ck_foods at (x, y), sc times its size.
+static void food_art(int kind, float x, float y, float sc) {
+    if (kind < 0 || kind >= FOOD_COUNT) return;
+    const ck_foodart *f = &ck_foods[kind];
+    for (int i = 0; i < f->n; i++) {
+        const ck_fshape *s = &f->s[i];
+        if (s->kind == 0) shape(SPR_DOT, x + s->x * sc, y + s->y * sc, s->w * sc, s->col, 1);
+        else rect(x + s->x * sc, y + s->y * sc, s->w * sc, s->h * sc, s->col, 1);
+    }
+}
 static void house_hero(const ck_game *G, int slot, float x, float y, int pose, float t, int face) {
     int hero = G->prog.hero[slot], col = skin_col(G, slot);
     bool R = hero == HERO_ROBOT, side = pose == HP_RUN || pose == HP_JUMP || pose == HP_JET;
@@ -1406,9 +1424,10 @@ static void draw_house(const ck_game *G) {
         float x = p->x - cam, tt = t + p->slot * 0.7f;
         int pose = p->eat > 0 || Hs->mode == HM_SLEEP ? HP_CHEER : !p->ground ? HP_JUMP : fabsf(p->vx) > 0.3f ? HP_RUN : HP_IDLE;
         house_hero(G, p->slot, x, p->y, pose, tt, p->face);
-        if (p->eat > 0 && p->col == 1) { shape(SPR_DOT, x + 6, p->y - 22, 4, 0xE04F4F, 1); rect(x + 5.5f, p->y - 28, 1.2f, 3, 0x6F4630, 1); }
-        else if (p->eat > 0) { shape(SPR_DOT, x + 6, p->y - 22, 4, 0xC98A4B, 1); shape(SPR_DOT, x + 6, p->y - 22, 2.4f, 0xE8B46A, 1); }
+        if (p->eat > 0) food_art(p->col, x + 6, p->y - 24, 0.4f + 0.6f * p->eat / 50.0f);   // shrinking as it is eaten
+        else if (p->hold) food_art(p->hold - 1, x + p->face * 9, p->y - 20, 1);
     }
+    for (int i = 0; i < Hs->nthrown; i++) food_art(Hs->thrown[i].kind, Hs->thrown[i].x - cam, Hs->thrown[i].y, 1);
     // what Down does where you stand
     int shown = -1;
     if (Hs->mode == HM_WALK)
@@ -1435,6 +1454,63 @@ static void draw_house(const ck_game *G) {
         }
     }
     if (Hs->mode == HM_SLOTS) slot_picker(G, "SLEEP AND SAVE", "Which save slot?", Hs->pick);
+    if (Hs->mode == HM_FRIDGE) {   // the fridge door open: three shelves of food, a cursor each
+        rect(0, 0, W, H, 0x0F0A19, 0.55f);
+        rect(76, 14, 168, 212, 0xD9DEE6, 1);
+        rect(82, 20, 156, 200, 0xF4F8FC, 1);
+        for (int r = 0; r < 3; r++) rect(84, 80 + r * 62, 152, 4, 0xBFC8D4, 1);
+        for (int k = 0; k < CK_FRIDGE_FOODS; k++) {
+            float fx = 110 + (k % 3) * 50, fy = 56 + (k / 3) * 62;
+            for (int j = 0; j < Hs->np; j++)
+                if (Hs->fpick[j] == k) { shape(SPR_RING, fx, fy, 20 + j * 3, Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F, 1); }
+            food_art(k, fx, fy, 3);
+        }
+        for (int j = 0; j < Hs->np; j++) {
+            txt(F_SMALL, Hs->ps[j].slot ? ST_BLUE : ST_YELLOW, j ? 300 : 20, 228, j ? ALIGN_RIGHT : ALIGN_LEFT, "%s", ck_foods[Hs->fpick[j]].name);
+        }
+        hint(10, "Stick choose   A take it   B close");
+    }
+    if (Hs->mode == HM_COOK) {   // the stove: a shelf of ingredients, the pan, the heat bar
+        rect(0, 0, W, H, 0x0F0A19, 0.55f);
+        rect(30, 24, 260, 50, 0x8A5A3C, 1);
+        rect(34, 28, 252, 42, 0xC98A4B, 1);
+        for (int k = 0; k < CK_COOK_INGR; k++) {
+            float fx = 56 + k * 42, fy = 49;
+            for (int j = 0; j < Hs->np; j++) if (Hs->cpick[j] == k && !Hs->dish) shape(SPR_RING, fx, fy, 17 + j * 3, Hs->ps[j].slot ? 0x8FD3FF : 0xFFD23F, 1);
+            food_art(ck_cook_ingr[k], fx, fy, 2.4f);
+        }
+        rect(50, 150, 220, 80, 0x3A3F4A, 1);   // the stove top
+        rect(56, 156, 208, 6, 0x5A5E6A, 1);
+        shape(SPR_DOT, 160, 160, 34, Hs->heat > 0 && !Hs->dish ? 0xFF8A3D : 0x2B2833, 1);   // the burner glows while it cooks
+        shape(SPR_DOT, 160, 132, 50, 0x5A5E6A, 1);   // the pan
+        shape(SPR_DOT, 160, 132, 44, 0x2B2833, 1);
+        rect(206, 128, 60, 8, 0x3A2618, 1);   // its handle
+        if (Hs->dish) food_art(Hs->dish - 1, 160, 132, 6);
+        else for (int i = 0; i < Hs->npan; i++) {
+            float a = i * 1.57f + G->t * (Hs->heat > 0 ? 1.5f : 0);
+            food_art(Hs->pan[i], 160 + cosf(a) * 18, 132 + sinf(a) * 14, 2.2f);
+        }
+        rect(60, 196, 200, 10, 0x1B1426, 1);   // heat
+        rect(62, 198, 196 * Hs->heat / 100, 6, Hs->dish ? 0x49D17A : 0xFF8A3D, 1);
+        if (Hs->dish) { banner(F_MED, ST_YELLOW, 0xFFD23F, 80, 120, 22, 95, Hs->dishName); hint(226, "A take it"); }
+        else {
+            txt(F_SMALL, ST_CREAM, W / 2, 222, ALIGN_CENTER, "%s", ck_foods[ck_cook_ingr[Hs->cpick[0]]].name);
+            hint(14, Hs->npan ? "< > choose   A add   B stir   START done" : "< > choose   A add to the pan   B close");
+        }
+    }
+    if (Hs->mode == HM_LETTER) {   // a big letter to read
+        const ck_letter *L = &ck_letters[(Hs->letter + CK_LETTERS - 1) % CK_LETTERS];
+        rect(0, 0, W, H, 0x0F0A19, 0.55f);
+        rect(40, 34, 240, 172, 0xC9B79A, 1);
+        rect(42, 36, 236, 168, 0xFFF6E6, 1);
+        for (int r = 0; r < 6; r++) rect(56, 96 + r * 18, 208, 1, 0xD9C9AE, 1);
+        shape(SPR_DOT, 252, 58, 12, 0xE04F4F, 1);   // a wax seal
+        shape(SPR_STAR, 252, 58, 6, 0xFFD23F, 1);
+        txt(F_MED, ST_RED, 58, 64, ALIGN_LEFT, "Dear heroes,");
+        for (int r = 0; r < 3; r++) txt(F_MED, ST_CREAM, 60, 96 + r * 22, ALIGN_LEFT, "%s", L->lines[r]);
+        txt(F_MED, ST_YELLOW, 262, 188, ALIGN_RIGHT, "Love, %s", L->from);
+        hint(226, "A close");
+    }
 }
 
 // The paint studio: the wall in runs of one colour per row (few boxes for the RDP), the palette,
@@ -1455,10 +1531,11 @@ static void draw_paint(const ck_game *G) {
         }
     }
     rect(0, CK_MURAL_Y + CK_MURAL_H * CK_MURAL_CELL, W, H, 0x9C7552, 1);
-    for (int k = 0; k <= CK_MURAL_PAL; k++) {
-        float x = 30 + k * 24, y = 228;
+    for (int k = 0; k < CK_MURAL_CHOICES; k++) {
+        float x = 26 + k * 24, y = 228;
         if (k < CK_MURAL_PAL) shape(SPR_DOT, x, y, 7, ck_mural_pal[k], 1);
-        else { shape(SPR_DOT, x, y, 7, 0xFFF6E6, 1); txt(F_SMALL, ST_RED, x, y + 3, ALIGN_CENTER, "x"); }
+        else if (k == CK_MURAL_ERASER) { shape(SPR_DOT, x, y, 7, 0xFFF6E6, 1); txt(F_SMALL, ST_RED, x, y + 3, ALIGN_CENTER, "x"); }
+        else { shape(SPR_DOT, x, y, 9, 0xE04F4F, 1); txt(F_SMALL, ST_WHITE, x, y + 3, ALIGN_CENTER, "ALL"); }
         for (int j = 0; j < Hs->np; j++) if (Hs->gs[j].col == k) shape(SPR_RING, x, y, 9 + j * 2, Hs->gs[j].slot ? 0x8FD3FF : 0xFFD23F, 1);
     }
     for (int i = 0; i < Hs->np; i++) {
@@ -1468,10 +1545,10 @@ static void draw_paint(const ck_game *G) {
         house_hero(G, p->slot, p->x, p->y, p->y < CK_MURAL_FLOOR ? HP_JET : HP_IDLE, tt, p->face);
         float bx = p->x + p->face * 9, by = p->y - 16;
         shape(SPR_DOT, bx, by, 4, 0x1B1426, 1);
-        shape(SPR_DOT, bx, by, 3, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : 0xFFF6E6, 1);
+        shape(SPR_DOT, bx, by, 3, p->col < CK_MURAL_PAL ? ck_mural_pal[p->col] : p->col == CK_MURAL_CLEAR ? 0xE04F4F : 0xFFF6E6, 1);
     }
     particles(G, 0);
-    txt(F_SMALL, ST_CREAM, W / 2, 11, ALIGN_CENTER, "A up   v down   B paint   L R colour   START done");
+    hint(11, "A up  v down  B paint  L R colour  ALL wipes  START done");
 }
 
 // The aquarium, three screens wide: two water tiles then the baked beach screen, swaying weed,
@@ -1489,6 +1566,20 @@ static void draw_aqua(const ck_game *G) {
             line(xa, y0 + y, xb, y0 + y - 6, 3, 0x2F9A5A, 1);
         }
     }
+    for (int k = 0; k < CK_AQUA_CHESTS; k++) {   // treasure chests: B opens them
+        float x = ck_aqua_chest_x[k] - cam, y = CK_AQUA_SEABED;
+        if (x < -30 || x > W + 30) continue;
+        rect(x - 11, y - 14, 22, 14, 0xA8672F, 1);
+        if (Hs->chestT[k] > 0) {   // open: the lid up, gold inside, glinting
+            rect(x - 9, y - 13, 18, 4, 0x3A2618, 1);
+            shape(SPR_DOT, x - 4, y - 13, 3, 0xFFD23F, 1); shape(SPR_DOT, x + 3, y - 14, 3, 0xFFD23F, 1);
+            rect(x - 11, y - 24, 22, 6, 0xC98A4B, 1);
+            if ((int)(t * 6) % 2) shape(SPR_STAR, x + 2, y - 18, 3, 0xFFF6A0, 1);
+        } else {
+            rect(x - 11, y - 18, 22, 6, 0xC98A4B, 1);
+            rect(x - 2, y - 14, 4, 4, 0xFFD23F, 1);
+        }
+    }
     for (int i = 0; i < Hs->nfood; i++) shape(SPR_DOT, Hs->food[i].x - cam, Hs->food[i].y, 1.6f, 0xE8B46A, 1);
     for (int i = 0; i < CK_AQUA_SHRIMP; i++) { const ck_shrimp *s = &Hs->shrimp[i]; blit_o(SPR_HOUSE_SHRIMP, (int)(t * 6 + i) % 2, s->x - cam, s->y - 3, (bopt){ .flip = s->face < 0 }); }
     for (int i = 0; i < CK_AQUA_FISH; i++) {
@@ -1498,7 +1589,7 @@ static void draw_aqua(const ck_game *G) {
         blit_o(SPR_HOUSE_FISH, f->kind * 2 + (int)(t * (f->happy > 0 ? 14 : 6) + f->ph) % 2, x, f->y, (bopt){ .flip = f->vx < 0, .rot = wig });
         if (f->happy > 20) shape(SPR_STAR, x, f->y - 12, 3, 0xFF8FC7, 1);
     }
-    for (int i = 0; i < CK_AQUA_CRABS; i++) { const ck_crab *c = &Hs->crabs[i]; blit(SPR_HOUSE_CRAB, c->snap > 0 && (c->snap / 5) % 2 == 0, c->x - cam, CK_AQUA_BEACH_Y - 5); }
+    for (int i = 0; i < CK_AQUA_CRABS; i++) { const ck_crab *c = &Hs->crabs[i]; blit(SPR_HOUSE_CRAB, c->snap > 0 && (c->snap / 5) % 2 == 0, c->x - cam, CK_AQUA_BEACH_Y - 5 + c->y); }
     for (int i = 0; i < Hs->np; i++) {
         const ck_hhero *p = &Hs->gs[i];
         float tt = t + p->slot * 0.7f, x = p->x - cam;
@@ -1512,66 +1603,70 @@ static void draw_aqua(const ck_game *G) {
         }
     }
     particles(G, cam);
-    txt(F_SMALL, ST_DARK, W / 2, 14, ALIGN_CENTER, "Stick swim   A up   B feed the fish   START out");
+    hint(14, "Stick swim   A up   B food, open chests, poke crabs   START out");
 }
 
-// The garage race, side on: a lane per player, boxes and circles only (raceLane and carSide in
-// web/lib/houseart.js draw the same picture).
-static void race_lane(float top, float h, float cam) {
-    float ground = top + h - 22;
-    rect(0, top, W, h, 0x8FD3FF, 1);
-    for (int k = 0; k < 4; k++) { float x = fmodf(fmodf(k * 140 - cam * 0.3f, 560) + 560, 560) - 70; shape(SPR_DOT, x, ground, 46, 0x7FCF86, 1); }
-    rect(0, ground, W, top + h - ground, 0x5A5E6A, 1);
-    rect(0, ground, W, 2, 0xFFF6D8, 1);
-    for (float x = -fmodf(cam, 40); x < W; x += 40) rect(x, ground + 11, 20, 2, 0xFFF6D8, 1);
-    float fx = CK_RACE_LEN - cam + CK_RACE_CAR_X;
-    if (fx > -10 && fx < W + 10) {
-        rect(fx - 1, ground - 46, 2, 46, 0xC9B8C7, 1);
-        rect(fx + 1, ground - 46, 16, 10, 0xE04F4F, 1);
-        for (float y = ground; y < top + h; y += 4)
-            for (int k = 0; k < 2; k++) rect(fx - 4 + k * 4, y, 4, 4, ((int)((y - ground) / 4) + k) % 2 ? 0xFFFFFF : 0x1B1426, 1);
-    }
-    for (int i = 0; i < CK_RACE_OBST; i++) {
-        float ox, w, hh; int kind;
-        ck_race_obst(i, &ox, &kind, &w, &hh);
-        float x = ox - cam + CK_RACE_CAR_X;
-        if (x < -20 || x > W + 20) continue;
-        if (kind == OBST_CONE) {
-            for (int r = 0; r < hh; r += 2) rect(x - w / 2 * (1 - r / hh), ground - r - 2, w * (1 - r / hh), 2, r == 6 ? 0xFFFFFF : 0xFF8A3D, 1);
-            rect(x - w / 2 - 2, ground - 2, w + 4, 2, 0xFF8A3D, 1);
-        } else {
-            rect(x - w / 2, ground - hh, w, hh, 0x8A5A3C, 1);
-            rect(x - w / 2 + 2, ground - hh + 2, w - 4, hh - 4, 0xC98A4B, 1);
-            rect(x - 1, ground - hh + 2, 2, hh - 4, 0x8A5A3C, 1);
-        }
-    }
+// The garage race, top down: a half of the screen per player, boxes and circles only (raceView
+// and carTop in web/lib/houseart.js draw the same picture).
+static void car_top(float x, float y, uint32_t hex) {
+    for (int k = 0; k < 4; k++) rect(x + (k % 2 ? 7 : -10), y + (k < 2 ? -11 : 5), 3, 7, 0x1B1426, 1);
+    rect(x - 8, y - 14, 16, 28, hex, 1);
+    rect(x - 6, y - 7, 12, 5, 0xBFF0FF, 1);
+    rect(x - 6, y + 6, 12, 3, 0x000000, 0.25f);
+    rect(x - 7, y - 15, 3, 2, 0xFFE066, 1); rect(x + 4, y - 15, 3, 2, 0xFFE066, 1);
 }
-static void car_side(float x, float y, uint32_t hex) {
-    rect(x - 17, y - 16, 34, 10, hex, 1); rect(x - 8, y - 24, 14, 8, hex, 1);
-    rect(x - 5, y - 22, 9, 5, 0xBFF0FF, 1); rect(x + 14, y - 14, 3, 3, 0xFFE066, 1);
-    for (int k = -1; k <= 1; k += 2) { shape(SPR_DOT, x + k * 10, y - 5, 5, 0x1B1426, 1); shape(SPR_DOT, x + k * 10, y - 5, 2, 0xC9B8C7, 1); }
+static void race_view(float x0, float vw, float dist, float clock) {
+    float cx = x0 + vw / 2;
+    rect(x0, 0, vw, H, 0x5DBB63, 1);
+    for (int k = 0; k < 8; k++) {   // bushes on the verges, scrolling down
+        float y = fmodf(k * 60 + dist, 480) - 120;
+        shape(SPR_DOT, x0 + 8 + (k % 2) * 4, y, 7, 0x3F9D4E, 1);
+        shape(SPR_DOT, x0 + vw - 10 - (k % 3) * 3, y + 30, 7, 0x3F9D4E, 1);
+    }
+    rect(cx - 64, 0, 128, H, 0x5A5E6A, 1);
+    for (float y = fmodf(dist, 24) - 24; y < H; y += 24) {
+        rect(cx - 66, y, 4, 12, 0xE04F4F, 1); rect(cx - 66, y + 12, 4, 12, 0xFFFFFF, 1);
+        rect(cx + 62, y, 4, 12, 0xE04F4F, 1); rect(cx + 62, y + 12, 4, 12, 0xFFFFFF, 1);
+    }
+    for (float y = fmodf(dist, 40) - 40; y < H; y += 40) { rect(cx - 21, y, 2, 20, 0xFFF6D8, 1); rect(cx + 19, y, 2, 20, 0xFFF6D8, 1); }
+    float fy = CK_RACE_CAR_Y - (CK_RACE_LEN - dist);
+    if (fy > -10 && fy < H + 10)
+        for (int r = 0; r < 2; r++) for (int k = 0; k < 16; k++) rect(cx - 64 + k * 8, fy - 8 + r * 4, 8, 4, (k + r) % 2 ? 0xFFFFFF : 0x1B1426, 1);
+    for (int i = 0; i < CK_RACE_OBST; i++) {
+        float od, ox, w, h; int kind;
+        ck_race_obst(i, clock, &od, &ox, &kind, &w, &h);
+        float x = cx + ox, y = CK_RACE_CAR_Y - (od - dist);
+        if (y < -30 || y > H + 30) continue;
+        if (kind == OBST_CONE) { shape(SPR_DOT, x, y, 6, 0xFF8A3D, 1); shape(SPR_DOT, x, y, 2.5f, 0xFFFFFF, 1); }
+        else if (kind == OBST_CRATE) { rect(x - 9, y - 9, 18, 18, 0x8A5A3C, 1); rect(x - 7, y - 7, 14, 14, 0xC98A4B, 1); rect(x - 1, y - 7, 2, 14, 0x8A5A3C, 1); }
+        else if (kind == OBST_OIL) { shape(SPR_DOT, x, y, 10, 0x1B1426, 0.85f); shape(SPR_DOT, x + 3, y - 2, 3, 0x5A4F78, 1); }
+        else car_top(x, y, 0x9AA1B0);
+    }
 }
 static void draw_cars(const ck_game *G) {
     const ck_house *Hs = &G->house;
     char c[12], s[32];
     int n = Hs->np;
-    float LH = n > 1 ? H / 2 : H;
+    float vw = n > 1 ? W / 2 : W;
     for (int i = 0; i < n; i++) {
         const ck_hhero *k = &Hs->gs[i];
-        float top = i * LH, ground = top + LH - 22;
-        race_lane(top, LH, k->x);
+        float x0 = i * vw;
+        rdpq_set_scissor(x0, 0, x0 + vw, H);
+        race_view(x0, vw, k->a, Hs->clock);
         int col = skin_col(G, k->slot);
         uint32_t hex;
         if (col < CK_NCOLS) hex = ck_cols[col];
         else { color_t rc = rainbow_col(G->t * 0.8f, 255); hex = (uint32_t)rc.r << 16 | (uint32_t)rc.g << 8 | rc.b; }
-        if (k->rep <= 0 || (int)(G->t * 15) % 2) car_side(CK_RACE_CAR_X, ground + k->y, hex);
-        rect(10, top + 4, 300, 5, 0x1B1426, 0.7f);
-        rect(10 + 296 * fminf(1, k->x / CK_RACE_LEN), top + 3, 4, 7, k->slot ? 0x8FD3FF : 0xFFD23F, 1);
-        if (n > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, 14, top + 22, ALIGN_LEFT, "P%d", k->slot + 1);
+        float wob = k->rep > 0 ? sinf(k->rep * 0.6f) * 4 : 0;
+        car_top(x0 + vw / 2 + k->x + wob, CK_RACE_CAR_Y, hex);
+        rect(x0 + vw - 12, 20, 5, 150, 0x1B1426, 0.7f);
+        rect(x0 + vw - 13, 166 - 146 * fminf(1, k->a / CK_RACE_LEN), 7, 4, k->slot ? 0x8FD3FF : 0xFFD23F, 1);
+        if (n > 1) txt(F_SMALL, k->slot ? ST_BLUE : ST_YELLOW, x0 + 8, 14, ALIGN_LEFT, "P%d", k->slot + 1);
     }
-    if (n > 1) rect(0, LH - 1, W, 2, 0x1B1426, 1);
+    rdpq_set_scissor(0, 0, W, H);
+    if (n > 1) rect(W / 2 - 1, 0, 2, H, 0x1B1426, 1);
     particles(G, 0);
-    if (n == 1) { dark_panel(W / 2 - 34, 14, 68, 16); txt(F_SMALL, ST_PLAIN, W / 2, 25, ALIGN_CENTER, "%s", clock_str((int)(Hs->clock * 60), c)); }
+    if (n == 1) { dark_panel(W / 2 - 34, 4, 68, 16); txt(F_SMALL, ST_PLAIN, W / 2, 15, ALIGN_CENTER, "%s", clock_str((int)(Hs->clock * 60), c)); }
     if (Hs->count > 0) { snprintf(s, sizeof s, "%d", (int)ceilf(Hs->count)); banner(F_HUGE, ST_YELLOW, 0xFFD23F, 100, 60, 34, 126, s); }
     else if (Hs->win < 0 && Hs->clock < 0.8f) banner(F_HUGE, ST_GREEN, 0x49D17A, 100, 80, 34, 126, "GO!");
     if (Hs->win >= 0) {
@@ -1579,7 +1674,7 @@ static void draw_cars(const ck_game *G) {
         else snprintf(s, sizeof s, "FINISHED  %s", clock_str((int)(Hs->gs[0].best * 60), c));
         banner(F_BIG, ST_YELLOW, 0xFFD23F, 98, 120, 30, 119, s);
     }
-    txt(F_SMALL, ST_CREAM, W / 2, H - 4, ALIGN_CENTER, "A jump   START out");
+    hint(H - 12, "Stick steer   A faster   B brake   START out");
 }
 
 // The music room's piano: the keys (lit while they sound), notes floating up, and each hero
@@ -1620,7 +1715,7 @@ static void draw_drums(const ck_game *G) {
         float bob = p->bounce > 0 ? sinf(p->bounce / 10.0f * PI) * 6 : 0;
         house_hero(G, p->slot, i ? 296 : 24, 222 - bob, p->bounce > 0 ? HP_CHEER : HP_IDLE, G->t + i, 1);
     }
-    txt(F_SMALL, ST_CREAM, W / 2, 14, ALIGN_CENTER, "Every button is a drum   START done");
+    hint(14, "Every button is a drum   START done");
 }
 static void draw_piano(const ck_game *G) {
     const ck_house *Hs = &G->house;
@@ -1656,7 +1751,7 @@ static void draw_piano(const ck_game *G) {
         uint32_t c = p->slot ? 0x8FD3FF : 0xFFD23F;
         for (int r = 0; r < 8; r++) rect(x - r * 5 / 8.0f, y - 8 + r, r * 10 / 8.0f + 1, 1, c, 1);   // a little arrow
     }
-    txt(F_SMALL, ST_CREAM, W / 2, 14, ALIGN_CENTER, "Stick move   A play   B other octave   START done");
+    hint(14, "Stick move   A play   B other octave   START done");
 }
 
 // ---------------------------------------------------------------------------- a frame

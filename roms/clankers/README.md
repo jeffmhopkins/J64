@@ -91,13 +91,16 @@ back to the map.
 
 | Room | What A does there |
 | --- | --- |
-| Yard | Pick an apple off the tree, read a letter from the mailbox; from World 2 on, the signpost goes back a world |
+| Yard | Pick an apple off the tree, open the mailbox for a big letter; from World 2 on, the signpost goes back a world |
 | Bedroom | Sleep, and save the game to a slot |
-| Kitchen | A snack fills the batteries |
-| Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall mural (hold B); L and R change colour |
+| Kitchen | The fridge: pick one of nine foods. The stove: add up to four ingredients, stir with B till the bar fills, and take the dish (an omelette, a toastie or a soup, named by what went in) |
+| Paint studio | Fly on the jetpack with no gravity (A or up rises, down sinks, let go to hover) and paint the wall (hold B); L and R change colour, and the last choice, ALL, wipes the wall with B. Turning round keeps the brush where it was |
 | Music room | The piano (the stick picks a key, A plays it, B jumps an octave) or the drums (every button is a different drum) |
-| Aquarium | Dive into a tank three screens wide with a bubble helmet; B feeds the fish, and swimming into one boops it; crabs walk the beach |
-| Garage | A side-on race, a lane each for two players: the cars drive themselves and A jumps the cones and crates |
+| Aquarium | Dive into a tank three screens wide with a bubble helmet. B sprinkles food (a fed fish follows you for a while), opens a treasure chest (5 bolts each, once a visit) and pokes a crab on the beach; swimming into a fish boops it |
+| Garage | A top-down race, half the screen each for two players: steer across three lanes round cones, crates, oil and slow cars; A or up goes faster, B or down brakes |
+
+Food you hold (from the tree, the fridge or the stove) goes in your hand: A eats it and fills your
+batteries, B throws it the way you face, and a baby that gets to it first munches it.
 
 The babies you have rescued wander about the house. Two players can play every room together,
 and START leaves a game.

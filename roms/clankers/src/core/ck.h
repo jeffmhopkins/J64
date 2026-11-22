@@ -397,10 +397,10 @@ typedef struct {
 #define CK_HOUSE_PILLAR 8
 #define CK_HOUSE_DOOR_TOP 120
 #define CK_HOUSE_ROOMS 7
-#define CK_HOUSE_SPOTS 10
-#define CK_HOUSE_DECOR 6
+#define CK_HOUSE_SPOTS 11
+#define CK_HOUSE_DECOR 5
 #define CK_HOUSE_BABIES 16
-enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK };
+enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE };
 // furniture frames, in the order tools/bake_sprites.mjs bakes them (HOUSEART.NAMES)
 enum { FURN_TREE, FURN_MAILBOX, FURN_COUNTER, FURN_FRIDGE, FURN_STOVE, FURN_TABLE, FURN_EASEL, FURN_PIANO,
        FURN_TANK, FURN_BED, FURN_CAR, FURN_PLANT, FURN_DRUM, FURN_LAMP, FURN_TOOLS, FURN_SIGN, FURN_COUNT };
@@ -417,7 +417,9 @@ extern const ck_decor ck_decors[CK_HOUSE_DECOR];
 #define CK_MURAL_Y 16
 #define CK_MURAL_FLOOR 220
 #define CK_MURAL_PAL 10
-#define CK_MURAL_ERASER CK_MURAL_PAL   // the last choice rubs paint out
+#define CK_MURAL_ERASER CK_MURAL_PAL   // after the colours: rub paint out
+#define CK_MURAL_CLEAR (CK_MURAL_PAL + 1)   // then: B wipes the whole wall
+#define CK_MURAL_CHOICES (CK_MURAL_PAL + 2)
 extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 // the aquarium: water on the left, a beach on the right
 // The aquarium is three screens wide: water, then a beach on the right (its last screen is the
@@ -432,13 +434,17 @@ extern const uint32_t ck_mural_pal[CK_MURAL_PAL];
 #define CK_AQUA_CRABS 3
 #define CK_AQUA_FOOD 12           // fish food flakes sinking at once
 // the garage's race track: an oval ring seen from above
-// The garage race: side on, each player in their own lane (two lanes stacked when two play).
-// The cars drive themselves; A jumps the cones and crates, and a bump slows you right down.
-#define CK_RACE_LEN 2400
-#define CK_RACE_OBST 12
-#define CK_RACE_CAR_X 80          // where the car sits on the screen
-enum { OBST_CONE, OBST_CRATE };
-void ck_race_obst(int i, float *x, int *kind, float *w, float *h);
+// The garage race, top down: the road scrolls down, the stick steers across three lanes to dodge
+// cones, crates, oil and slow cars; up or A goes faster, down or B brakes. Two players get a half
+// of the screen each, the same road.
+#define CK_RACE_LEN 3200
+#define CK_RACE_OBST 32
+#define CK_RACE_LANE 40           // the lanes are at -40, 0 and 40 from the road's middle
+#define CK_RACE_EDGE 52           // how far from the middle a car can go
+#define CK_RACE_CAR_Y 190         // where your car sits on the screen
+enum { OBST_CONE, OBST_CRATE, OBST_OIL, OBST_CAR };
+// obstacle i: how far along the road (at race time `clock`: slow cars drive on), across, its kind and size
+void ck_race_obst(int i, float clock, float *d, float *x, int *kind, float *w, float *h);
 // the piano: two octaves from middle C, 14 white keys
 #define CK_KEYS_X 20
 #define CK_KEYS_Y 150
@@ -461,17 +467,39 @@ typedef struct {
     bool ground, land, jet, brush;
     int eat, bubT, col;        // house: snack time; aqua: next bubble; paint: palette choice
     float bx, by;              // paint: where the brush was last frame
-    float a, s, lapT, best;    // cars: (unused), speed, (unused), finish time
+    float a, s, lapT, best;    // cars: distance along the road, speed, (unused), finish time
     int laps, key, rep, bounce;
     bool half;
+    int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
 } ck_hhero;
 typedef struct { uint32_t hex; float x, x0, x1, vx, y, vy; int wait; } ck_hbaby;
-typedef struct { int kind; float x, y, vx, ph; int scare; int happy; } ck_fish;   // happy: frames of a happy wiggle
-typedef struct { float x, y; int life; } ck_food;
+typedef struct { int kind; float x, y, vx, ph; int scare, happy, follow, who; } ck_fish;   // happy: a happy wiggle; follow: frames it swims after hero `who`
+typedef struct { float x, y; int life; } ck_flake;
 typedef struct { float x, y, vx, vy; int face, rest; } ck_shrimp;
-typedef struct { float x, vx; int snap, wait; } ck_crab;
+typedef struct { float x, vx, y, vy; int snap, wait, run; } ck_crab;   // y: a jump when poked; run: frames of running away
 typedef struct { float x, y; int life; uint32_t col; } ck_note_fx;
-enum { HM_WALK, HM_SLOTS, HM_SLEEP };
+enum { HM_WALK, HM_SLOTS, HM_SLEEP, HM_FRIDGE, HM_LETTER, HM_COOK };
+// Food from the fridge (and apples off the tree): held in the hand, A eats it, B throws it.
+// Each is drawn from a few circles and boxes, the same in both frontends.
+enum { FOOD_APPLE, FOOD_BANANA, FOOD_CHEESE, FOOD_CARROT, FOOD_CAKE, FOOD_ICECREAM, FOOD_MILK, FOOD_PIZZA, FOOD_COOKIE,   // the fridge
+       FOOD_EGG, FOOD_TOMATO, FOOD_MUSHROOM, FOOD_BREAD,                                                                   // stove ingredients
+       FOOD_OMELETTE, FOOD_SOUP, FOOD_TOASTIE, FOOD_COUNT };                                                               // what the stove cooks
+#define CK_FRIDGE_FOODS 9
+// The stove: six ingredients on a shelf (CK_COOK_INGR from ck_cook_ingr), up to four in the pan,
+// B stirs it till the heat bar fills, and out comes a dish named by ck_cook_name().
+#define CK_COOK_INGR 6
+#define CK_COOK_PAN 4
+extern const int ck_cook_ingr[CK_COOK_INGR];
+typedef struct { uint8_t kind; float x, y, w, h; uint32_t col; } ck_fshape;   // kind 0: a circle (w is its radius), 1: a box
+typedef struct { const char *name; int n; ck_fshape s[5]; } ck_foodart;
+extern const ck_foodart ck_foods[FOOD_COUNT];
+typedef struct { float x, y, vx, vy; int kind, life; } ck_thrown;
+#define CK_THROWN 6
+#define CK_LETTERS 6
+typedef struct { const char *from; const char *lines[3]; } ck_letter;
+extern const ck_letter ck_letters[CK_LETTERS];
+#define CK_AQUA_CHESTS 2
+extern const float ck_aqua_chest_x[CK_AQUA_CHESTS];
 typedef struct {
     ck_hhero ps[2];            // in the house
     ck_hhero gs[2];            // in the game you went into
@@ -487,7 +515,7 @@ typedef struct {
     ck_fish fish[CK_AQUA_FISH];
     ck_shrimp shrimp[CK_AQUA_SHRIMP];
     ck_crab crabs[CK_AQUA_CRABS];
-    ck_food food[CK_AQUA_FOOD];
+    ck_flake food[CK_AQUA_FOOD];
     int nfood;
     float gcam;                // the camera in a game that scrolls (the aquarium)
     float count, endT, clock;  // cars: the countdown, the time since the winner got home, the race clock
@@ -495,7 +523,17 @@ typedef struct {
     uint8_t lit[CK_KEYS_N];    // piano: frames a key stays lit
     ck_note_fx notes[16];
     int nnotes;
-    int letter;                // the next letter in the mailbox
+    int letter;                // the next letter in the mailbox (HM_LETTER shows letter - 1)
+    int fpick[2];              // HM_FRIDGE: each player's cursor
+    int cpick[2];              // HM_COOK: each player's cursor on the shelf
+    int pan[CK_COOK_PAN], npan;   // HM_COOK: what is in the pan (FOOD_*)
+    float heat;                // HM_COOK: 0..100, the dish is done at 100
+    int dish;                  // HM_COOK: the cooked dish, FOOD_* + 1 (0: still cooking)
+    char dishName[28];
+    ck_thrown thrown[CK_THROWN];
+    int nthrown;
+    int chestT[CK_AQUA_CHESTS];   // aquarium: frames a chest stays open
+    uint8_t chestGot;          // aquarium: chests whose bolts you have had this visit
     bool drums;                // SC_PIANO shows the drum kit instead of the piano
 } ck_house;
 #define CK_SLOTS 3
