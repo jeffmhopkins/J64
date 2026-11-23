@@ -582,7 +582,7 @@ static void go(ck_game *G, int scene) {
         break;
     case SC_MENU: G->menuPick = 0; G->menuAsk = false; break;
     case SC_SLOTS: G->slotPick = G->slot; ck_play(G, SONG_TITLE); break;
-    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_FISH: ck_play(G, SONG_SELECT); break;
+    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_FISH: case SC_SAND: ck_play(G, SONG_SELECT); break;
     case SC_CARS: ck_play(G, ck_race_song(G->house.track)); break;
     case SC_PINBALL: ck_play(G, SONG_PINBALL); break;
     case SC_BLAST: ck_play(G, SONG_BLASTER); break;
@@ -866,7 +866,7 @@ void ck_game_step(ck_game *G, uint16_t pad1, uint16_t pad2) {
         if (ANYHIT(G, CK_START) || ANYHIT(G, CK_A)) { ck_sfx(G, SFX_CONFIRM); go(G, SC_SLOTS); }
         break;
     case SC_SLOTS: slots_update(G); break;
-    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_CARS: case SC_PIANO: case SC_PINBALL: case SC_BLAST: case SC_FISH: case SC_BOLT: case SC_JETRUN: ck_house_step(G); break;
+    case SC_HOUSE: case SC_PAINT: case SC_AQUA: case SC_CARS: case SC_PIANO: case SC_PINBALL: case SC_BLAST: case SC_FISH: case SC_BOLT: case SC_JETRUN: case SC_SAND: ck_house_step(G); break;
     case SC_SELECT: select_update(G); break;
     case SC_MAP: map_update(G); break;
     case SC_SHOP: shop_update(G); break;

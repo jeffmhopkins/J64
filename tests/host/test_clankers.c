@@ -281,7 +281,7 @@ static void test_autotest(void) {
     }
     if (r != AT_PASS) fprintf(stderr, "autotest: %s\n", A.msg);
     EXPECT_EQ_INT(r, AT_PASS);
-    EXPECT_EQ_INT(checks, 14);
+    EXPECT_EQ_INT(checks, 15);
 }
 
 // Left alone, the story runs its songs in order, thunders during the storm and ends on the title.
@@ -1004,6 +1004,7 @@ static void test_drop_player2(void) {
 
 
 // The house: walk along the rooms, use the things in them, and the little games.
+static int sand_count(const ck_sandbox *S, int m);
 static void hold(ck_game *G, int n, uint16_t p1, uint16_t p2) { for (int i = 0; i < n; i++) ck_game_step(G, p1, p2); }
 // The house seen from above, as an 8 px grid: a cell is open when its middle is not solid.
 #define HG 8
@@ -1871,6 +1872,29 @@ static void test_house(void) {
     EXPECT_EQ_INT(Jr->state, RUN_PLAY);
     EXPECT_EQ_INT(Jr->ps[0].on && Jr->ps[1].on, 1);
     press(G, CK_START, 0);
+    // the sandbox: pour sand with A, change to water with R, rub out with B, START goes back in
+    walk_to(G, SPOT_SAND);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_SAND);
+    ck_sandbox *Sb = &G->house.sand;
+    EXPECT_EQ_INT(Sb->cur[0].tool, SANDTOOL_SAND);
+    EXPECT_EQ_INT(Sb->cur[1].tool, SANDTOOL_WATER);
+    hold(G, 30, CK_A, 0);
+    EXPECT_EQ_INT(sand_count(Sb, SAND_SAND) > 10, 1);
+    press(G, CK_R, 0);
+    EXPECT_EQ_INT(Sb->cur[0].tool, SANDTOOL_WATER);
+    hold(G, 30, CK_A | CK_RIGHT, 0);
+    EXPECT_EQ_INT(sand_count(Sb, SAND_WATER) > 10, 1);
+    hold(G, 40, CK_LEFT, 0);
+    press(G, CK_L, 0); press(G, CK_L, 0);   // back round to Wipe
+    EXPECT_EQ_INT(Sb->cur[0].tool, SANDTOOL_CLEAR);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(sand_count(Sb, SAND_SAND) + sand_count(Sb, SAND_WATER), 0);
+    for (int i = 0; i < 400; i++) ck_game_step(G, CK_UP | CK_LEFT | (i % 3 ? CK_A : 0), CK_DOWN | CK_RIGHT | CK_A);   // the cursors stop at the tank's edges
+    EXPECT_EQ_INT(Sb->cur[0].x == CK_SAND_X && Sb->cur[0].y == CK_SAND_Y, 1);
+    EXPECT_EQ_INT(Sb->cur[1].x == CK_SAND_X + CK_SAND_W * CK_SAND_CELL - 1 && Sb->cur[1].y == CK_SAND_Y + CK_SAND_H * CK_SAND_CELL - 1, 1);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
     // the pond: cast, wait for a bite, hook it with A, reel it in
     walk_to(G, SPOT_POND);
     press(G, CK_A, 0);
@@ -1976,6 +2000,90 @@ static void test_slots(void) {
     EXPECT_EQ_INT(G->slots[0].w[0].bolts, 77);   // slot 1 is left as it was
 }
 
+// ---- the sandbox
+static int sand_count(const ck_sandbox *S, int m) {
+    int n = 0;
+    for (int i = 0; i < CK_SAND_W * CK_SAND_H; i++) n += (S->cell[i] & SAND_MAT) == m;
+    return n;
+}
+static int sand_top(const ck_sandbox *S, int x, int m) {   // how high material m reaches in column x (0: none)
+    for (int y = 0; y < CK_SAND_H; y++) if ((S->cell[y * CK_SAND_W + x] & SAND_MAT) == m) return CK_SAND_H - y;
+    return 0;
+}
+static void sand_put(ck_sandbox *S, int x0, int y0, int x1, int y1, int m) {
+    for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) S->cell[y * CK_SAND_W + x] = (uint8_t)m;
+}
+// The rules: sand falls and piles, water lies flat, clay stays where it is put, acid eats sand,
+// clay and water, and gravity's sway heaps a pond up on its low side, then the other.
+static void test_sandbox(void) {
+    static ck_sandbox S;
+    memset(&S, 0, sizeof S);
+    S.still = true;
+    // a heap of sand dropped in the middle falls, keeps every grain, and spreads into a pile
+    sand_put(&S, 70, 0, 85, 40, SAND_SAND);
+    int n = sand_count(&S, SAND_SAND);
+    for (int i = 0; i < 600; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_SAND), n);
+    int peak = sand_top(&S, 77, SAND_SAND), foot = sand_top(&S, 50, SAND_SAND);
+    EXPECT_EQ_INT(peak > 10 && peak < 41, 1);
+    EXPECT_EQ_INT(foot < peak, 1);
+    for (int x = 1; x < CK_SAND_W; x++) EXPECT_EQ_INT(abs(sand_top(&S, x, SAND_SAND) - sand_top(&S, x - 1, SAND_SAND)) <= 2, 1);   // no cliffs
+    // water poured in a corner runs out flat across the floor
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 0, 0, 19, 59, SAND_WATER);
+    n = sand_count(&S, SAND_WATER);
+    for (int i = 0; i < 1500; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER), n);
+    int lo = CK_SAND_H, hi = 0;
+    for (int x = 0; x < CK_SAND_W; x++) { int h = sand_top(&S, x, SAND_WATER); lo = h < lo ? h : lo; hi = h > hi ? h : hi; }
+    if (hi - lo > 1) printf("  sandbox: water still %d to %d high\n", lo, hi);
+    EXPECT_EQ_INT(hi - lo <= 1, 1);
+    // a clay shelf up in the air stays put and holds sand and water on it
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 40, 50, 90, 52, SAND_CLAY);
+    sand_put(&S, 60, 20, 66, 30, SAND_SAND);
+    sand_put(&S, 80, 30, 84, 34, SAND_WATER);
+    for (int i = 0; i < 300; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_CLAY), 51 * 3);
+    for (int x = 40; x <= 90; x++) EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + x] & SAND_MAT, SAND_CLAY);
+    EXPECT_EQ_INT(sand_top(&S, 63, SAND_SAND) >= CK_SAND_H - 49, 1);   // the sand sits on the shelf
+    EXPECT_EQ_INT(sand_count(&S, SAND_SAND), 77);
+    // acid eats sand, clay and water, and gets used up doing it
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 0, 80, 51, 99, SAND_SAND); sand_put(&S, 52, 80, 103, 99, SAND_CLAY); sand_put(&S, 104, 80, 155, 99, SAND_WATER);
+    sand_put(&S, 0, 60, 155, 70, SAND_ACID);
+    int sand0 = sand_count(&S, SAND_SAND), clay0 = sand_count(&S, SAND_CLAY), water0 = sand_count(&S, SAND_WATER), acid0 = sand_count(&S, SAND_ACID);
+    for (int i = 0; i < 400; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_SAND) < sand0, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_CLAY) < clay0, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER) < water0, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_ACID) < acid0, 1);
+    // sand sinks through water
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 0, 60, 155, 99, SAND_WATER);
+    sand_put(&S, 70, 50, 74, 59, SAND_SAND);
+    for (int i = 0; i < 600; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(S.cell[99 * CK_SAND_W + 72] & SAND_MAT, SAND_SAND);
+    // the sway: a pond heaps up on whichever side gravity leans to, then the other
+    memset(&S, 0, sizeof S);
+    sand_put(&S, 0, 60, 155, 99, SAND_WATER);
+    n = sand_count(&S, SAND_WATER);
+    for (int i = 0; i < CK_SAND_SWAY / 4 + 60; i++) ck_sand_step(&S);   // leaning right
+    EXPECT_EQ_INT(S.lean > 0.3f, 1);
+    int l = sand_top(&S, 2, SAND_WATER), r = sand_top(&S, CK_SAND_W - 3, SAND_WATER);
+    printf("  sandbox: leaning right, the pond is %d deep on the left and %d on the right\n", l, r);
+    EXPECT_EQ_INT(r - l >= 8, 1);
+    for (int i = 0; i < CK_SAND_SWAY / 2; i++) ck_sand_step(&S);   // leaning left
+    l = sand_top(&S, 2, SAND_WATER); r = sand_top(&S, CK_SAND_W - 3, SAND_WATER);
+    EXPECT_EQ_INT(l - r >= 8, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER), n);
+    // pouring at the very edges stays inside the tank
+    for (int k = 0; k < CK_SAND_TOOLS; k++) for (int z = 0; z < CK_SAND_SIZES; z++) {
+        ck_sand_pour(&S, -3, -3, k, z); ck_sand_pour(&S, CK_SAND_W + 2, CK_SAND_H + 2, k, z); ck_sand_pour(&S, 0, CK_SAND_H - 1, k, z);
+    }
+    EXPECT_EQ_INT(ck_sand_hex(SAND_EMPTY) != ck_sand_hex(SAND_WATER), 1);
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -2000,5 +2108,6 @@ void test_clankers(void) {
     test_race_view();
     test_house();
     test_house_gate();
+    test_sandbox();
     test_slots();
 }

@@ -36,6 +36,7 @@ const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
     { SPOT_POND, "Go fishing" },
     { SPOT_BOLT, "Play Bolt Ball" },
     { SPOT_JETRUN, "Play Jet Run" },
+    { SPOT_SAND, "Play in the sandbox" },
 };
 #define C(x, y, r, c) { 0, x, y, r, 0, c }
 #define R(x, y, w, h, c) { 1, x, y, w, h, c }
@@ -340,6 +341,7 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
     case SPOT_POND: ck_sfx(G, SFX_OPEN); ck_fish_start(G); break;
     case SPOT_BOLT: ck_sfx(G, SFX_OPEN); ck_bolt_start(G); break;
     case SPOT_JETRUN: ck_sfx(G, SFX_OPEN); ck_run_start(G); break;
+    case SPOT_SAND: ck_sfx(G, SFX_OPEN); ck_sand_start(G); break;
     case SPOT_BED: ck_sfx(G, SFX_SELECT); H->mode = HM_SLOTS; H->pick = G->slot; break;
     }
 }
@@ -1213,5 +1215,6 @@ void ck_house_step(ck_game *G) {
     case SC_FISH: ck_fish_update(G); break;
     case SC_BOLT: ck_bolt_update(G); break;
     case SC_JETRUN: ck_run_update(G); break;
+    case SC_SAND: ck_sand_update(G); break;
     }
 }

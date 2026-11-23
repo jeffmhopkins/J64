@@ -39,6 +39,7 @@ const HOUSEART = (() => {
       [345, 'pond', 'Go fishing'],
       [1745, 'bolt', 'Play Bolt Ball'],
       [1830, 'jetrun', 'Play Jet Run'],
+      [1880, 'sand', 'Play in the sandbox'],
     ],
     // decorations that are only looked at: x, furniture frame
     decor: [[728, 'table'], [920, 'plant'], [1285, 'plant'], [555, 'lamp'], [1490, 'tools']],

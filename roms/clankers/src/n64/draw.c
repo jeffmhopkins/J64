@@ -35,6 +35,7 @@ static void drop(int id) {
 }
 
 static bool is_house_art(int id);
+static void sand_free(void);
 static bool is_big(int id) {
     static const int big[] = { SPR_TITLE, SPR_SELECT_BG, SPR_JET_SKY, SPR_JET_HILLS, SPR_CRANE, SPR_INTRO_NIGHT,
                                SPR_INTRO_STORM, SPR_INTRO_DAWN, SPR_CUT_FLOAT, SPR_CUT_ROCKET,
@@ -75,9 +76,10 @@ void draw_init(void) {
 // Free the big pictures and hero sheets the next scene does not need.
 static void free_for(const ck_game *G) {
     int sc = G->scene;
-    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH || sc == SC_BOLT || sc == SC_JETRUN) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
+    int group = sc == SC_INTRO ? 4 : (sc == SC_TITLE || sc == SC_SLOTS) ? 0 : sc == SC_HOUSE ? 6 : sc == SC_AQUA ? 7 : sc == SC_CARS ? 8 : (sc == SC_PAINT || sc == SC_PIANO || sc == SC_PINBALL || sc == SC_BLAST || sc == SC_FISH || sc == SC_BOLT || sc == SC_JETRUN || sc == SC_SAND) ? 9 : G->scene == SC_SELECT ? 1 : (G->scene == SC_MAP || G->scene == SC_SHOP || G->scene == SC_MENU) ? 2 : G->scene == SC_CUT ? 5 : 3;
     group = group * 16 + G->worldNum * 4 + (G->scene == SC_CUT ? G->cut % 4 : 0);   // a new world or film needs its own pictures
     waited = false;
+    if (sc != SC_SAND) sand_free();   // the sandbox's textures only while it is open
     if (group != big_group) {
         big_group = group;
         for (int id = 0; id < SPR_COUNT; id++) if (is_big(id)) drop(id);
@@ -2725,6 +2727,81 @@ static void draw_piano(const ck_game *G) {
 
 // ---------------------------------------------------------------------------- a frame
 
+// ---------------------------------------------------------------------------- the sandbox
+// The tank is drawn from the core's cells each frame: the CPU writes one 16-bit pixel a cell
+// (two at a time) into a small texture, and the RDP draws it twice the size. Three textures take
+// turns, so the RDP is never still reading the one being written (there are three framebuffers).
+#define SAND_BUFS 3
+static surface_t sand_surf[SAND_BUFS];
+static uint16_t sand_lut[256];
+static int sand_k = -1;
+static void sand_free(void) {
+    if (sand_k < 0) return;
+    rspq_wait();
+    for (int k = 0; k < SAND_BUFS; k++) surface_free(&sand_surf[k]);
+    sand_k = -1;
+}
+static void sand_tank(const ck_sandbox *S) {
+    if (sand_k < 0) {
+        for (int k = 0; k < SAND_BUFS; k++) sand_surf[k] = surface_alloc(FMT_RGBA16, CK_SAND_W, CK_SAND_H);
+        for (int c = 0; c < 256; c++) sand_lut[c] = color_to_packed16(hexc(ck_sand_hex(c & ~SAND_MOVED), 255));
+        sand_k = 0;
+    }
+    surface_t *sf = &sand_surf[sand_k];
+    sand_k = (sand_k + 1) % SAND_BUFS;
+    const uint8_t *cell = S->cell;
+    for (int y = 0; y < CK_SAND_H; y++) {
+        uint32_t *px = (uint32_t *)((uint8_t *)sf->buffer + y * sf->stride);   // uncached: straight to RDRAM
+        for (int x = 0; x < CK_SAND_W; x += 2, cell += 2) *px++ = (uint32_t)sand_lut[cell[0]] << 16 | sand_lut[cell[1]];
+    }
+    mode_tex();
+    rdpq_set_prim_color(RGBA32(255, 255, 255, 255));
+    rdpq_tex_blit(sf, CK_SAND_X, CK_SAND_Y, &(rdpq_blitparms_t){ .scale_x = CK_SAND_CELL, .scale_y = CK_SAND_CELL });
+}
+// a tool's swatch: the material's colour, or the rubber, the sway (its little level), the wipe
+static void sand_swatch(int k, float x, float y, float r, float lean) {
+    if (k <= SANDTOOL_CLAY) shape(SPR_DOT, x, y, r, ck_sand_hex((k + 1) | (8 << 4)), 1);
+    else if (k == SANDTOOL_ERASE) { shape(SPR_DOT, x, y, r, 0xFFF6E6, 1); txt(F_SMALL, ST_RED, x, y + 3, ALIGN_CENTER, "x"); }
+    else if (k == SANDTOOL_TILT) {
+        shape(SPR_DOT, x, y, r, 0x8FD3FF, 1);
+        float a = asinf(lean);   // gravity's arrow, pointing down the way it leans
+        for (int i = -2; i <= 3; i++) shape(SPR_DOT, x + sinf(a) * i * r * 0.22f, y + cosf(a) * i * r * 0.22f, i == 3 ? 2.2f : 1.3f, 0x1B1426, 1);
+    } else { shape(SPR_DOT, x, y, r, 0xE04F4F, 1); txt(F_SMALL, ST_WHITE, x, y + 3, ALIGN_CENTER, "ALL"); }
+}
+static void draw_sand(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    const ck_sandbox *S = &Hs->sand;
+    int tw = CK_SAND_W * CK_SAND_CELL, th = CK_SAND_H * CK_SAND_CELL;
+    rect(0, 0, W, H, 0x5DBB63, 1);   // the garden
+    rect(CK_SAND_X - 4, CK_SAND_Y - 4, tw + 8, th + 8, 0x8A5A3C, 1);   // the sandbox's wooden frame
+    rect(CK_SAND_X - 3, CK_SAND_Y - 3, tw + 6, 2, 0xC98A4B, 1);
+    sand_tank(S);
+    // the tools along the bottom, each player's ringed
+    for (int k = 0; k < CK_SAND_TOOLS; k++) {
+        float x = 30 + k * 44, y = 231;
+        sand_swatch(k, x, y, 7, S->lean / CK_SAND_LEAN * 0.5f);
+        if (k == SANDTOOL_TILT && S->still) rect(x - 8, y - 1, 16, 2, 0xE04F4F, 1);
+        for (int j = 0; j < Hs->np; j++) if (S->cur[j].tool == k) shape(SPR_RING, x, y, 9 + j * 2, Hs->gs[j].slot ? 0x8FD3FF : 0xFFD23F, 1);
+    }
+    // each cursor: a ring the brush's size, and what it pours in the middle
+    for (int i = 0; i < Hs->np; i++) {
+        const ck_sandcur *c = &S->cur[i];
+        uint32_t pc = Hs->gs[i].slot ? 0x8FD3FF : 0xFFD23F;
+        int sl = Hs->gs[i].slot; bool erase = sl >= 0 && sl < 2 && (G->in.held[sl] & CK_B);
+        float r = (ck_sand_radius(c->size) + 0.5f) * CK_SAND_CELL;
+        if (c->tool <= SANDTOOL_ERASE || erase) {
+            shape(SPR_RING, c->x, c->y, r + 2, 0x1B1426, 0.7f);
+            shape(SPR_RING, c->x, c->y, r + 1, erase ? 0xFFF6E6 : pc, 1);
+        }
+        sand_swatch(erase ? SANDTOOL_ERASE : c->tool, c->x + r + 6, c->y - r - 6, 4.5f, S->lean / CK_SAND_LEAN * 0.5f);
+    }
+    particles(G, 0);
+    int t = S->cur[Hs->last].tool;
+    hint(11, t == SANDTOOL_TILT ? (S->still ? "A sway on   B rub out   L R pick   START leave" : "A sway off   B rub out   L R pick   START leave")
+           : t == SANDTOOL_CLEAR ? "A wipe it all   B rub out   L R pick   START leave"
+           : "A pour   B rub out   L R pick   C size   START leave");
+}
+
 void draw_frame(const ck_game *G, bool scanlines, bool interlaced) {
     free_for(G);
     mode = M_NONE;
@@ -2752,6 +2829,7 @@ void draw_frame(const ck_game *G, bool scanlines, bool interlaced) {
     case SC_FISH: draw_fish(G); break;
     case SC_BOLT: draw_bolt(G); break;
     case SC_JETRUN: draw_jetrun(G); break;
+    case SC_SAND: draw_sand(G); break;
     }
     if (scanlines) {
         // a hint of a CRT: darken every other line

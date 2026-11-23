@@ -128,6 +128,8 @@ const HOUSETOP = (() => {
   put('tree', 1720, 1220, [8, 6]); put('tree', 760, 1220, [8, 6]);
   for (const [x, y] of [[90, 200], [2070, 200], [2070, 560], [100, 860], [2060, 960], [560, 1300], [1900, 1320], [400, 360], [1500, 1300]]) put('bush', x, y, [16, 10]);
   for (const [x, y] of [[620, 1110], [900, 1110], [1060, 1110], [1420, 1110], [1600, 1110], [1820, 1110], [1480, 250], [1980, 250]]) put('flowers', x, y, [0, 0], { flat: true });
+  // the sandbox in the back garden, by the pond (last, so the other looks keep their numbers)
+  put('sandbox', 440, 236, [36, 26], use('sand'));
 
   // every different look (art and colours) once: the N64 bakes a sprite for each
   const ARTS = [];
