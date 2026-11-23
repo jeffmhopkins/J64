@@ -88,7 +88,7 @@ CRT scanlines on or off. A second controller plays the ostrich.
 Each world's map starts at the heroes' house: a four-bedroom family house with a garage and a
 garden all round, seen from above. You come in at the front gate and walk every way with the
 stick; your hero turns to face the way you walk (sideways, toward you, or away with their back to
-you, outfits and all). The camera follows you, and indoors it keeps the room you are in on screen. A uses the thing
+you, outfits and all). The camera follows you smoothly everywhere, indoors and out. A uses the thing
 you stand at, and A anywhere else hops. START leaves any game or screen. Walk back out of the front
 gate, or press START, to go back to the map.
 
@@ -112,8 +112,9 @@ Food you hold (from the tree, the fridge or the stove) goes in your hand: A eats
 batteries, B throws it the way you last walked, and a baby that gets to it first munches it.
 
 The babies you have rescued wander about the house and the back garden. Two players share the
-screen and can play every room together; they can't walk more than a screen apart. The dining
-room, laundry, bathrooms, ensuite, hallway, foyer and nursery are there to explore.
+screen and can play every room together; when they wander apart the camera zooms out to keep both
+on screen, down to half size, and that is as far apart as they can go. The dining room, laundry,
+ensuite, hallway, foyer and nursery are there to explore, and A at either toilet flushes it.
 
 <a id="shop"></a>
 ## The parts shop

@@ -428,10 +428,10 @@ typedef struct {
 // into ck_house_map.c by tools/bake_sprites.mjs. A at a thing uses it; some open a little game of
 // their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SAND and the arcade). Rescued baby bots wander about.
 #define CK_HOUSE_ROOMS 8
-#define CK_HOUSE_SPOTS 17
+#define CK_HOUSE_SPOTS 18
 #define CK_HOUSE_BABIES 16
 enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE,
-       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT, SPOT_JETRUN, SPOT_SAND };
+       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT, SPOT_JETRUN, SPOT_SAND, SPOT_FLUSH };
 // the rooms of the old side-on house: the music room's colours still dress the piano and drums
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
 typedef struct { int kind; const char *label; } ck_spot;   // what A does there
@@ -453,7 +453,17 @@ extern const ck_tart ck_tarts[];
 extern const int ck_ntrooms, ck_ntwalk, ck_nthings, ck_ntarts, ck_ntareas;
 bool ck_house_solid(float x, float y);         // a wall, furniture or outside the house's ground
 int ck_house_room_at(float x, float y);       // the room (ck_trooms) a point is in, or -1
-void ck_house_camera(float mx, float my, float *cx, float *cy);   // the view for the party's middle
+// The view: the zoom that fits feet x0..x1, y0..y1 (all the heroes) on screen, CK_HOUSE_ZOOM
+// down to CK_HOUSE_ZOOM_MIN, and the top-left corner of the view at zoom z (the screen shows
+// CK_W / z by CK_H / z of the world). Heroes, babies and food are drawn CK_HOUSE_BIG times their
+// usual size in the house, so at CK_HOUSE_ZOOM they are their usual size on screen and the house
+// round them is two thirds of its size in the plan.
+#define CK_HOUSE_BIG 1.5f
+#define CK_HOUSE_ZOOM (1 / CK_HOUSE_BIG)
+#define CK_HOUSE_ZOOM_MIN (CK_HOUSE_ZOOM / 2)
+#define CK_FLUSH_T 90
+float ck_house_fit(float x0, float y0, float x1, float y1);
+void ck_house_camera(float x0, float y0, float x1, float y1, float z, float *cx, float *cy);
 // the paint studio's wall: 80 x 48 cells of 4 px from y 16; 0 is bare, else palette index + 1
 #define CK_MURAL_W 80
 #define CK_MURAL_H 48
@@ -855,6 +865,8 @@ typedef struct {
     ck_hbaby babies[CK_HOUSE_BABIES];
     int nbabies;
     float cam, camy;           // the house's view: its top-left corner in the world
+    float zoom;                // and its zoom: 1, or less to fit two heroes far apart
+    int flushT, flushAt;       // a toilet flushing: ticks left (from CK_FLUSH_T), and which thing
     int mode, pick;
     float sleepT;
     char msg[56];

@@ -1111,12 +1111,12 @@ static void test_house(void) {
     press(G, 0, CK_C); EXPECT_EQ_INT(G->house.ps[G->house.last].slot, 1);
     press(G, CK_C, 0); EXPECT_EQ_INT(G->house.ps[G->house.last].slot, 0);
     EXPECT_EQ_INT(G->house.babies[0].hex, G->world.babies[0]);
-    // the plan: every spot is on exactly one thing, every thing stands where you can't walk,
-    // the heroes come in on open ground at the front, and the camera keeps a room's back wall in view
+    // the plan: every spot is on exactly one thing (but both toilets flush), every thing stands
+    // where you can't walk, the heroes come in on open ground at the front, and the camera centres a hero
     for (int k = 0; k < CK_HOUSE_SPOTS; k++) {
         int n = 0;
         for (int i = 0; i < ck_nthings; i++) n += ck_things[i].spot == k;
-        EXPECT_EQ_INT(n, 1);
+        EXPECT_EQ_INT(n, k == SPOT_FLUSH ? 2 : 1);
     }
     for (int i = 0; i < ck_nthings; i++) {
         const ck_thing *t = &ck_things[i];
@@ -1129,20 +1129,38 @@ static void test_house(void) {
     for (int r = 0; r < ck_ntrooms; r++) {
         const ck_troom *R = &ck_trooms[r];
         float cx, cy;
-        ck_house_camera(R->x + R->w / 2.0f, R->y + CK_TD_FACE + 30.0f, &cx, &cy);   // just in front of the back wall
-        EXPECT_EQ_INT(cy <= R->y, 1);
-        EXPECT_EQ_INT(cx <= R->x + R->w / 2.0f && cx + CK_W >= R->x + R->w / 2.0f, 1);
-        EXPECT_EQ_INT(cx >= 0 && cy >= 0 && cx <= ck_td_world[0] - CK_W && cy <= ck_td_world[1] - CK_H, 1);
+        // the camera is the same everywhere: a hero alone is in the middle (unless at the world's edge)
+        float hx = R->x + R->w / 2.0f, hy = R->y + CK_TD_FACE + 30.0f;
+        const float z = CK_HOUSE_ZOOM, vw = CK_W / z, vh = CK_H / z;
+        EXPECT_EQ_INT(ck_house_fit(hx, hy, hx, hy) == z, 1);
+        ck_house_camera(hx, hy, hx, hy, z, &cx, &cy);
+        EXPECT_EQ_INT(fabsf(cx + vw / 2 - hx) < 2 || cx == 0 || fabsf(cx - (ck_td_world[0] - vw)) < 2, 1);
+        EXPECT_EQ_INT(hy - 70 * CK_HOUSE_BIG >= cy && hy + 24 * CK_HOUSE_BIG <= cy + vh, 1);
+        EXPECT_EQ_INT(cx >= 0 && cy >= 0 && cx <= ck_td_world[0] - vw + 1 && cy <= ck_td_world[1] - vh + 1, 1);
         EXPECT_EQ_INT(ck_house_room_at(R->x + R->w / 2.0f, R->y + R->h / 2.0f), r);
     }
-    // two heroes can't wander more than a screen apart
+    // two heroes can wander apart only as far as the camera can zoom out to show them both, and
+    // it zooms out as they part, keeping both on screen every tick, and back in when they meet
     {
         float y1 = G->house.ps[1].y;
-        hold(G, 200, 0, CK_LEFT);
+        EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
+        bool seen = true;
+        for (int i = 0; i < 400; i++) {
+            hold(G, 1, 0, CK_LEFT);
+            const ck_house *Hs = &G->house;
+            for (int k = 0; k < 2; k++) {
+                float x = (Hs->ps[k].x - Hs->cam) * Hs->zoom, y = (Hs->ps[k].y - Hs->camy) * Hs->zoom;
+                if (x < 8 || x > CK_W - 8 || y < 60 * Hs->zoom * CK_HOUSE_BIG || y > CK_H - 8 * Hs->zoom) seen = false;
+            }
+        }
+        EXPECT_EQ_INT(seen, 1);
         EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x < ck_td_leash[0], 1);
         EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x > ck_td_leash[0] - 4, 1);
         EXPECT_EQ_INT(fabsf(G->house.ps[1].y - y1) < 1, 1);
-        hold(G, 200, 0, CK_RIGHT);
+        EXPECT_EQ_INT(G->house.zoom < 0.6f * CK_HOUSE_ZOOM && G->house.zoom >= CK_HOUSE_ZOOM_MIN, 1);
+        hold(G, 400, 0, CK_RIGHT);
+        hold(G, 120, 0, 0);
+        EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
     }
     // A on open ground hops
     hold(G, 10, 0, 0);
@@ -1942,6 +1960,15 @@ static void test_house(void) {
     EXPECT_EQ_INT(Sb->cur[1].x == CK_SAND_X + CK_SAND_W * CK_SAND_CELL - 1 && Sb->cur[1].y == CK_SAND_Y + CK_SAND_H * CK_SAND_CELL - 1, 1);
     press(G, CK_START, 0);
     EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    // a toilet: A flushes it (once at a time), and it swirls for CK_FLUSH_T ticks
+    walk_to(G, SPOT_FLUSH);
+    EXPECT_EQ_INT(ck_house_near(G, &G->house.ps[0]), SPOT_FLUSH);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.mode, HM_WALK);
+    EXPECT_EQ_INT(G->house.flushT > CK_FLUSH_T - 5, 1);
+    EXPECT_EQ_INT(G->house.flushAt >= 0 && ck_things[G->house.flushAt].spot == SPOT_FLUSH, 1);
+    hold(G, CK_FLUSH_T, 0, 0);
+    EXPECT_EQ_INT(G->house.flushT, 0);
     // the pond: cast, wait for a bite, hook it with A, reel it in
     walk_to(G, SPOT_POND);
     press(G, CK_A, 0);
