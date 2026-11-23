@@ -3,7 +3,7 @@
 // lies flat, acid eats sand, clay and water, and clay stays just where it is put. Gravity leans a
 // little left and right every ten seconds, so a pond sloshes; the screen itself never turns.
 const SAND = {
-  W: 156, H: 100, CELL: 2, X: 4, Y: 20, SWAY: 600, LEAN: 0.42, SPREAD: 4,
+  W: 156, H: 100, CELL: 2, X: 4, Y: 20, SWAY: 600, LEAN: 0.11, SPREAD: 4,
   EMPTY: 0, SAND: 1, WATER: 2, ACID: 3, CLAY: 4, MAT: 7, MOVED: 8,
   TOOLS: ['Sand', 'Water', 'Acid', 'Clay', 'Rubber', 'Sway', 'Wipe'], ERASE: 4, TILT: 5, CLEAR: 6, SIZES: 3,
 };
@@ -35,15 +35,13 @@ function sandRules(S) {
     if (mb === 0) { move(x, y, x - a, y + 1, false); return; }
     if (liquid(below)) { if (chance(120)) swap(x, y, x, y + 1); return; }
     if (liquid(ma)) { if (chance(60)) swap(x, y, x + a, y + 1); return; }
-    if (liquid(mb)) { if (chance(60)) swap(x, y, x - a, y + 1); return; }
-    if (lean > 80 && mat(x, y - 1) === 0 && mat(x + side, y) === 0 && mat(x + side, y + 1) !== 0 && chance((lean - 80) * 2))
-      move(x, y, x + side, y, side > 0 ? (S.tick & 1) === 1 : (S.tick & 1) === 0);
+    if (liquid(mb)) { if (chance(60)) swap(x, y, x - a, y + 1); }
   }
   function acidBite(x, y) {
     const k = rng() >>> 8 & 3, nx = x + [0, -1, 1, 0][k], ny = y + [1, 0, 0, -1][k], n = mat(nx, ny);
     if (nx < 0 || ny < 0 || nx >= W || ny >= H) return false;
     if (n !== SAND.SAND && n !== SAND.CLAY && n !== SAND.WATER) return false;
-    if (!chance(n === SAND.CLAY ? 20 : 60)) return false;
+    if (!chance(60)) return false;   // sand, clay and water all go at the same rate
     C[ny * W + nx] = 0; S.fizz++; S.fx = nx; S.fy = ny;
     if (chance(128)) { C[y * W + x] = 0; return true; }
     return false;
@@ -99,8 +97,19 @@ function sandRules(S) {
         if (dx * dx + dy * dy > r * r + r || x < 0 || y < 0 || x >= W || y >= H) continue;
         const i = y * W + x;
         if (tool === SAND.ERASE) { C[i] = 0; continue; }
-        if (tool > 3 || (C[i] & SAND.MAT)) continue;
-        if (tool !== 3 && !chance(64)) continue;
+        const m = C[i] & SAND.MAT, solid = tool === 0 || tool === 3;
+        if (tool > 3 || (solid && m === tool + 1)) continue;
+        if (!solid && liquid(m)) {   // poured into a pond: push the water above up a cell, so the level rises
+          if (!chance(64)) continue;
+          let top = y - 1;
+          while (top >= 0 && liquid(C[top * W + x] & SAND.MAT)) top--;
+          if (top < 0 || (C[top * W + x] & SAND.MAT)) continue;
+          for (let k = top; k < y; k++) C[k * W + x] = C[(k + 1) * W + x];
+          C[i] = (tool + 1) | (rng() & 0xf0);
+          continue;
+        }
+        if (m && !solid) continue;   // sand and clay take over what is under the brush; water and acid never do
+        if (!m && tool !== 3 && !chance(64)) continue;   // into thin air, sand, water and acid spray
         C[i] = (tool + 1) | (rng() & 0xf0);
       }
     },

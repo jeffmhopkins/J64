@@ -688,7 +688,7 @@ float ck_run_safe_y(const ck_jetrun *J, const ck_runcol *c);  // where a hero's 
 #define CK_SAND_X 4
 #define CK_SAND_Y 20
 #define CK_SAND_SWAY 600          // frames for gravity to lean left, right and back (10 seconds)
-#define CK_SAND_LEAN 0.42f        // the most it leans: the sideways part of gravity
+#define CK_SAND_LEAN 0.11f        // the most it leans: the sideways part of gravity (a gentle slosh)
 // a cell: the material in the low 3 bits, a flag the step uses in bit 3, a shade 0..15 on top
 enum { SAND_EMPTY, SAND_SAND, SAND_WATER, SAND_ACID, SAND_CLAY, SAND_KINDS };
 #define SAND_MAT 7

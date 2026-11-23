@@ -2057,6 +2057,11 @@ static int sand_top(const ck_sandbox *S, int x, int m) {   // how high material 
     for (int y = 0; y < CK_SAND_H; y++) if ((S->cell[y * CK_SAND_W + x] & SAND_MAT) == m) return CK_SAND_H - y;
     return 0;
 }
+static int sand_ends(const ck_sandbox *S, int right) {   // the pond's depth over 8 columns at one end, added up
+    int n = 0;
+    for (int k = 0; k < 8; k++) n += sand_top(S, right ? CK_SAND_W - 1 - k : k, SAND_WATER);
+    return n;
+}
 static void sand_put(ck_sandbox *S, int x0, int y0, int x1, int y1, int m) {
     for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) S->cell[y * CK_SAND_W + x] = (uint8_t)m;
 }
@@ -2105,6 +2110,19 @@ static void test_sandbox(void) {
     EXPECT_EQ_INT(sand_count(&S, SAND_CLAY) < clay0, 1);
     EXPECT_EQ_INT(sand_count(&S, SAND_WATER) < water0, 1);
     EXPECT_EQ_INT(sand_count(&S, SAND_ACID) < acid0, 1);
+    // ... and at the same rate: the same acid over a floor of each eats about as much of each
+    int ate[3];
+    for (int k = 0; k < 3; k++) {
+        memset(S.cell, 0, sizeof S.cell);
+        S.rng = 12345;
+        sand_put(&S, 0, 90, 155, 99, k == 0 ? SAND_SAND : k == 1 ? SAND_CLAY : SAND_WATER);
+        int was = 156 * 10;
+        sand_put(&S, 0, 80, 155, 84, SAND_ACID);
+        for (int i = 0; i < 200; i++) ck_sand_step(&S);
+        ate[k] = was - sand_count(&S, k == 0 ? SAND_SAND : k == 1 ? SAND_CLAY : SAND_WATER);
+    }
+    printf("  sandbox: acid ate %d sand, %d clay, %d water\n", ate[0], ate[1], ate[2]);
+    for (int k = 1; k < 3; k++) EXPECT_EQ_INT(abs(ate[k] - ate[0]) * 4 <= ate[0], 1);
     // sand sinks through water
     memset(S.cell, 0, sizeof S.cell);
     sand_put(&S, 0, 60, 155, 99, SAND_WATER);
@@ -2116,14 +2134,34 @@ static void test_sandbox(void) {
     sand_put(&S, 0, 60, 155, 99, SAND_WATER);
     n = sand_count(&S, SAND_WATER);
     for (int i = 0; i < CK_SAND_SWAY / 4 + 60; i++) ck_sand_step(&S);   // leaning right
-    EXPECT_EQ_INT(S.lean > 0.3f, 1);
-    int l = sand_top(&S, 2, SAND_WATER), r = sand_top(&S, CK_SAND_W - 3, SAND_WATER);
-    printf("  sandbox: leaning right, the pond is %d deep on the left and %d on the right\n", l, r);
-    EXPECT_EQ_INT(r - l >= 8, 1);
+    EXPECT_EQ_INT(S.lean > CK_SAND_LEAN * 0.8f, 1);
+    int l = sand_ends(&S, 0), r = sand_ends(&S, 1);
+    printf("  sandbox: leaning right, the pond is %.1f deep on the left and %.1f on the right\n", l / 8.0, r / 8.0);
+    EXPECT_EQ_INT(r - l >= 2 * 8 && r - l <= 12 * 8, 1);   // a gentle slosh: a few cells, not a big heap
     for (int i = 0; i < CK_SAND_SWAY / 2; i++) ck_sand_step(&S);   // leaning left
-    l = sand_top(&S, 2, SAND_WATER); r = sand_top(&S, CK_SAND_W - 3, SAND_WATER);
-    EXPECT_EQ_INT(l - r >= 8, 1);
+    l = sand_ends(&S, 0); r = sand_ends(&S, 1);
+    EXPECT_EQ_INT(l - r >= 2 * 8 && l - r <= 12 * 8, 1);
     EXPECT_EQ_INT(sand_count(&S, SAND_WATER), n);
+    // sand and clay take over whatever is under the brush; water and acid do not
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 60, 40, 80, 60, SAND_WATER);
+    ck_sand_pour(&S, 70, 50, SANDTOOL_CLAY, 1);
+    for (int dy = -3; dy <= 3; dy++) EXPECT_EQ_INT(S.cell[(50 + dy) * CK_SAND_W + 70] & SAND_MAT, SAND_CLAY);
+    ck_sand_pour(&S, 70, 50, SANDTOOL_SAND, 0);
+    EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + 70] & SAND_MAT, SAND_SAND);
+    EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + 71] & SAND_MAT, SAND_SAND);
+    for (int k = 0; k < 20; k++) { ck_sand_pour(&S, 70, 50, SANDTOOL_WATER, 2); ck_sand_pour(&S, 70, 50, SANDTOOL_ACID, 2); }   // liquids never take over sand or clay
+    EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + 70] & SAND_MAT, SAND_SAND);
+    EXPECT_EQ_INT(S.cell[47 * CK_SAND_W + 70] & SAND_MAT, SAND_CLAY);
+    // water poured deep in a pond adds to it: the level rises
+    memset(S.cell, 0, sizeof S.cell);
+    S.still = true; S.lean = 0;
+    sand_put(&S, 0, 80, 155, 99, SAND_WATER);
+    n = sand_count(&S, SAND_WATER);
+    for (int k = 0; k < 30; k++) ck_sand_pour(&S, 70, 95, SANDTOOL_WATER, 2);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER) > n + 100, 1);
+    for (int i = 0; i < 600; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_top(&S, 10, SAND_WATER) > 20, 1);
     // pouring at the very edges stays inside the tank
     for (int k = 0; k < CK_SAND_TOOLS; k++) for (int z = 0; z < CK_SAND_SIZES; z++) {
         ck_sand_pour(&S, -3, -3, k, z); ck_sand_pour(&S, CK_SAND_W + 2, CK_SAND_H + 2, k, z); ck_sand_pour(&S, 0, CK_SAND_H - 1, k, z);

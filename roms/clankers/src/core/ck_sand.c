@@ -5,7 +5,7 @@
 // sinking through water and acid; water and acid fall, slide and run sideways until they lie flat;
 // acid bites the sand, clay and water it touches and is sometimes used up doing it; clay never
 // moves. Gravity leans a little left and right over CK_SAND_SWAY frames: falling things drift with
-// it, piles slide the way it leans, and water runs downhill and heaps up against the low side, so a
+// it, piles slide off the way it leans, and water runs downhill and heaps up against the low side, so a
 // pond sloshes back and forth. Kept cheap for the N64: one byte a cell, no floats in the loop, and
 // a cell boxed in on every side is passed over after a few reads.
 #include <math.h>
@@ -60,9 +60,24 @@ void ck_sand_pour(ck_sandbox *S, int cx, int cy, int tool, int size) {
             if (dx * dx + dy * dy > r * r + r || x < 0 || y < 0 || x >= SW || y >= SH) continue;
             uint8_t *c = &S->cell[y * SW + x];
             if (tool == SANDTOOL_ERASE) { *c = 0; continue; }
-            if (tool > SANDTOOL_CLAY || (*c & SAND_MAT)) continue;
-            // clay goes on solid; the rest pours as a spray so it falls apart as it lands
-            if (tool != SANDTOOL_CLAY && !chance(S, 64)) continue;
+            int m = *c & SAND_MAT;
+            bool solid = tool == SANDTOOL_SAND || tool == SANDTOOL_CLAY;
+            if (tool > SANDTOOL_CLAY || (solid && m == tool + 1)) continue;
+            // Sand and clay take over whatever is under the brush. Water and acid never take over
+            // sand or clay: they land on top and run round. Poured into a pond they add to it,
+            // pushing the water above up a cell so the level rises. Into thin air, clay goes on
+            // solid and the rest pours as a spray so it falls apart as it lands.
+            if (!solid && liquid(m)) {
+                if (!chance(S, 64)) continue;
+                int top = y - 1;
+                while (top >= 0 && liquid(S->cell[top * SW + x] & SAND_MAT)) top--;
+                if (top < 0 || (S->cell[top * SW + x] & SAND_MAT)) continue;   // capped by sand, clay or the top
+                for (int k = top; k < y; k++) S->cell[k * SW + x] = S->cell[(k + 1) * SW + x];
+                *c = (uint8_t)((tool + 1) | (srng(S) & 0xF0));
+                continue;
+            }
+            if (m && !solid) continue;
+            if (!m && tool != SANDTOOL_CLAY && !chance(S, 64)) continue;
             *c = (uint8_t)((tool + 1) | (srng(S) & 0xF0));
         }
 }
@@ -96,10 +111,7 @@ static void sand_cell(ck_sandbox *S, int x, int y, int side, int lean) {
     // sink through water and acid, slower than through air
     if (liquid(below)) { if (chance(S, 120)) swap(S, x, y, x, y + 1); return; }
     if (liquid(ma)) { if (chance(S, 60)) swap(S, x, y, x + a, y + 1); return; }
-    if (liquid(mb)) { if (chance(S, 60)) swap(S, x, y, x - a, y + 1); return; }
-    // a steep lean tips a pile's top grains over sideways (a gentle one leaves piles be)
-    if (lean > 80 && mat(S, x, y - 1) == SAND_EMPTY && mat(S, x + side, y) == SAND_EMPTY && mat(S, x + side, y + 1) != SAND_EMPTY && chance(S, (lean - 80) * 2))
-        move(S, x, y, x + side, y, side > 0 ? S->tick & 1 : !(S->tick & 1));
+    if (liquid(mb)) { if (chance(S, 60)) swap(S, x, y, x - a, y + 1); }
 }
 
 // Acid looks at one neighbour a tick, and bites it if it is sand, clay or water. Returns true if
@@ -110,7 +122,7 @@ static bool acid_bite(ck_sandbox *S, int x, int y) {
     int n = mat(S, nx, ny);
     if (nx < 0 || ny < 0 || nx >= SW || ny >= SH) return false;
     if (n != SAND_SAND && n != SAND_CLAY && n != SAND_WATER) return false;
-    if (!chance(S, n == SAND_CLAY ? 20 : 60)) return false;
+    if (!chance(S, 60)) return false;   // sand, clay and water all go at the same rate
     S->cell[ny * SW + nx] = 0;
     S->fizz++; S->fx = nx; S->fy = ny;
     if (chance(S, 128)) { S->cell[y * SW + x] = 0; return true; }
