@@ -445,7 +445,7 @@ typedef struct { int x0, y0, x1, y1; } ck_trect;
 // back from there. art is its look (ck_tarts, and a baked sprite each); spot is SPOT_* or -1.
 typedef struct { short x, y, fw, fd, art, spot, flat; } ck_thing;
 typedef struct { float scale; int fw, fd; unsigned char tank, shade; } ck_tart;
-extern const int ck_td_world[2], ck_td_start[2][2], ck_td_gate[3], ck_td_leash[2];
+extern const int ck_td_world[2], ck_td_start[2][2], ck_td_gate[3];
 extern const ck_troom ck_trooms[];
 extern const ck_trect ck_twalk[], ck_tareas[];
 extern const ck_thing ck_things[];
@@ -454,15 +454,27 @@ extern const int ck_ntrooms, ck_ntwalk, ck_nthings, ck_ntarts, ck_ntareas;
 bool ck_house_solid(float x, float y);         // a wall, furniture or outside the house's ground
 int ck_house_room_at(float x, float y);       // the room (ck_trooms) a point is in, or -1
 // The view: the zoom that fits feet x0..x1, y0..y1 (all the heroes) on screen, CK_HOUSE_ZOOM
-// down to CK_HOUSE_ZOOM_MIN, and the top-left corner of the view at zoom z (the screen shows
-// CK_W / z by CK_H / z of the world). Heroes, babies and food are drawn CK_HOUSE_BIG times their
+// down to ck_house_zoom_min (the whole property), and the top-left corner of the view at zoom z
+// (the screen shows CK_W / z by CK_H / z of the world). Heroes, babies and food are drawn CK_HOUSE_BIG times their
 // usual size in the house, so at CK_HOUSE_ZOOM they are their usual size on screen and the house
 // round them is two thirds of its size in the plan.
 #define CK_HOUSE_BIG 1.5f
 #define CK_HOUSE_ZOOM (1 / CK_HOUSE_BIG)
-#define CK_HOUSE_ZOOM_MIN (CK_HOUSE_ZOOM / 2)
 #define CK_FLUSH_T 90
+float ck_house_zoom_min(void);
 float ck_house_fit(float x0, float y0, float x1, float y1);
+// What the N64 keeps loaded for a view (tested against a memory budget on the host): the house
+// picture comes in tiles of CK_HBG_TW x CK_HBG_TH pixels, in three sets baked at CK_HOUSE_ZOOM, a
+// half and a quarter of it; ck_house_tier is the set for zoom z. A tile, or a thing's furniture
+// sprite, is kept while it is within margin screen pixels of the view, and let go further out.
+#define CK_HBG_TW 160
+#define CK_HBG_TH 120
+#define CK_HOUSE_TIERS 3
+#define CK_HOUSE_KEEP 8   // the margin
+int ck_house_tier(float z);
+void ck_house_tiles(int tier, int *cols, int *rows, float *ww, float *wh);   // the set's grid, and how much of the house a tile covers
+bool ck_house_tile_near(int tier, int tx, int ty, float cam, float camy, float z, float margin);
+bool ck_house_thing_near(int i, float cam, float camy, float z, float margin);
 void ck_house_camera(float x0, float y0, float x1, float y1, float z, float *cx, float *cy);
 // the paint studio's wall: 80 x 48 cells of 4 px from y 16; 0 is bare, else palette index + 1
 #define CK_MURAL_W 80

@@ -840,11 +840,11 @@ function houseScene(from) {
       p.moving = false;
       if (p.eatT > 0) p.eatT--;
       else {
-        // walk every way, sliding along walls and furniture; two heroes stay near each other
+        // walk every way, sliding along walls and furniture
         const n = Math.hypot(dx, dy);
         if (n) {
-          const vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED, o = S.ps[1 - i];
-          const ok = (x, y) => !HT.solid(x, y) && (!o || (Math.abs(x - o.x) < HT.LEASH[0] && Math.abs(y - o.y) < HT.LEASH[1]));
+          const vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED;
+          const ok = (x, y) => !HT.solid(x, y);   // no leash: the camera zooms out to show both, however far apart
           if (ok(p.x + vx, p.y)) { p.x += vx; p.moving = true; }
           if (ok(p.x, p.y + vy)) { p.y += vy; p.moving = true; }
           if (dx) p.face = dx;

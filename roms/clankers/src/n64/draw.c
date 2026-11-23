@@ -1407,46 +1407,44 @@ static void cloud(float x, float y) { shape(SPR_DOT, x, y, 12, 0xFFFFFF, 1); sha
 static void oval(float x, float y, float rx, float ry, uint32_t hex, float alpha) {
     blit_o(SPR_DOT, 0, x, y, (bopt){ .sx = rx / 7.5f, .sy = ry / 7.5f, .tinted = true, .tint = hexc(hex, (int)(alpha * 255)) });
 }
-// The house picture is baked at CK_HOUSE_ZOOM in tiles of HBG_TW x HBG_TH pixels, each covering
-// HBG_WW x HBG_WH of the house; the furniture (SPR_HART_*) is baked at that size too.
-#define HBG_TW 160
-#define HBG_TH 120
-#define HBG_WW (HBG_TW / CK_HOUSE_ZOOM)
-#define HBG_WH (HBG_TH / CK_HOUSE_ZOOM)
-static int hbg_cols(void) { return (int)ceilf(ck_td_world[0] / HBG_WW); }
-static int hbg_rows(void) { return (int)ceilf(ck_td_world[1] / HBG_WH); }
-// the same picture at half that size, each tile covering twice as much of the house each way
-static int hbs_cols(void) { return (int)ceilf(ck_td_world[0] / (2 * HBG_WW)); }
-static int hbs_rows(void) { return (int)ceilf(ck_td_world[1] / (2 * HBG_WH)); }
+// The house picture is baked at CK_HOUSE_ZOOM, and at a half and a quarter of it, in tiles of
+// CK_HBG_TW x CK_HBG_TH pixels (SPR_HBG_*, SPR_HBS_*, SPR_HBQ_*); the furniture (SPR_HART_*) is
+// baked at CK_HOUSE_ZOOM too. ck_house_tier picks the set for the zoom, and ck_house_tile_near and
+// ck_house_thing_near what to keep loaded: the host tests check that against a memory budget.
+static const int HOUSE_TILE0[CK_HOUSE_TIERS] = { SPR_HBG_0, SPR_HBS_0, SPR_HBQ_0 };
+static int house_ntiles(int tier) { int c, r; float ww, wh; ck_house_tiles(tier, &c, &r, &ww, &wh); return c * r; }
 static bool is_house_art(int id) {
-    return (id >= SPR_HART_0 && id < SPR_HART_0 + ck_ntarts) || (id >= SPR_HBG_0 && id < SPR_HBG_0 + hbg_cols() * hbg_rows())
-        || (id >= SPR_HBS_0 && id < SPR_HBS_0 + hbs_cols() * hbs_rows());
+    if (id >= SPR_HART_0 && id < SPR_HART_0 + ck_ntarts) return true;
+    for (int k = 0; k < CK_HOUSE_TIERS; k++) if (id >= HOUSE_TILE0[k] && id < HOUSE_TILE0[k] + house_ntiles(k)) return true;
+    return false;
 }
-// below this zoom the house picture comes from the half-size tiles
-#define HBS_ZOOM (0.8f * CK_HOUSE_ZOOM)
-// One set of tiles of the house picture, each covering tw x th of the house, drawn at zoom z;
-// tiles further than 48 px out (and every tile when !on) are let go.
-static void house_tiles(int id0, int cols, int rows, float tw, float th, float cam, float camy, float z, bool on, int pass) {
-    float sc = z * tw / HBG_TW;
+// The house picture in view, from the tile set for zoom z. First lets go of every tile and
+// furniture sprite that is out of reach (drop waits for the RDP once), then draws the tiles.
+static void draw_house_bg(float cam, float camy, float z) {
+    int tier = ck_house_tier(z);
+    static bool art_near[256];
+    for (int a = 0; a < ck_ntarts && a < 256; a++) art_near[a] = false;
+    for (int i = 0; i < ck_nthings; i++) if (ck_house_thing_near(i, cam, camy, z, CK_HOUSE_KEEP)) art_near[ck_things[i].art] = true;
+    for (int a = 0; a < ck_ntarts && a < 256; a++) if (!art_near[a]) drop(SPR_HART_0 + a);
+    for (int k = 0; k < CK_HOUSE_TIERS; k++) {
+        int cols, rows; float ww, wh;
+        ck_house_tiles(k, &cols, &rows, &ww, &wh);
+        for (int ty = 0; ty < rows; ty++)
+            for (int tx = 0; tx < cols; tx++)
+                if (k != tier || !ck_house_tile_near(k, tx, ty, cam, camy, z, CK_HOUSE_KEEP)) drop(HOUSE_TILE0[k] + ty * cols + tx);
+    }
+    int cols, rows; float ww, wh;
+    ck_house_tiles(tier, &cols, &rows, &ww, &wh);
+    float sc = z * ww / CK_HBG_TW;
     for (int ty = 0; ty < rows; ty++)
         for (int tx = 0; tx < cols; tx++) {
-            float x = (tx * tw - cam) * z, y = (ty * th - camy) * z, w = tw * z, h = th * z;
-            int id = id0 + ty * cols + tx;
-            if (pass && on && x + w > 0 && x < W && y + h > 0 && y < H) {
-                // whole pixels when not zoomed; zoomed, a hair bigger so no seams show between tiles
-                if (fabsf(sc - 1) < 1e-4f) blit(id, 0, roundf(x), roundf(y));
-                else blit_o(id, 0, floorf(x), floorf(y), (bopt){ .sx = sc + 1.0f / HBG_TW, .sy = sc + 1.0f / HBG_TH });
-            } else if (!pass && (!on || x + w < -48 || x > W + 48 || y + h < -48 || y > H + 48)) drop(id);
+            if (!ck_house_tile_near(tier, tx, ty, cam, camy, z, 0)) continue;
+            float x = (tx * ww - cam) * z, y = (ty * wh - camy) * z;
+            int id = HOUSE_TILE0[tier] + ty * cols + tx;
+            // whole pixels at the tiles' own size; scaled, a hair bigger so no seams show between them
+            if (fabsf(sc - 1) < 1e-4f) blit(id, 0, roundf(x), roundf(y));
+            else blit_o(id, 0, floorf(x), floorf(y), (bopt){ .sx = sc + 1.0f / CK_HBG_TW, .sy = sc + 1.0f / CK_HBG_TH });
         }
-}
-// The house picture in view: the full-size tiles, or the half-size ones when zoomed well out, so
-// only a dozen or so tiles (about 40 KB each) are ever loaded.
-static void draw_house_bg(float cam, float camy, float z) {
-    bool half = z < HBS_ZOOM;
-    for (int pass = 0; pass < 2; pass++) {   // let go first (drop waits for the RDP once), then draw
-        house_tiles(SPR_HBG_0, hbg_cols(), hbg_rows(), HBG_WW, HBG_WH, cam, camy, z, !half, pass);
-        house_tiles(SPR_HBS_0, hbs_cols(), hbs_rows(), 2 * HBG_WW, 2 * HBG_WH, cam, camy, z, half, pass);
-    }
 }
 // one thing from ck_things: its shadow, its sprite, and fish in the tank
 static void house_thing(const ck_thing *th, float cam, float camy, float z, float t) {
@@ -1507,6 +1505,7 @@ static void draw_house(const ck_game *G) {
     const ck_house *Hs = &G->house;
     float cam = Hs->cam, camy = Hs->camy, t = G->t, Z = Hs->zoom > 0 ? Hs->zoom : CK_HOUSE_ZOOM;
     float B = Z * CK_HOUSE_BIG;   // heroes, babies and food are CK_HOUSE_BIG times their usual size here
+    if (cam < 0 || camy < 0 || cam + W / Z > ck_td_world[0] || camy + H / Z > ck_td_world[1]) rect(0, 0, W, H, 0x5DBB63, 1);   // zoomed out past the property (housetop.js GRASS): grass round it
     draw_house_bg(cam, camy, Z);
     // the furniture, babies, heroes and thrown food, back to front by where their feet are
     enum { D_THING, D_BABY, D_HERO, D_FOOD, D_SPLASH };
@@ -1515,8 +1514,7 @@ static void draw_house(const ck_game *G) {
     for (int i = 0; i < ck_nthings && n < 200; i++) {
         const ck_thing *th = &ck_things[i];
         if (th->spot == SPOT_BACK && !ck_spot_here(G, SPOT_BACK)) continue;
-        float x = (th->x - cam) * Z, y = (th->y - camy) * Z;
-        if (x < -120 * Z || x > W + 120 * Z || y < -20 * Z || y > H + 180 * Z) continue;
+        if (!ck_house_thing_near(i, cam, camy, Z, 0)) continue;
         list[n++] = (typeof(list[0])){ th->flat ? th->y - 1e4f : th->y, D_THING, (short)i };
     }
     for (int i = 0; i < Hs->nbabies && n < 200; i++) list[n++] = (typeof(list[0])){ Hs->babies[i].y, D_BABY, (short)i };

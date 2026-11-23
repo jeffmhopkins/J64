@@ -5,7 +5,6 @@
 const int ck_td_world[2] = { 2160, 1400 };
 const int ck_td_start[2][2] = { { 1238, 1120 }, { 1262, 1134 } };
 const int ck_td_gate[3] = { 1250, 30, 1386 };
-const int ck_td_leash[2] = { 840, 570 };
 const ck_troom ck_trooms[14] = {
     { 560, 300, 300, 280, "Kitchen" },
     { 860, 300, 420, 280, "Family room" },

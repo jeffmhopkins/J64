@@ -112,8 +112,8 @@ Food you hold (from the tree, the fridge or the stove) goes in your hand: A eats
 batteries, B throws it the way you last walked, and a baby that gets to it first munches it.
 
 The babies you have rescued wander about the house and the back garden. Two players share the
-screen and can play every room together; when they wander apart the camera zooms out to keep both
-on screen, down to half size, and that is as far apart as they can go. The dining room, laundry,
+screen and can play every room together; they can go anywhere, apart or together: the camera zooms
+out as far as it takes to keep both on screen, down to the whole property. The dining room, laundry,
 ensuite, hallway, foyer and nursery are there to explore, and A at either toilet flushes it.
 
 <a id="shop"></a>
@@ -153,7 +153,9 @@ node roms/clankers/tools/bake_sprites.mjs
 ```
 
 It needs Node and Playwright with Chromium. It writes `assets/*.png`, `assets/rgba16/*.png`
-(full-screen pictures, kept at 16 bits to save memory) and `src/n64/sprites.h`.
+(full-screen pictures, kept at 16 bits to save memory), `assets/ci8/*.png` (hero sheets,
+accessories and the house, packed with a 256-colour palette at half that again) and
+`src/n64/sprites.h`.
 
 > [!IMPORTANT]
 > The baked strips are checked in, so a ROM build does not need a browser. Bake again whenever

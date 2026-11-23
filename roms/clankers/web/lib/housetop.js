@@ -170,20 +170,21 @@ const HOUSETOP = (() => {
   // where the heroes come in from the map, the gate back out, and the most two heroes can be apart
   const START = [[1238, 1120], [1262, 1134]];
   const GATE = { x: 1250, hw: 30, y: H - 14 };
-  const LEASH = [840, 570];   // as far apart as the camera can zoom out to show (ZOOM_MIN)
   // where the babies wander: the back garden, then a room each (more babies go round again)
   const AREAS = [[700, 100, 1500, 280], ...['Nursery', 'Nursery', 'Family room', 'Bedroom 2', 'Bedroom 3', 'Living room', 'Kitchen'].map(n => room(n)).map(r => [r.x + 20, r.fy + 30, r.x + r.w - 20, r.y + r.h - 12])];
   // The camera follows the heroes the same way everywhere: the box round their feet x0..x1,
   // y0..y1 (36 px either side, 70 above for their heads, 24 below, at their size here) sits in the
   // middle of a w x h screen, and when two heroes are too far apart for it to fit, fit() zooms out
-  // (ZOOM down to ZOOM_MIN). camera() is the view's top-left corner at zoom z. Heroes, babies and
+  // as far as it takes, down to the whole property (zoomMin). camera() is the view's top-left
+  // corner at zoom z, centred on the house when the view is bigger than it. Heroes, babies and
   // food are drawn BIG times their usual size, so at ZOOM they are their usual size on screen.
   // ck_house.c does the same.
-  const BIG = 1.5, ZOOM = 1 / BIG, ZOOM_MIN = ZOOM / 2, CAM = [36 * BIG, 70 * BIG, 24 * BIG];
-  const fit = (x0, y0, x1, y1, w, h) => Math.max(ZOOM_MIN, Math.min(ZOOM, w / (x1 - x0 + 2 * CAM[0]), h / (y1 - y0 + CAM[1] + CAM[2])));
+  const BIG = 1.5, ZOOM = 1 / BIG, CAM = [36 * BIG, 70 * BIG, 24 * BIG];
+  const zoomMin = (w, h) => Math.min(ZOOM, w / (W + 2 * CAM[0]), h / (H + CAM[1] + CAM[2]));
+  const fit = (x0, y0, x1, y1, w, h) => Math.max(zoomMin(w, h), Math.min(ZOOM, w / (x1 - x0 + 2 * CAM[0]), h / (y1 - y0 + CAM[1] + CAM[2])));
   function camera(x0, y0, x1, y1, z, w, h) {
-    const cl = (v, a, b) => Math.max(a, Math.min(b, v)), vw = w / z, vh = h / z;
-    let cx = cl((x0 + x1) / 2 - vw / 2, 0, W - vw), cy = cl((y0 - CAM[1] + y1 + CAM[2]) / 2 - vh / 2, 0, H - vh);
+    const vw = w / z, vh = h / z, place = (mid, v, world) => v >= world ? (world - v) / 2 : Math.max(0, Math.min(world - v, mid - v / 2));
+    let cx = place((x0 + x1) / 2, vw, W), cy = place((y0 - CAM[1] + y1 + CAM[2]) / 2, vh, H);
     if (z >= ZOOM) { cx = Math.round(cx * z) / z; cy = Math.round(cy * z) / z; }
     return [cx, cy];
   }
@@ -377,9 +378,11 @@ const HOUSETOP = (() => {
   // furniture by where their feet are. bg is drawStatic's picture made once (or it is drawn
   // here); show(th) can hide a thing. z is the zoom: the screen shows w / z by h / z of the house.
   function draw(g, cx, cy, t, actors = [], bg = null, show = null, w = 320, h = 240, z = 1) {
-    K.g = g; g.save(); g.scale(z, z); g.translate(-cx, -cy);
-    const vw = Math.min(W, w / z), vh = Math.min(H, h / z);
-    if (bg) g.drawImage(bg, cx, cy, vw, vh, cx, cy, vw, vh); else drawStatic(g);
+    K.g = g; g.save();
+    if (cx < 0 || cy < 0 || cx + w / z > W || cy + h / z > H) { g.fillStyle = hx(GRASS); g.fillRect(0, 0, w, h); }   // zoomed out past the property: grass round it
+    g.scale(z, z); g.translate(-cx, -cy);
+    const sx = Math.max(0, cx), sy = Math.max(0, cy), vw = Math.min(W - sx, w / z), vh = Math.min(H - sy, h / z);
+    if (bg) g.drawImage(bg, sx, sy, vw, vh, sx, sy, vw, vh); else drawStatic(g);
     K.g = g;
     const list = [];
     for (const th of things) if (!show || show(th)) list.push({ y: th.flat ? -1e4 + th.y : th.y, draw: () => drawThing(g, th, t) });
@@ -391,6 +394,6 @@ const HOUSETOP = (() => {
   }
   function prompt(g, label, x, y) { const s = 'A  ' + label, w = textW(g, s, 8) + 14; K.rr(x - w / 2, y, w, 15, 5, 'rgba(27,20,38,0.86)'); text(g, s, x, y + 11, 8, '#fff6d8', 'center', null); }
 
-  return { WORLD, FACE, CAP, WT, rooms, ACROSS, DOWN, OUT, FACADE, walk, things, ARTS, SCALE, START, GATE, LEASH, AREAS, PLATE,
-           draw, drawStatic, drawArt, drawThing, plate, hero, solid, near, roomAt, camera, fit, BIG, ZOOM, ZOOM_MIN, prompt, text, textW, shadow };
+  return { WORLD, FACE, CAP, WT, rooms, ACROSS, DOWN, OUT, FACADE, walk, things, ARTS, SCALE, START, GATE, AREAS, PLATE,
+           draw, drawStatic, drawArt, drawThing, plate, hero, solid, near, roomAt, camera, fit, zoomMin, BIG, ZOOM, prompt, text, textW, shadow };
 })();

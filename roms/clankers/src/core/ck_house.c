@@ -318,18 +318,41 @@ int ck_house_near(const ck_game *G, const ck_hhero *p) {
 #define CAM_SIDE (36 * CK_HOUSE_BIG)
 #define CAM_UP (70 * CK_HOUSE_BIG)
 #define CAM_DOWN (24 * CK_HOUSE_BIG)
+float ck_house_zoom_min(void) {
+    return fminf(CK_HOUSE_ZOOM, fminf(CK_W / (ck_td_world[0] + 2 * CAM_SIDE), CK_H / (ck_td_world[1] + CAM_UP + CAM_DOWN)));
+}
 float ck_house_fit(float x0, float y0, float x1, float y1) {
     float z = fminf(CK_W / (x1 - x0 + 2 * CAM_SIDE), CK_H / (y1 - y0 + CAM_UP + CAM_DOWN));
-    return ck_clampf(z, CK_HOUSE_ZOOM_MIN, CK_HOUSE_ZOOM);
+    return ck_clampf(z, ck_house_zoom_min(), CK_HOUSE_ZOOM);
 }
+// the view's corner along one axis: centred on the house when the view is bigger than it
+static float place(float mid, float v, float world) { return v >= world ? (world - v) / 2 : ck_clampf(mid - v / 2, 0, world - v); }
 void ck_house_camera(float x0, float y0, float x1, float y1, float z, float *cx, float *cy) {
     float vw = CK_W / z, vh = CK_H / z;
-    *cx = ck_clampf((x0 + x1) / 2 - vw / 2, 0, ck_td_world[0] - vw);
-    *cy = ck_clampf((y0 - CAM_UP + y1 + CAM_DOWN) / 2 - vh / 2, 0, ck_td_world[1] - vh);
+    *cx = place((x0 + x1) / 2, vw, ck_td_world[0]);
+    *cy = place((y0 - CAM_UP + y1 + CAM_DOWN) / 2, vh, ck_td_world[1]);
     if (z >= CK_HOUSE_ZOOM) { *cx = roundf(*cx * z) / z; *cy = roundf(*cy * z) / z; }   // whole screen pixels when not zoomed out, so the picture stays crisp
 }
 // snap: straight to the right view (coming in); otherwise it zooms out at once as the heroes part
 // (so neither is ever off screen) and back in gently
+int ck_house_tier(float z) { return z >= 0.9f * CK_HOUSE_ZOOM ? 0 : z >= 0.45f * CK_HOUSE_ZOOM ? 1 : 2; }
+void ck_house_tiles(int tier, int *cols, int *rows, float *ww, float *wh) {
+    float k = (float)(1 << tier) / CK_HOUSE_ZOOM;   // house pixels per tile pixel
+    *ww = CK_HBG_TW * k; *wh = CK_HBG_TH * k;
+    *cols = (int)ceilf(ck_td_world[0] / *ww); *rows = (int)ceilf(ck_td_world[1] / *wh);
+}
+bool ck_house_tile_near(int tier, int tx, int ty, float cam, float camy, float z, float margin) {
+    int cols, rows; float ww, wh;
+    ck_house_tiles(tier, &cols, &rows, &ww, &wh);
+    float x = (tx * ww - cam) * z, y = (ty * wh - camy) * z;
+    return x + ww * z > -margin && x < CK_W + margin && y + wh * z > -margin && y < CK_H + margin;
+}
+// a thing's furniture reaches 120 px either side of it, 180 up and 20 down at most
+bool ck_house_thing_near(int i, float cam, float camy, float z, float margin) {
+    const ck_thing *t = &ck_things[i];
+    float x = (t->x - cam) * z, y = (t->y - camy) * z;
+    return x > -120 * z - margin && x < CK_W + 120 * z + margin && y > -20 * z - margin && y < CK_H + 180 * z + margin;
+}
 // a point in the house on the screen (sparks and puffs are drawn in screen pixels)
 #define SX(H, x) (((x) - (H)->cam) * (H)->zoom)
 #define SY(H, y) (((y) - (H)->camy) * (H)->zoom)
@@ -713,14 +736,12 @@ void ck_house_update(ck_game *G) {
         p->moving = false;
         if (p->eat > 0) p->eat--;
         else {
-            // walk every way, sliding along walls and furniture; two heroes stay near each other
+            // walk every way, sliding along walls and furniture (no leash: the camera zooms out
+            // to show both heroes however far apart they go)
             if (dx || dy) {
                 float n = sqrtf((float)(dx * dx + dy * dy)), vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED;
-                const ck_hhero *o = H->np > 1 ? &H->ps[1 - i] : NULL;
-                #define OK(X, Y) (!ck_house_solid(X, Y) && (!o || (fabsf((X) - o->x) < ck_td_leash[0] && fabsf((Y) - o->y) < ck_td_leash[1])))
-                if (OK(p->x + vx, p->y)) { p->x += vx; p->moving = true; }
-                if (OK(p->x, p->y + vy)) { p->y += vy; p->moving = true; }
-                #undef OK
+                if (!ck_house_solid(p->x + vx, p->y)) { p->x += vx; p->moving = true; }
+                if (!ck_house_solid(p->x, p->y + vy)) { p->y += vy; p->moving = true; }
                 if (dx) p->face = dx;
                 p->lx = dx / n; p->ly = dy / n;
                 if (p->moving) p->anim += 1.7f;   // a stride for every 1.7 steps, as on a level

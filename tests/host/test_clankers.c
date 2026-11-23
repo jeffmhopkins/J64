@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "ck_autotest.h"
+#include "../../roms/clankers/src/n64/sprites.h"   // the N64 sprite sizes, for the house memory budget
 #include "ck_internal.h"
 #include "test.h"
 
@@ -1097,6 +1098,62 @@ static void test_house_gate(void) {
     EXPECT_EQ_INT(walk_path(G, -2), 1);
     EXPECT_EQ_INT(G->scene, SC_MAP);
 }
+// are both heroes on screen, head to toe?
+static bool both_seen(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    for (int k = 0; k < Hs->np; k++) {
+        float x = (Hs->ps[k].x - Hs->cam) * Hs->zoom, y = (Hs->ps[k].y - Hs->camy) * Hs->zoom, b = Hs->zoom * CK_HOUSE_BIG;
+        if (x < 16 * b || x > CK_W - 16 * b || y < 56 * b || y > CK_H - 4 * b) return false;
+    }
+    return true;
+}
+
+// The house on the N64 must fit in memory at every view, with two players: the most it keeps
+// loaded (draw.c: the tiles and furniture near the view, ck_house_tile_near and
+// ck_house_thing_near) plus both hero sheets, every outfit strip and every baby. The ROM has 4 MB:
+// about 1.1 MB is code and data, 0.5 MB the screens and the RDP's queues, and the rest of the
+// game's sprites stay cached, so the house gets CK_HOUSE_MEM_BUDGET. (The build that ran out of
+// memory on the cart needed about 2.2 MB by this count: RGBA16 sheets, and every piece of
+// furniture kept loaded at full size.)
+#define CK_HOUSE_MEM_BUDGET (1100 * 1024)
+static void test_house_memory(void) {
+    (void)ACC_AT;
+    int fixed = 0, hero = 0;
+    for (int c = 0; c < 8; c++) {
+        if (SPR_INFO[SPR_HERO_ROBOT_0 + c].bytes > hero) hero = SPR_INFO[SPR_HERO_ROBOT_0 + c].bytes;
+        if (SPR_INFO[SPR_HERO_OSTRICH_0 + c].bytes > hero) hero = SPR_INFO[SPR_HERO_OSTRICH_0 + c].bytes;
+    }
+    fixed += 2 * hero;
+    const int acc[] = { SPR_ACC_HEAD, SPR_ACC_FACE, SPR_ACC_NECK, SPR_ACC_BODY, SPR_ACC_FEET };
+    for (unsigned k = 0; k < sizeof acc / sizeof *acc; k++) fixed += SPR_INFO[acc[k]].bytes;
+    for (int i = 0; i < SPR_COUNT; i++) if (!strncmp(SPR_INFO[i].file, "rom:/baby_", 10)) fixed += SPR_INFO[i].bytes;
+    fixed += SPR_INFO[SPR_HOUSE_FISH].bytes + SPR_INFO[SPR_DOT].bytes + SPR_INFO[SPR_ZEE].bytes;
+    const int tile0[CK_HOUSE_TIERS] = { SPR_HBG_0, SPR_HBS_0, SPR_HBQ_0 };
+    int worst = 0;
+    float zmin = ck_house_zoom_min();
+    for (int zi = 0; zi <= 40; zi++) {
+        float z = zmin + (CK_HOUSE_ZOOM - zmin) * zi / 40.0f, vw = CK_W / z, vh = CK_H / z;
+        int tier = ck_house_tier(z), cols, rows;
+        float ww, wh;
+        ck_house_tiles(tier, &cols, &rows, &ww, &wh);
+        EXPECT_EQ_INT(SPR_INFO[tile0[tier] + cols * rows - 1].fw, CK_HBG_TW);   // the baked set has every tile
+        for (float cy = fminf(0, (ck_td_world[1] - vh) / 2); cy <= fmaxf(0, ck_td_world[1] - vh); cy += 20)
+            for (float cx = fminf(0, (ck_td_world[0] - vw) / 2); cx <= fmaxf(0, ck_td_world[0] - vw); cx += 20) {
+                int m = fixed;
+                for (int ty = 0; ty < rows; ty++)
+                    for (int tx = 0; tx < cols; tx++)
+                        if (ck_house_tile_near(tier, tx, ty, cx, cy, z, CK_HOUSE_KEEP)) m += SPR_INFO[tile0[tier] + ty * cols + tx].bytes;
+                static bool art[256];
+                memset(art, 0, sizeof art);
+                for (int i = 0; i < ck_nthings; i++) if (ck_house_thing_near(i, cx, cy, z, CK_HOUSE_KEEP)) art[ck_things[i].art] = true;
+                for (int a = 0; a < ck_ntarts; a++) if (art[a]) m += SPR_INFO[SPR_HART_0 + a].bytes;
+                if (m > worst) worst = m;
+            }
+    }
+    printf("  house memory: %d KB at most (%d KB for heroes, outfits and babies), budget %d KB\n", worst / 1024, fixed / 1024, CK_HOUSE_MEM_BUDGET / 1024);
+    EXPECT_EQ_INT(worst <= CK_HOUSE_MEM_BUDGET, 1);
+}
+
 static void test_house(void) {
     ck_game *G = load_game();
     if (!G) return;
@@ -1139,26 +1196,32 @@ static void test_house(void) {
         EXPECT_EQ_INT(cx >= 0 && cy >= 0 && cx <= ck_td_world[0] - vw + 1 && cy <= ck_td_world[1] - vh + 1, 1);
         EXPECT_EQ_INT(ck_house_room_at(R->x + R->w / 2.0f, R->y + R->h / 2.0f), r);
     }
-    // two heroes can wander apart only as far as the camera can zoom out to show them both, and
-    // it zooms out as they part, keeping both on screen every tick, and back in when they meet
+    // two heroes can wander apart as far as they like: the camera zooms out as they part, keeping
+    // both on screen every tick, and back in when they meet
     {
-        float y1 = G->house.ps[1].y;
+        float x1 = G->house.ps[1].x, y1 = G->house.ps[1].y;
         EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
+        EXPECT_EQ_INT(both_seen(G), 1);
         bool seen = true;
-        for (int i = 0; i < 400; i++) {
-            hold(G, 1, 0, CK_LEFT);
-            const ck_house *Hs = &G->house;
-            for (int k = 0; k < 2; k++) {
-                float x = (Hs->ps[k].x - Hs->cam) * Hs->zoom, y = (Hs->ps[k].y - Hs->camy) * Hs->zoom;
-                if (x < 8 || x > CK_W - 8 || y < 60 * Hs->zoom * CK_HOUSE_BIG || y > CK_H - 8 * Hs->zoom) seen = false;
-            }
-        }
+        for (int i = 0; i < 400; i++) { hold(G, 1, 0, CK_LEFT); seen = seen && both_seen(G); }
         EXPECT_EQ_INT(seen, 1);
-        EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x < ck_td_leash[0], 1);
-        EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x > ck_td_leash[0] - 4, 1);
+        EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x > 900, 1);   // no leash
         EXPECT_EQ_INT(fabsf(G->house.ps[1].y - y1) < 1, 1);
-        EXPECT_EQ_INT(G->house.zoom < 0.6f * CK_HOUSE_ZOOM && G->house.zoom >= CK_HOUSE_ZOOM_MIN, 1);
-        hold(G, 400, 0, CK_RIGHT);
+        EXPECT_EQ_INT(G->house.zoom < 0.5f * CK_HOUSE_ZOOM, 1);
+        for (int i = 0; i < 600 && G->house.ps[1].x < x1; i++) hold(G, 1, 0, CK_RIGHT);
+        hold(G, 120, 0, 0);
+        EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
+        // one in the back garden and one at the front gate, or in opposite corners: both on screen
+        ck_hhero save0 = G->house.ps[0], save1 = G->house.ps[1];
+        const float spots[][4] = { { 1250, 150, 1250, 1380 }, { 30, 60, 2130, 1390 }, { 2130, 60, 30, 1390 } };
+        for (int k = 0; k < 3; k++) {
+            G->house.ps[0].x = spots[k][0]; G->house.ps[0].y = spots[k][1];
+            G->house.ps[1].x = spots[k][2]; G->house.ps[1].y = spots[k][3];
+            hold(G, 2, 0, 0);
+            EXPECT_EQ_INT(both_seen(G), 1);
+            EXPECT_EQ_INT(G->house.zoom >= ck_house_zoom_min() && G->house.zoom < 0.3f, 1);
+        }
+        G->house.ps[0] = save0; G->house.ps[1] = save1;
         hold(G, 120, 0, 0);
         EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
     }
@@ -2219,6 +2282,7 @@ void test_clankers(void) {
     test_drop_player2();
     test_race_view();
     test_house();
+    test_house_memory();
     test_house_gate();
     test_sandbox();
     test_slots();
