@@ -168,7 +168,7 @@ static bopt skin_o(bopt o, int col, float t) {
     o.tint = rainbow_col(t * 0.8f, a);
     return o;
 }
-// one item at a point of a hero frame; view: 0 robot front, 1 robot side, 2 ostrich front, 3 ostrich side
+// one item at a point of a hero frame; view: hero * 3 + 0 front, 1 side, 2 back (robot 0-2, ostrich 3-5)
 static void acc_piece(int a, int view, const acc_pt *p, float x, float y, float sc, bool flip, float t, int shade, int alpha) {
     int slot = ck_acc[a].slot;
     bopt o = { .flip = flip, .sx = p->sx * sc, .sy = p->sy * sc, .rot = flip ? p->rot : -p->rot, .tinted = true,
@@ -1383,7 +1383,7 @@ static void garnish_art(ck_garnish gar, float x, float y, float sc) {
         food_art(ck_cook_ingr[gar.i[j]], x + (j - (n - 1) / 2.0f) * 4.5f * sc, y - 3.5f * sc + (j % 2) * 1.5f * sc, 0.4f * sc);
     }
 }
-static void house_hero(const ck_game *G, int slot, float x, float y, int pose, float t, int face) {
+static void house_hero_s(const ck_game *G, int slot, float x, float y, int pose, float t, int face, float sc) {
     int hero = G->prog.hero[slot], col = skin_col(G, slot);
     bool R = hero == HERO_ROBOT, side = pose == HP_RUN || pose == HP_JUMP || pose == HP_JET;
     int fr;
@@ -1398,43 +1398,88 @@ static void house_hero(const ck_game *G, int slot, float x, float y, int pose, f
     default: fr = (int)(t / (R ? 0.52f : 0.3f)) % 4; break;
     }
     bool flip = side && face < 0;
-    blit_o(hero_sprite(hero, col), fr, x, y, skin_o((bopt){ .flip = flip }, col, t));
-    hero_acc(wear_of(G, slot), hero, fr, x, y, 1, flip, t);
+    blit_o(hero_sprite(hero, col), fr, x, y, skin_o((bopt){ .flip = flip, .sx = sc, .sy = sc }, col, t));
+    hero_acc(wear_of(G, slot), hero, fr, x, y, sc, flip, t);
 }
+static void house_hero(const ck_game *G, int slot, float x, float y, int pose, float t, int face) { house_hero_s(G, slot, x, y, pose, t, face, 1); }
 static void cloud(float x, float y) { shape(SPR_DOT, x, y, 12, 0xFFFFFF, 1); shape(SPR_DOT, x + 12, y - 4, 14, 0xFFFFFF, 1); shape(SPR_DOT, x + 26, y, 11, 0xFFFFFF, 1); }
 // a soft oval, rx by ry (shadows on the floor)
 static void oval(float x, float y, float rx, float ry, uint32_t hex, float alpha) {
     blit_o(SPR_DOT, 0, x, y, (bopt){ .sx = rx / 7.5f, .sy = ry / 7.5f, .tinted = true, .tint = hexc(hex, (int)(alpha * 255)) });
 }
+// The house picture is baked at CK_HOUSE_ZOOM in tiles of HBG_TW x HBG_TH pixels, each covering
+// HBG_WW x HBG_WH of the house; the furniture (SPR_HART_*) is baked at that size too.
 #define HBG_TW 160
 #define HBG_TH 120
-static int hbg_cols(void) { return (ck_td_world[0] + HBG_TW - 1) / HBG_TW; }
-static int hbg_rows(void) { return (ck_td_world[1] + HBG_TH - 1) / HBG_TH; }
-static bool is_house_art(int id) { return (id >= SPR_HART_0 && id < SPR_HART_0 + ck_ntarts) || (id >= SPR_HBG_0 && id < SPR_HBG_0 + hbg_cols() * hbg_rows()); }
-// The tiles of the house picture in view; tiles further than 48 px out are let go, so only a
-// dozen or so (about 40 KB each) are ever loaded.
-static void draw_house_bg(float cam, float camy) {
-    int cols = hbg_cols(), rows = hbg_rows();
-    for (int pass = 0; pass < 2; pass++)   // let go first (drop waits for the RDP once), then draw
-        for (int ty = 0; ty < rows; ty++)
-            for (int tx = 0; tx < cols; tx++) {
-                float x = tx * HBG_TW - cam, y = ty * HBG_TH - camy;
-                int id = SPR_HBG_0 + ty * cols + tx;
-                if (pass && x + HBG_TW > 0 && x < W && y + HBG_TH > 0 && y < H) blit(id, 0, x, y);
-                else if (!pass && (x + HBG_TW < -48 || x > W + 48 || y + HBG_TH < -48 || y > H + 48)) drop(id);
-            }
+#define HBG_WW (HBG_TW / CK_HOUSE_ZOOM)
+#define HBG_WH (HBG_TH / CK_HOUSE_ZOOM)
+static int hbg_cols(void) { return (int)ceilf(ck_td_world[0] / HBG_WW); }
+static int hbg_rows(void) { return (int)ceilf(ck_td_world[1] / HBG_WH); }
+// the same picture at half that size, each tile covering twice as much of the house each way
+static int hbs_cols(void) { return (int)ceilf(ck_td_world[0] / (2 * HBG_WW)); }
+static int hbs_rows(void) { return (int)ceilf(ck_td_world[1] / (2 * HBG_WH)); }
+static bool is_house_art(int id) {
+    return (id >= SPR_HART_0 && id < SPR_HART_0 + ck_ntarts) || (id >= SPR_HBG_0 && id < SPR_HBG_0 + hbg_cols() * hbg_rows())
+        || (id >= SPR_HBS_0 && id < SPR_HBS_0 + hbs_cols() * hbs_rows());
+}
+// below this zoom the house picture comes from the half-size tiles
+#define HBS_ZOOM (0.8f * CK_HOUSE_ZOOM)
+// One set of tiles of the house picture, each covering tw x th of the house, drawn at zoom z;
+// tiles further than 48 px out (and every tile when !on) are let go.
+static void house_tiles(int id0, int cols, int rows, float tw, float th, float cam, float camy, float z, bool on, int pass) {
+    float sc = z * tw / HBG_TW;
+    for (int ty = 0; ty < rows; ty++)
+        for (int tx = 0; tx < cols; tx++) {
+            float x = (tx * tw - cam) * z, y = (ty * th - camy) * z, w = tw * z, h = th * z;
+            int id = id0 + ty * cols + tx;
+            if (pass && on && x + w > 0 && x < W && y + h > 0 && y < H) {
+                // whole pixels when not zoomed; zoomed, a hair bigger so no seams show between tiles
+                if (fabsf(sc - 1) < 1e-4f) blit(id, 0, roundf(x), roundf(y));
+                else blit_o(id, 0, floorf(x), floorf(y), (bopt){ .sx = sc + 1.0f / HBG_TW, .sy = sc + 1.0f / HBG_TH });
+            } else if (!pass && (!on || x + w < -48 || x > W + 48 || y + h < -48 || y > H + 48)) drop(id);
+        }
+}
+// The house picture in view: the full-size tiles, or the half-size ones when zoomed well out, so
+// only a dozen or so tiles (about 40 KB each) are ever loaded.
+static void draw_house_bg(float cam, float camy, float z) {
+    bool half = z < HBS_ZOOM;
+    for (int pass = 0; pass < 2; pass++) {   // let go first (drop waits for the RDP once), then draw
+        house_tiles(SPR_HBG_0, hbg_cols(), hbg_rows(), HBG_WW, HBG_WH, cam, camy, z, !half, pass);
+        house_tiles(SPR_HBS_0, hbs_cols(), hbs_rows(), 2 * HBG_WW, 2 * HBG_WH, cam, camy, z, half, pass);
+    }
 }
 // one thing from ck_things: its shadow, its sprite, and fish in the tank
-static void house_thing(const ck_thing *th, float cam, float camy, float t) {
+static void house_thing(const ck_thing *th, float cam, float camy, float z, float t) {
     const ck_tart *a = &ck_tarts[th->art];
-    float x = th->x - cam, y = th->y - camy;
-    if (a->shade) oval(x, y - th->fd * 0.4f, th->fw + 4, th->fd * 0.5f + 3, 0x140C1E, 0.14f);
-    blit(SPR_HART_0 + th->art, 0, x, y);
+    float x = (th->x - cam) * z, y = (th->y - camy) * z;
+    if (a->shade) oval(x, y - th->fd * 0.4f * z, (th->fw + 4) * z, (th->fd * 0.5f + 3) * z, 0x140C1E, 0.14f);
+    float hs = z / CK_HOUSE_ZOOM;   // the furniture is baked at CK_HOUSE_ZOOM
+    if (fabsf(hs - 1) < 1e-4f) blit(SPR_HART_0 + th->art, 0, roundf(x), roundf(y));
+    else blit_o(SPR_HART_0 + th->art, 0, x, y, (bopt){ .sx = hs, .sy = hs });
     if (a->tank)
         for (int k = 0; k < 3; k++) {
             float u = t * (0.3f + k * 0.1f) + k * 2;
-            blit_o(SPR_HOUSE_FISH, k * 2 + (int)(t * 5) % 2, x + sinf(u) * 28 * a->scale, y - (72 - k * 12) * a->scale, (bopt){ .sx = 0.6f, .sy = 0.6f, .flip = cosf(u) < 0 });
+            blit_o(SPR_HOUSE_FISH, k * 2 + (int)(t * 5) % 2, x + sinf(u) * 28 * a->scale * z, y - (72 - k * 12) * a->scale * z, (bopt){ .sx = 0.6f * z, .sy = 0.6f * z, .flip = cosf(u) < 0 });
         }
+}
+// a toilet flushing (ck_house flushT): the water swirls round the bowl and down, and for the first
+// half a splash of drops leaps out over whoever is standing there (drops: the splash only)
+static void house_flush(const ck_house *Hs, float cam, float camy, float z, bool drops) {
+    if (Hs->flushT <= 0 || Hs->flushAt < 0) return;
+    const ck_thing *th = &ck_things[Hs->flushAt];
+    float sc = ck_tarts[th->art].scale, u = 1 - Hs->flushT / (float)CK_FLUSH_T;
+    float bx = (th->x - cam) * z, by = (th->y - 18 * sc - camy) * z;
+    if (drops) {
+        if (u >= 0.5f) return;
+        float v = u * 2;
+        for (int k = 0; k < 6; k++) shape(SPR_DOT, bx + (k - 2.5f) * 9.6f * v * z, by + (-70 * v + 50 * v * v - 4) * z, 1.4f * z, k % 2 ? 0xBFE9FF : 0x8FD3FF, 1);
+        return;
+    }
+    oval(bx, by, 5.2f * sc * z, 3.6f * sc * z, 0x8FD3FF, 1);
+    for (int k = 0; k < 4; k++) {
+        float a = u * 26 + k * PI / 2, r = 1 - u * 0.75f;
+        shape(SPR_DOT, bx + cosf(a) * 4.4f * sc * r * z, by + sinf(a) * 3 * sc * r * z, (1.4f - u * 0.6f) * sc * z, k % 2 ? 0xFFFFFF : 0x3F8FD8, 1);
+    }
 }
 static void slot_picker(const ck_game *G, const char *title, const char *sub, int pick) {
     rect(0, 0, W, H, 0x0F0A19, 0.6f);
@@ -1460,50 +1505,55 @@ static void draw_slots(const ck_game *G) {
 }
 static void draw_house(const ck_game *G) {
     const ck_house *Hs = &G->house;
-    float cam = Hs->cam, camy = Hs->camy, t = G->t;
-    draw_house_bg(cam, camy);
+    float cam = Hs->cam, camy = Hs->camy, t = G->t, Z = Hs->zoom > 0 ? Hs->zoom : CK_HOUSE_ZOOM;
+    float B = Z * CK_HOUSE_BIG;   // heroes, babies and food are CK_HOUSE_BIG times their usual size here
+    draw_house_bg(cam, camy, Z);
     // the furniture, babies, heroes and thrown food, back to front by where their feet are
-    enum { D_THING, D_BABY, D_HERO, D_FOOD };
+    enum { D_THING, D_BABY, D_HERO, D_FOOD, D_SPLASH };
     static struct { float y; short kind, i; } list[200];
     int n = 0;
     for (int i = 0; i < ck_nthings && n < 200; i++) {
         const ck_thing *th = &ck_things[i];
         if (th->spot == SPOT_BACK && !ck_spot_here(G, SPOT_BACK)) continue;
-        float x = th->x - cam, y = th->y - camy;
-        if (x < -120 || x > W + 120 || y < -20 || y > H + 180) continue;
+        float x = (th->x - cam) * Z, y = (th->y - camy) * Z;
+        if (x < -120 * Z || x > W + 120 * Z || y < -20 * Z || y > H + 180 * Z) continue;
         list[n++] = (typeof(list[0])){ th->flat ? th->y - 1e4f : th->y, D_THING, (short)i };
     }
     for (int i = 0; i < Hs->nbabies && n < 200; i++) list[n++] = (typeof(list[0])){ Hs->babies[i].y, D_BABY, (short)i };
     for (int i = 0; i < Hs->np && n < 200; i++) list[n++] = (typeof(list[0])){ Hs->ps[i].y, D_HERO, (short)i };
     for (int i = 0; i < Hs->nthrown && n < 200; i++) list[n++] = (typeof(list[0])){ Hs->thrown[i].y, D_FOOD, (short)i };
+    if (Hs->flushT > 0 && Hs->flushAt >= 0 && n < 200) list[n++] = (typeof(list[0])){ ck_things[Hs->flushAt].y + 60, D_SPLASH, 0 };
     for (int i = 1; i < n; i++) for (int j = i; j > 0 && list[j - 1].y > list[j].y; j--) { typeof(list[0]) tmp = list[j]; list[j] = list[j - 1]; list[j - 1] = tmp; }
     for (int k = 0; k < n; k++) {
         int i = list[k].i;
-        if (list[k].kind == D_THING) house_thing(&ck_things[i], cam, camy, t);
+        if (list[k].kind == D_THING) { house_thing(&ck_things[i], cam, camy, Z, t); if (i == Hs->flushAt) house_flush(Hs, cam, camy, Z, false); }
+        else if (list[k].kind == D_SPLASH) house_flush(Hs, cam, camy, Z, true);
         else if (list[k].kind == D_BABY) {
             const ck_hbaby *b = &Hs->babies[i];
-            float x = b->x - cam, y = b->y - camy;
+            float x = (b->x - cam) * Z, y = (b->y - camy) * Z;
             if (x < -20 || x > W + 20 || y < -10 || y > H + 40) continue;
             float hop = b->wait > 0 ? 0 : fabsf(sinf(t * 8 + b->x)) * 2;
-            oval(x, y, 6, 2.1f, 0x140C1E, 0.22f);
-            baby(b->hex, (int)(t * 3 + i) % 2, x, y - hop - b->z, 0.05f / 0.06f);
+            oval(x, y, 6 * B, 2.1f * B, 0x140C1E, 0.22f);
+            baby(b->hex, (int)(t * 3 + i) % 2, x, y - hop * B - b->z * Z, 0.05f / 0.06f * B);
         } else if (list[k].kind == D_HERO) {
             const ck_hhero *p = &Hs->ps[i];
-            float x = p->x - cam, y = p->y - camy - p->jz, tt = t + p->slot * 0.7f;
+            float x = (p->x - cam) * Z, y = (p->y - camy - p->jz) * Z, tt = t + p->slot * 0.7f;
             // four ways: side on when walking more across than up or down, else toward us or away
             bool vert = fabsf(p->ly) > fabsf(p->lx), away = vert && p->ly < 0;
             int pose = p->eat > 0 || Hs->mode == HM_SLEEP ? HP_CHEER : p->jz > 0 ? HP_JUMP
                      : p->moving ? (vert ? (away ? HP_WALK_BACK : HP_WALK_FRONT) : HP_RUN) : away ? HP_BACK : HP_IDLE;
             float r = G->prog.hero[p->slot] == HERO_ROBOT ? 10 : 9;
-            oval(x, p->y - camy, r, r * 0.35f, 0x140C1E, 0.22f);
-            if (away && p->hold && p->eat <= 0) { food_art(p->hold - 1, x + p->face * 9, y - 20, 1); garnish_art(p->garnish, x + p->face * 9, y - 20, 1); }   // from behind, what you hold is in front of you
-            house_hero(G, p->slot, x, y, pose, tt, p->face);
-            if (p->eat > 0) { float sc = 0.4f + 0.6f * p->eat / 50.0f; food_art(p->col, x + 6, y - 24, sc); if (p->col >= FOOD_DISH0) garnish_art(p->garnish, x + 6, y - 24, sc); }   // shrinking as it is eaten
-            else if (p->hold && !away) { food_art(p->hold - 1, x + p->face * 9, y - 20, 1); garnish_art(p->garnish, x + p->face * 9, y - 20, 1); }
+            oval(x, (p->y - camy) * Z, r * B, r * 0.35f * B, 0x140C1E, 0.22f);
+            if (fabsf(B - 1) < 1e-4f) { x = roundf(x); y = roundf(y); }   // whole pixels at their usual size
+            float hx = x + p->face * 9 * B, hy = y - 20 * B;
+            if (away && p->hold && p->eat <= 0) { food_art(p->hold - 1, hx, hy, B); garnish_art(p->garnish, hx, hy, B); }   // from behind, what you hold is in front of you
+            house_hero_s(G, p->slot, x, y, pose, tt, p->face, B);
+            if (p->eat > 0) { float sc = (0.4f + 0.6f * p->eat / 50.0f) * B; food_art(p->col, x + 6 * B, y - 24 * B, sc); if (p->col >= FOOD_DISH0) garnish_art(p->garnish, x + 6 * B, y - 24 * B, sc); }   // shrinking as it is eaten
+            else if (p->hold && !away) { food_art(p->hold - 1, hx, hy, B); garnish_art(p->garnish, hx, hy, B); }
         } else {
             const ck_thrown *f = &Hs->thrown[i];
-            oval(f->x - cam, f->y - camy, 4, 1.4f, 0x140C1E, 0.22f);
-            food_art(f->kind, f->x - cam, f->y - camy - 4 - f->z, 1);
+            oval((f->x - cam) * Z, (f->y - camy) * Z, 4 * B, 1.4f * B, 0x140C1E, 0.22f);
+            food_art(f->kind, (f->x - cam) * Z, (f->y - camy - f->z) * Z - 4 * B, B);
         }
     }
     // what A does where you stand, over your head
@@ -1517,7 +1567,7 @@ static void draw_house(const ck_game *G) {
             char s[32];
             if (ck_spots[k].kind == SPOT_BACK) snprintf(s, sizeof s, "A  Back to World %d", G->worldNum - 1);
             else snprintf(s, sizeof s, "A  %s", ck_spots[k].label);
-            float w = txt_w(F_SMALL, s) + 14, x = fminf(fmaxf(p->x - cam, w / 2 + 4), W - w / 2 - 4), y = fmaxf(22, p->y - camy - 64);
+            float w = txt_w(F_SMALL, s) + 14, x = fminf(fmaxf((p->x - cam) * Z, w / 2 + 4), W - w / 2 - 4), y = fmaxf(22, (p->y - camy) * Z - 64 * B);
             dark_panel(x - w / 2, y, w, 15);
             txt(F_SMALL, ST_PLAIN, x, y + 11, ALIGN_CENTER, "%s", s);
         }
@@ -1530,7 +1580,7 @@ static void draw_house(const ck_game *G) {
             float u = fmodf(Hs->sleepT * 0.8f + k / 3.0f, 1), sz = (8 + u * 8) / 12;
             const ck_thing *bed = &ck_things[0];
             for (int i = 0; i < ck_nthings; i++) if (ck_things[i].spot == SPOT_BED) bed = &ck_things[i];
-            blit_o(SPR_ZEE, 0, bed->x - cam + 10 + u * 20, bed->y - camy - 70 - u * 50, (bopt){ .sx = sz, .sy = sz, .tinted = true, .tint = RGBA32(255, 246, 216, (int)((1 - u) * 255)) });
+            blit_o(SPR_ZEE, 0, (bed->x - cam + 10 + u * 20) * Z, (bed->y - camy - 70 - u * 50) * Z, (bopt){ .sx = sz, .sy = sz, .tinted = true, .tint = RGBA32(255, 246, 216, (int)((1 - u) * 255)) });
         }
     }
     if (Hs->mode == HM_SLOTS) slot_picker(G, "SLEEP AND SAVE", "Which save slot?", Hs->pick);

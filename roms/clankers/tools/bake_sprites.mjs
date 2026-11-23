@@ -319,22 +319,29 @@ function bakeAll() {
   // and the little creatures; the rooms themselves are plain boxes the N64 fills in
   // the house seen from above (web/lib/housetop.js): every look of furniture in HOUSETOP.ARTS
   // order, cropped to what it draws (the N64 adds the soft shadow and the fish in the tank), and
-  // the house's static picture cut into 160 x 120 tiles, row by row
+  // The house is baked at HZ, the size the camera shows it at when not zoomed out (CK_HOUSE_ZOOM):
+  // the furniture, one cropped sprite per look, and the house's static picture cut into tiles
+  const HZ = HOUSETOP.ZOOM;
   HOUSETOP.ARTS.forEach((a, i) => {
     const cv = document.createElement('canvas'); cv.width = 320; cv.height = 320;
-    const g = cv.getContext('2d'); g.translate(160, 260); K.g = g; HOUSETOP.drawArt(g, a, 0, true);
+    const g = cv.getContext('2d'); g.translate(160, 260); g.scale(HZ, HZ); K.g = g; HOUSETOP.drawArt(g, a, 0, true);
     const d = g.getImageData(0, 0, 320, 320).data;
     let x0 = 320, y0 = 320, x1 = -1, y1 = -1;
     for (let y = 0; y < 320; y++) for (let x = 0; x < 320; x++) if (d[(y * 320 + x) * 4 + 3] > 8) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     if (x1 < 0) { x0 = 160; x1 = 161; y0 = 259; y1 = 260; }
     x0 -= 1; y0 -= 1; x1 += 2; y1 += 2;
-    strip('hart_' + i, x1 - x0, y1 - y0, 160 - x0, 260 - y0, 1, g2 => HOUSETOP.drawArt(g2, a, 0, true), 'rgba16');
+    strip('hart_' + i, x1 - x0, y1 - y0, 160 - x0, 260 - y0, 1, g2 => { g2.scale(HZ, HZ); HOUSETOP.drawArt(g2, a, 0, true); }, 'rgba16');
   });
   {
     const W = HOUSETOP.WORLD.W, H = HOUSETOP.WORLD.H, bg = document.createElement('canvas'); bg.width = W; bg.height = H;
     const g = bg.getContext('2d'); HOUSETOP.drawStatic(g); K.g = g; for (const r of HOUSETOP.rooms) HOUSETOP.plate(g, r);
-    for (let ty = 0; ty * 120 < H; ty++) for (let tx = 0; tx * 160 < W; tx++)
-      strip('hbg_' + (ty * Math.ceil(W / 160) + tx), 160, 120, 0, 0, 1, g2 => g2.drawImage(bg, -tx * 160, -ty * 120), 'rgba16');
+    // each tile 160 x 120 pixels at HZ: 240 x 180 of the house; then at half that, for when the
+    // camera zooms out, each 480 x 360 of the house
+    for (const [name, z] of [['hbg_', HZ], ['hbs_', HZ / 2]]) {
+      const tw = 160 / z, th = 120 / z, cols = Math.ceil(W / tw);
+      for (let ty = 0; ty * th < H; ty++) for (let tx = 0; tx < cols; tx++)
+        strip(name + (ty * cols + tx), 160, 120, 0, 0, 1, g2 => { g2.imageSmoothingQuality = 'high'; g2.scale(z, z); g2.drawImage(bg, -tx * tw, -ty * th); }, 'rgba16');
+    }
   }
   picture('aqua_bg', 320, 240, g => HOUSEART.aquaBg(g, true));
   picture('aqua_water', 320, 240, g => HOUSEART.aquaBg(g, false));
