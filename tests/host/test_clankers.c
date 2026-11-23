@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "ck_autotest.h"
+#include "../../roms/clankers/src/n64/sprites.h"   // the N64 sprite sizes, for the house memory budget
 #include "ck_internal.h"
 #include "test.h"
 
@@ -281,7 +282,7 @@ static void test_autotest(void) {
     }
     if (r != AT_PASS) fprintf(stderr, "autotest: %s\n", A.msg);
     EXPECT_EQ_INT(r, AT_PASS);
-    EXPECT_EQ_INT(checks, 14);
+    EXPECT_EQ_INT(checks, 15);
 }
 
 // Left alone, the story runs its songs in order, thunders during the storm and ends on the title.
@@ -1004,6 +1005,7 @@ static void test_drop_player2(void) {
 
 
 // The house: walk along the rooms, use the things in them, and the little games.
+static int sand_count(const ck_sandbox *S, int m);
 static void hold(ck_game *G, int n, uint16_t p1, uint16_t p2) { for (int i = 0; i < n; i++) ck_game_step(G, p1, p2); }
 // The house seen from above, as an 8 px grid: a cell is open when its middle is not solid.
 #define HG 8
@@ -1096,6 +1098,62 @@ static void test_house_gate(void) {
     EXPECT_EQ_INT(walk_path(G, -2), 1);
     EXPECT_EQ_INT(G->scene, SC_MAP);
 }
+// are both heroes on screen, head to toe?
+static bool both_seen(const ck_game *G) {
+    const ck_house *Hs = &G->house;
+    for (int k = 0; k < Hs->np; k++) {
+        float x = (Hs->ps[k].x - Hs->cam) * Hs->zoom, y = (Hs->ps[k].y - Hs->camy) * Hs->zoom, b = Hs->zoom * CK_HOUSE_BIG;
+        if (x < 16 * b || x > CK_W - 16 * b || y < 56 * b || y > CK_H - 4 * b) return false;
+    }
+    return true;
+}
+
+// The house on the N64 must fit in memory at every view, with two players: the most it keeps
+// loaded (draw.c: the tiles and furniture near the view, ck_house_tile_near and
+// ck_house_thing_near) plus both hero sheets, every outfit strip and every baby. The ROM has 4 MB:
+// about 1.1 MB is code and data, 0.5 MB the screens and the RDP's queues, and the rest of the
+// game's sprites stay cached, so the house gets CK_HOUSE_MEM_BUDGET. (The build that ran out of
+// memory on the cart needed about 2.2 MB by this count: RGBA16 sheets, and every piece of
+// furniture kept loaded at full size.)
+#define CK_HOUSE_MEM_BUDGET (1100 * 1024)
+static void test_house_memory(void) {
+    (void)ACC_AT;
+    int fixed = 0, hero = 0;
+    for (int c = 0; c < 8; c++) {
+        if (SPR_INFO[SPR_HERO_ROBOT_0 + c].bytes > hero) hero = SPR_INFO[SPR_HERO_ROBOT_0 + c].bytes;
+        if (SPR_INFO[SPR_HERO_OSTRICH_0 + c].bytes > hero) hero = SPR_INFO[SPR_HERO_OSTRICH_0 + c].bytes;
+    }
+    fixed += 2 * hero;
+    const int acc[] = { SPR_ACC_HEAD, SPR_ACC_FACE, SPR_ACC_NECK, SPR_ACC_BODY, SPR_ACC_FEET };
+    for (unsigned k = 0; k < sizeof acc / sizeof *acc; k++) fixed += SPR_INFO[acc[k]].bytes;
+    for (int i = 0; i < SPR_COUNT; i++) if (!strncmp(SPR_INFO[i].file, "rom:/baby_", 10)) fixed += SPR_INFO[i].bytes;
+    fixed += SPR_INFO[SPR_HOUSE_FISH].bytes + SPR_INFO[SPR_DOT].bytes + SPR_INFO[SPR_ZEE].bytes;
+    const int tile0[CK_HOUSE_TIERS] = { SPR_HBG_0, SPR_HBS_0, SPR_HBQ_0 };
+    int worst = 0;
+    float zmin = ck_house_zoom_min();
+    for (int zi = 0; zi <= 40; zi++) {
+        float z = zmin + (CK_HOUSE_ZOOM - zmin) * zi / 40.0f, vw = CK_W / z, vh = CK_H / z;
+        int tier = ck_house_tier(z), cols, rows;
+        float ww, wh;
+        ck_house_tiles(tier, &cols, &rows, &ww, &wh);
+        EXPECT_EQ_INT(SPR_INFO[tile0[tier] + cols * rows - 1].fw, CK_HBG_TW);   // the baked set has every tile
+        for (float cy = fminf(0, (ck_td_world[1] - vh) / 2); cy <= fmaxf(0, ck_td_world[1] - vh); cy += 20)
+            for (float cx = fminf(0, (ck_td_world[0] - vw) / 2); cx <= fmaxf(0, ck_td_world[0] - vw); cx += 20) {
+                int m = fixed;
+                for (int ty = 0; ty < rows; ty++)
+                    for (int tx = 0; tx < cols; tx++)
+                        if (ck_house_tile_near(tier, tx, ty, cx, cy, z, CK_HOUSE_KEEP)) m += SPR_INFO[tile0[tier] + ty * cols + tx].bytes;
+                static bool art[256];
+                memset(art, 0, sizeof art);
+                for (int i = 0; i < ck_nthings; i++) if (ck_house_thing_near(i, cx, cy, z, CK_HOUSE_KEEP)) art[ck_things[i].art] = true;
+                for (int a = 0; a < ck_ntarts; a++) if (art[a]) m += SPR_INFO[SPR_HART_0 + a].bytes;
+                if (m > worst) worst = m;
+            }
+    }
+    printf("  house memory: %d KB at most (%d KB for heroes, outfits and babies), budget %d KB\n", worst / 1024, fixed / 1024, CK_HOUSE_MEM_BUDGET / 1024);
+    EXPECT_EQ_INT(worst <= CK_HOUSE_MEM_BUDGET, 1);
+}
+
 static void test_house(void) {
     ck_game *G = load_game();
     if (!G) return;
@@ -1110,12 +1168,12 @@ static void test_house(void) {
     press(G, 0, CK_C); EXPECT_EQ_INT(G->house.ps[G->house.last].slot, 1);
     press(G, CK_C, 0); EXPECT_EQ_INT(G->house.ps[G->house.last].slot, 0);
     EXPECT_EQ_INT(G->house.babies[0].hex, G->world.babies[0]);
-    // the plan: every spot is on exactly one thing, every thing stands where you can't walk,
-    // the heroes come in on open ground at the front, and the camera keeps a room's back wall in view
+    // the plan: every spot is on exactly one thing (but both toilets flush), every thing stands
+    // where you can't walk, the heroes come in on open ground at the front, and the camera centres a hero
     for (int k = 0; k < CK_HOUSE_SPOTS; k++) {
         int n = 0;
         for (int i = 0; i < ck_nthings; i++) n += ck_things[i].spot == k;
-        EXPECT_EQ_INT(n, 1);
+        EXPECT_EQ_INT(n, k == SPOT_FLUSH ? 2 : 1);
     }
     for (int i = 0; i < ck_nthings; i++) {
         const ck_thing *t = &ck_things[i];
@@ -1128,20 +1186,44 @@ static void test_house(void) {
     for (int r = 0; r < ck_ntrooms; r++) {
         const ck_troom *R = &ck_trooms[r];
         float cx, cy;
-        ck_house_camera(R->x + R->w / 2.0f, R->y + CK_TD_FACE + 30.0f, &cx, &cy);   // just in front of the back wall
-        EXPECT_EQ_INT(cy <= R->y, 1);
-        EXPECT_EQ_INT(cx <= R->x + R->w / 2.0f && cx + CK_W >= R->x + R->w / 2.0f, 1);
-        EXPECT_EQ_INT(cx >= 0 && cy >= 0 && cx <= ck_td_world[0] - CK_W && cy <= ck_td_world[1] - CK_H, 1);
+        // the camera is the same everywhere: a hero alone is in the middle (unless at the world's edge)
+        float hx = R->x + R->w / 2.0f, hy = R->y + CK_TD_FACE + 30.0f;
+        const float z = CK_HOUSE_ZOOM, vw = CK_W / z, vh = CK_H / z;
+        EXPECT_EQ_INT(ck_house_fit(hx, hy, hx, hy) == z, 1);
+        ck_house_camera(hx, hy, hx, hy, z, &cx, &cy);
+        EXPECT_EQ_INT(fabsf(cx + vw / 2 - hx) < 2 || cx == 0 || fabsf(cx - (ck_td_world[0] - vw)) < 2, 1);
+        EXPECT_EQ_INT(hy - 70 * CK_HOUSE_BIG >= cy && hy + 24 * CK_HOUSE_BIG <= cy + vh, 1);
+        EXPECT_EQ_INT(cx >= 0 && cy >= 0 && cx <= ck_td_world[0] - vw + 1 && cy <= ck_td_world[1] - vh + 1, 1);
         EXPECT_EQ_INT(ck_house_room_at(R->x + R->w / 2.0f, R->y + R->h / 2.0f), r);
     }
-    // two heroes can't wander more than a screen apart
+    // two heroes can wander apart as far as they like: the camera zooms out as they part, keeping
+    // both on screen every tick, and back in when they meet
     {
-        float y1 = G->house.ps[1].y;
-        hold(G, 200, 0, CK_LEFT);
-        EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x < ck_td_leash[0], 1);
-        EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x > ck_td_leash[0] - 4, 1);
+        float x1 = G->house.ps[1].x, y1 = G->house.ps[1].y;
+        EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
+        EXPECT_EQ_INT(both_seen(G), 1);
+        bool seen = true;
+        for (int i = 0; i < 400; i++) { hold(G, 1, 0, CK_LEFT); seen = seen && both_seen(G); }
+        EXPECT_EQ_INT(seen, 1);
+        EXPECT_EQ_INT(G->house.ps[0].x - G->house.ps[1].x > 900, 1);   // no leash
         EXPECT_EQ_INT(fabsf(G->house.ps[1].y - y1) < 1, 1);
-        hold(G, 200, 0, CK_RIGHT);
+        EXPECT_EQ_INT(G->house.zoom < 0.5f * CK_HOUSE_ZOOM, 1);
+        for (int i = 0; i < 600 && G->house.ps[1].x < x1; i++) hold(G, 1, 0, CK_RIGHT);
+        hold(G, 120, 0, 0);
+        EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
+        // one in the back garden and one at the front gate, or in opposite corners: both on screen
+        ck_hhero save0 = G->house.ps[0], save1 = G->house.ps[1];
+        const float spots[][4] = { { 1250, 150, 1250, 1380 }, { 30, 60, 2130, 1390 }, { 2130, 60, 30, 1390 } };
+        for (int k = 0; k < 3; k++) {
+            G->house.ps[0].x = spots[k][0]; G->house.ps[0].y = spots[k][1];
+            G->house.ps[1].x = spots[k][2]; G->house.ps[1].y = spots[k][3];
+            hold(G, 2, 0, 0);
+            EXPECT_EQ_INT(both_seen(G), 1);
+            EXPECT_EQ_INT(G->house.zoom >= ck_house_zoom_min() && G->house.zoom < 0.3f, 1);
+        }
+        G->house.ps[0] = save0; G->house.ps[1] = save1;
+        hold(G, 120, 0, 0);
+        EXPECT_EQ_INT(G->house.zoom == CK_HOUSE_ZOOM, 1);
     }
     // A on open ground hops
     hold(G, 10, 0, 0);
@@ -1918,6 +2000,38 @@ static void test_house(void) {
     EXPECT_EQ_INT(Jr->state, RUN_PLAY);
     EXPECT_EQ_INT(Jr->ps[0].on && Jr->ps[1].on, 1);
     press(G, CK_START, 0);
+    // the sandbox: pour sand with A, change to water with R, rub out with B, START goes back in
+    walk_to(G, SPOT_SAND);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->scene, SC_SAND);
+    ck_sandbox *Sb = &G->house.sand;
+    EXPECT_EQ_INT(Sb->cur[0].tool, SANDTOOL_SAND);
+    EXPECT_EQ_INT(Sb->cur[1].tool, SANDTOOL_WATER);
+    hold(G, 30, CK_A, 0);
+    EXPECT_EQ_INT(sand_count(Sb, SAND_SAND) > 10, 1);
+    press(G, CK_R, 0);
+    EXPECT_EQ_INT(Sb->cur[0].tool, SANDTOOL_WATER);
+    hold(G, 30, CK_A | CK_RIGHT, 0);
+    EXPECT_EQ_INT(sand_count(Sb, SAND_WATER) > 10, 1);
+    hold(G, 40, CK_LEFT, 0);
+    press(G, CK_L, 0); press(G, CK_L, 0);   // back round to Wipe
+    EXPECT_EQ_INT(Sb->cur[0].tool, SANDTOOL_CLEAR);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(sand_count(Sb, SAND_SAND) + sand_count(Sb, SAND_WATER), 0);
+    for (int i = 0; i < 400; i++) ck_game_step(G, CK_UP | CK_LEFT | (i % 3 ? CK_A : 0), CK_DOWN | CK_RIGHT | CK_A);   // the cursors stop at the tank's edges
+    EXPECT_EQ_INT(Sb->cur[0].x == CK_SAND_X && Sb->cur[0].y == CK_SAND_Y, 1);
+    EXPECT_EQ_INT(Sb->cur[1].x == CK_SAND_X + CK_SAND_W * CK_SAND_CELL - 1 && Sb->cur[1].y == CK_SAND_Y + CK_SAND_H * CK_SAND_CELL - 1, 1);
+    press(G, CK_START, 0);
+    EXPECT_EQ_INT(G->scene, SC_HOUSE);
+    // a toilet: A flushes it (once at a time), and it swirls for CK_FLUSH_T ticks
+    walk_to(G, SPOT_FLUSH);
+    EXPECT_EQ_INT(ck_house_near(G, &G->house.ps[0]), SPOT_FLUSH);
+    press(G, CK_A, 0);
+    EXPECT_EQ_INT(G->house.mode, HM_WALK);
+    EXPECT_EQ_INT(G->house.flushT > CK_FLUSH_T - 5, 1);
+    EXPECT_EQ_INT(G->house.flushAt >= 0 && ck_things[G->house.flushAt].spot == SPOT_FLUSH, 1);
+    hold(G, CK_FLUSH_T, 0, 0);
+    EXPECT_EQ_INT(G->house.flushT, 0);
     // the pond: cast, wait for a bite, hook it with A, reel it in
     walk_to(G, SPOT_POND);
     press(G, CK_A, 0);
@@ -2023,6 +2137,128 @@ static void test_slots(void) {
     EXPECT_EQ_INT(G->slots[0].w[0].bolts, 77);   // slot 1 is left as it was
 }
 
+// ---- the sandbox
+static int sand_count(const ck_sandbox *S, int m) {
+    int n = 0;
+    for (int i = 0; i < CK_SAND_W * CK_SAND_H; i++) n += (S->cell[i] & SAND_MAT) == m;
+    return n;
+}
+static int sand_top(const ck_sandbox *S, int x, int m) {   // how high material m reaches in column x (0: none)
+    for (int y = 0; y < CK_SAND_H; y++) if ((S->cell[y * CK_SAND_W + x] & SAND_MAT) == m) return CK_SAND_H - y;
+    return 0;
+}
+static int sand_ends(const ck_sandbox *S, int right) {   // the pond's depth over 8 columns at one end, added up
+    int n = 0;
+    for (int k = 0; k < 8; k++) n += sand_top(S, right ? CK_SAND_W - 1 - k : k, SAND_WATER);
+    return n;
+}
+static void sand_put(ck_sandbox *S, int x0, int y0, int x1, int y1, int m) {
+    for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) S->cell[y * CK_SAND_W + x] = (uint8_t)m;
+}
+// The rules: sand falls and piles, water lies flat, clay stays where it is put, acid eats sand,
+// clay and water, and gravity's sway heaps a pond up on its low side, then the other.
+static void test_sandbox(void) {
+    static ck_sandbox S;
+    memset(&S, 0, sizeof S);
+    S.still = true;
+    // a heap of sand dropped in the middle falls, keeps every grain, and spreads into a pile
+    sand_put(&S, 70, 0, 85, 40, SAND_SAND);
+    int n = sand_count(&S, SAND_SAND);
+    for (int i = 0; i < 600; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_SAND), n);
+    int peak = sand_top(&S, 77, SAND_SAND), foot = sand_top(&S, 50, SAND_SAND);
+    EXPECT_EQ_INT(peak > 10 && peak < 41, 1);
+    EXPECT_EQ_INT(foot < peak, 1);
+    for (int x = 1; x < CK_SAND_W; x++) EXPECT_EQ_INT(abs(sand_top(&S, x, SAND_SAND) - sand_top(&S, x - 1, SAND_SAND)) <= 2, 1);   // no cliffs
+    // water poured in a corner runs out flat across the floor
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 0, 0, 19, 59, SAND_WATER);
+    n = sand_count(&S, SAND_WATER);
+    for (int i = 0; i < 1500; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER), n);
+    int lo = CK_SAND_H, hi = 0;
+    for (int x = 0; x < CK_SAND_W; x++) { int h = sand_top(&S, x, SAND_WATER); lo = h < lo ? h : lo; hi = h > hi ? h : hi; }
+    if (hi - lo > 1) printf("  sandbox: water still %d to %d high\n", lo, hi);
+    EXPECT_EQ_INT(hi - lo <= 1, 1);
+    // a clay shelf up in the air stays put and holds sand and water on it
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 40, 50, 90, 52, SAND_CLAY);
+    sand_put(&S, 60, 20, 66, 30, SAND_SAND);
+    sand_put(&S, 80, 30, 84, 34, SAND_WATER);
+    for (int i = 0; i < 300; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_CLAY), 51 * 3);
+    for (int x = 40; x <= 90; x++) EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + x] & SAND_MAT, SAND_CLAY);
+    EXPECT_EQ_INT(sand_top(&S, 63, SAND_SAND) >= CK_SAND_H - 49, 1);   // the sand sits on the shelf
+    EXPECT_EQ_INT(sand_count(&S, SAND_SAND), 77);
+    // acid eats sand, clay and water, and gets used up doing it
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 0, 80, 51, 99, SAND_SAND); sand_put(&S, 52, 80, 103, 99, SAND_CLAY); sand_put(&S, 104, 80, 155, 99, SAND_WATER);
+    sand_put(&S, 0, 60, 155, 70, SAND_ACID);
+    int sand0 = sand_count(&S, SAND_SAND), clay0 = sand_count(&S, SAND_CLAY), water0 = sand_count(&S, SAND_WATER), acid0 = sand_count(&S, SAND_ACID);
+    for (int i = 0; i < 400; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_count(&S, SAND_SAND) < sand0, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_CLAY) < clay0, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER) < water0, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_ACID) < acid0, 1);
+    // ... and at the same rate: the same acid over a floor of each eats about as much of each
+    int ate[3];
+    for (int k = 0; k < 3; k++) {
+        memset(S.cell, 0, sizeof S.cell);
+        S.rng = 12345;
+        sand_put(&S, 0, 90, 155, 99, k == 0 ? SAND_SAND : k == 1 ? SAND_CLAY : SAND_WATER);
+        int was = 156 * 10;
+        sand_put(&S, 0, 80, 155, 84, SAND_ACID);
+        for (int i = 0; i < 200; i++) ck_sand_step(&S);
+        ate[k] = was - sand_count(&S, k == 0 ? SAND_SAND : k == 1 ? SAND_CLAY : SAND_WATER);
+    }
+    printf("  sandbox: acid ate %d sand, %d clay, %d water\n", ate[0], ate[1], ate[2]);
+    for (int k = 1; k < 3; k++) EXPECT_EQ_INT(abs(ate[k] - ate[0]) * 4 <= ate[0], 1);
+    // sand sinks through water
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 0, 60, 155, 99, SAND_WATER);
+    sand_put(&S, 70, 50, 74, 59, SAND_SAND);
+    for (int i = 0; i < 600; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(S.cell[99 * CK_SAND_W + 72] & SAND_MAT, SAND_SAND);
+    // the sway: a pond heaps up on whichever side gravity leans to, then the other
+    memset(&S, 0, sizeof S);
+    sand_put(&S, 0, 60, 155, 99, SAND_WATER);
+    n = sand_count(&S, SAND_WATER);
+    for (int i = 0; i < CK_SAND_SWAY / 4 + 60; i++) ck_sand_step(&S);   // leaning right
+    EXPECT_EQ_INT(S.lean > CK_SAND_LEAN * 0.8f, 1);
+    int l = sand_ends(&S, 0), r = sand_ends(&S, 1);
+    printf("  sandbox: leaning right, the pond is %.1f deep on the left and %.1f on the right\n", l / 8.0, r / 8.0);
+    EXPECT_EQ_INT(r - l >= 2 * 8 && r - l <= 12 * 8, 1);   // a gentle slosh: a few cells, not a big heap
+    for (int i = 0; i < CK_SAND_SWAY / 2; i++) ck_sand_step(&S);   // leaning left
+    l = sand_ends(&S, 0); r = sand_ends(&S, 1);
+    EXPECT_EQ_INT(l - r >= 2 * 8 && l - r <= 12 * 8, 1);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER), n);
+    // sand and clay take over whatever is under the brush; water and acid do not
+    memset(S.cell, 0, sizeof S.cell);
+    sand_put(&S, 60, 40, 80, 60, SAND_WATER);
+    ck_sand_pour(&S, 70, 50, SANDTOOL_CLAY, 1);
+    for (int dy = -3; dy <= 3; dy++) EXPECT_EQ_INT(S.cell[(50 + dy) * CK_SAND_W + 70] & SAND_MAT, SAND_CLAY);
+    ck_sand_pour(&S, 70, 50, SANDTOOL_SAND, 0);
+    EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + 70] & SAND_MAT, SAND_SAND);
+    EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + 71] & SAND_MAT, SAND_SAND);
+    for (int k = 0; k < 20; k++) { ck_sand_pour(&S, 70, 50, SANDTOOL_WATER, 2); ck_sand_pour(&S, 70, 50, SANDTOOL_ACID, 2); }   // liquids never take over sand or clay
+    EXPECT_EQ_INT(S.cell[50 * CK_SAND_W + 70] & SAND_MAT, SAND_SAND);
+    EXPECT_EQ_INT(S.cell[47 * CK_SAND_W + 70] & SAND_MAT, SAND_CLAY);
+    // water poured deep in a pond adds to it: the level rises
+    memset(S.cell, 0, sizeof S.cell);
+    S.still = true; S.lean = 0;
+    sand_put(&S, 0, 80, 155, 99, SAND_WATER);
+    n = sand_count(&S, SAND_WATER);
+    for (int k = 0; k < 30; k++) ck_sand_pour(&S, 70, 95, SANDTOOL_WATER, 2);
+    EXPECT_EQ_INT(sand_count(&S, SAND_WATER) > n + 100, 1);
+    for (int i = 0; i < 600; i++) ck_sand_step(&S);
+    EXPECT_EQ_INT(sand_top(&S, 10, SAND_WATER) > 20, 1);
+    // pouring at the very edges stays inside the tank
+    for (int k = 0; k < CK_SAND_TOOLS; k++) for (int z = 0; z < CK_SAND_SIZES; z++) {
+        ck_sand_pour(&S, -3, -3, k, z); ck_sand_pour(&S, CK_SAND_W + 2, CK_SAND_H + 2, k, z); ck_sand_pour(&S, 0, CK_SAND_H - 1, k, z);
+    }
+    EXPECT_EQ_INT(ck_sand_hex(SAND_EMPTY) != ck_sand_hex(SAND_WATER), 1);
+}
+
 void test_clankers(void) {
     test_music();
     test_parse();
@@ -2046,6 +2282,8 @@ void test_clankers(void) {
     test_drop_player2();
     test_race_view();
     test_house();
+    test_house_memory();
     test_house_gate();
+    test_sandbox();
     test_slots();
 }

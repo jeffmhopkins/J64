@@ -6,7 +6,8 @@
 // Loads web/lib (the drawing kit, Glitchies, map themes, title), the data files and the font
 // into headless Chromium, draws every frame the N64 needs onto canvases, and writes:
 //   assets/*.png        sprite strips (frames side by side), packed as RGBA32
-//   assets/rgba16/*.png big pictures and hero sheets, packed as RGBA16 to save memory
+//   assets/rgba16/*.png big pictures, packed as RGBA16 to save memory
+//   assets/ci8/*.png    hero sheets, accessories and the house, with a 256-colour palette (half again)
 //   src/n64/sprites.h   frame sizes and anchor points for each strip
 // Re-run it after changing draw.js, a theme, or a world file, and commit the results.
 // Needs Node and Playwright with Chromium (a dev-machine tool, not part of `make`).
@@ -106,7 +107,7 @@ function bakeAll() {
   const HERO_FRAMES = 42, isBack = i => i >= 36 && i < 42;
   for (const hero of ['robot', 'ostrich'])
     for (let c = 0; c < COLS.length; c++)
-      strip(`hero_${hero}_${c}`, 64, 56, 32, 44, HERO_FRAMES, (g, i) => heroFrame(hero, COLS[c], i), 'rgba16', 8);
+      strip(`hero_${hero}_${c}`, 64, 56, 32, 44, HERO_FRAMES, (g, i) => heroFrame(hero, COLS[c], i), 'ci8', 8);
 
   // ---- accessories from the parts shop. The hero views call K.onWear(kind, where) as they draw:
   // 'head' (hats, face and neck pieces hang off the head's top middle), 'body' (the torso box) and
@@ -161,7 +162,7 @@ function bakeAll() {
         else K.wearNeck(it.id, a.neck[0], a.neck[1], a.neck[2], a.side ? 1 : 0);
       }
       K.plain = false; K.back = false;
-    }, 'rgba16', items.length);
+    }, 'ci8', items.length);
   }
   out.accAt = ACC_AT;
 
@@ -319,22 +320,29 @@ function bakeAll() {
   // and the little creatures; the rooms themselves are plain boxes the N64 fills in
   // the house seen from above (web/lib/housetop.js): every look of furniture in HOUSETOP.ARTS
   // order, cropped to what it draws (the N64 adds the soft shadow and the fish in the tank), and
-  // the house's static picture cut into 160 x 120 tiles, row by row
+  // The house is baked at HZ, the size the camera shows it at when not zoomed out (CK_HOUSE_ZOOM):
+  // the furniture, one cropped sprite per look, and the house's static picture cut into tiles
+  const HZ = HOUSETOP.ZOOM;
   HOUSETOP.ARTS.forEach((a, i) => {
     const cv = document.createElement('canvas'); cv.width = 320; cv.height = 320;
-    const g = cv.getContext('2d'); g.translate(160, 260); K.g = g; HOUSETOP.drawArt(g, a, 0, true);
+    const g = cv.getContext('2d'); g.translate(160, 260); g.scale(HZ, HZ); K.g = g; HOUSETOP.drawArt(g, a, 0, true);
     const d = g.getImageData(0, 0, 320, 320).data;
     let x0 = 320, y0 = 320, x1 = -1, y1 = -1;
     for (let y = 0; y < 320; y++) for (let x = 0; x < 320; x++) if (d[(y * 320 + x) * 4 + 3] > 8) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     if (x1 < 0) { x0 = 160; x1 = 161; y0 = 259; y1 = 260; }
     x0 -= 1; y0 -= 1; x1 += 2; y1 += 2;
-    strip('hart_' + i, x1 - x0, y1 - y0, 160 - x0, 260 - y0, 1, g2 => HOUSETOP.drawArt(g2, a, 0, true), 'rgba16');
+    strip('hart_' + i, x1 - x0, y1 - y0, 160 - x0, 260 - y0, 1, g2 => { g2.scale(HZ, HZ); HOUSETOP.drawArt(g2, a, 0, true); }, 'ci8');
   });
   {
     const W = HOUSETOP.WORLD.W, H = HOUSETOP.WORLD.H, bg = document.createElement('canvas'); bg.width = W; bg.height = H;
     const g = bg.getContext('2d'); HOUSETOP.drawStatic(g); K.g = g; for (const r of HOUSETOP.rooms) HOUSETOP.plate(g, r);
-    for (let ty = 0; ty * 120 < H; ty++) for (let tx = 0; tx * 160 < W; tx++)
-      strip('hbg_' + (ty * Math.ceil(W / 160) + tx), 160, 120, 0, 0, 1, g2 => g2.drawImage(bg, -tx * 160, -ty * 120), 'rgba16');
+    // each tile 160 x 120 pixels at HZ: 240 x 180 of the house; then at a half and a quarter of
+    // that, for when the camera zooms out (the quarter set is the whole property in six tiles)
+    for (const [name, z] of [['hbg_', HZ], ['hbs_', HZ / 2], ['hbq_', HZ / 4]]) {
+      const tw = 160 / z, th = 120 / z, cols = Math.ceil(W / tw);
+      for (let ty = 0; ty * th < H; ty++) for (let tx = 0; tx < cols; tx++)
+        strip(name + (ty * cols + tx), 160, 120, 0, 0, 1, g2 => { g2.imageSmoothingQuality = 'high'; g2.scale(z, z); g2.drawImage(bg, -tx * tw, -ty * th); }, 'ci8');
+    }
   }
   picture('aqua_bg', 320, 240, g => HOUSEART.aquaBg(g, true));
   picture('aqua_water', 320, 240, g => HOUSEART.aquaBg(g, false));
@@ -424,7 +432,6 @@ function bakeAll() {
     `const int ck_td_world[2] = { ${T.WORLD.W}, ${T.WORLD.H} };`,
     `const int ck_td_start[2][2] = { ${T.START.map(R).join(', ')} };`,
     `const int ck_td_gate[3] = { ${T.GATE.x}, ${T.GATE.hw}, ${T.GATE.y} };`,
-    `const int ck_td_leash[2] = { ${T.LEASH.join(', ')} };`,
     `const ck_troom ck_trooms[${T.rooms.length}] = {`, ...T.rooms.map(r => `    { ${r.x}, ${r.y}, ${r.w}, ${r.h}, "${r.name}" },`), '};',
     `const int ck_ntrooms = ${T.rooms.length};`,
     `const ck_trect ck_twalk[${T.walk.length}] = {`, ...T.walk.map(w => `    ${R(w)},`), '};',
@@ -455,8 +462,9 @@ const { sheets, accAt, houseMap } = await page.evaluate(() => bakeAll());
 await browser.close();
 
 fs.mkdirSync(path.join(ASSETS, 'rgba16'), { recursive: true });
+fs.mkdirSync(path.join(ASSETS, 'ci8'), { recursive: true });
 for (const s of sheets) {
-  const dir = s.fmt === 'rgba16' ? path.join(ASSETS, 'rgba16') : ASSETS;
+  const dir = s.fmt === 'rgba32' ? ASSETS : path.join(ASSETS, s.fmt);
   fs.writeFileSync(path.join(dir, s.name + '.png'), Buffer.from(s.png.split(',')[1], 'base64'));
 }
 const id = n => 'SPR_' + n.toUpperCase().replace(/[^A-Z0-9]/g, '_');
@@ -464,10 +472,11 @@ const lines = [
   '// Generated by roms/clankers/tools/bake_sprites.mjs. Do not edit; re-run the tool.',
   '// Each strip: frame size, frames per row, frame count, and the anchor inside a frame.',
   '#ifndef CK_SPRITES_H', '#define CK_SPRITES_H', '',
-  'typedef struct { const char *file; short fw, fh, cols, n, ax, ay; } spr_info;', '',
+  '// bytes: about what it takes in memory once loaded (pixels, and the palette of a CI8 one)',
+  'typedef struct { const char *file; short fw, fh, cols, n, ax, ay; int bytes; } spr_info;', '',
   'enum {', ...sheets.map(s => `    ${id(s.name)},`), '    SPR_COUNT', '};', '',
   'static const spr_info SPR_INFO[SPR_COUNT] = {',
-  ...sheets.map(s => `    [${id(s.name)}] = { "rom:/${s.name}.sprite", ${s.fw}, ${s.fh}, ${s.cols}, ${s.n}, ${s.ax}, ${s.ay} },`),
+  ...sheets.map(s => `    [${id(s.name)}] = { "rom:/${s.name}.sprite", ${s.fw}, ${s.fh}, ${s.cols}, ${s.n}, ${s.ax}, ${s.ay}, ${s.fw * s.cols * s.fh * Math.ceil(s.n / s.cols) * { rgba32: 4, rgba16: 2, ci8: 1 }[s.fmt] + (s.fmt === 'ci8' ? 512 : 0)} },`),
   '};', '',
   '// Where each hero frame (robot, ostrich) wears its accessories, from the feet anchor: the head\'s',
   '// top middle (hats, face and neck pieces), the middle of the body, and up to two feet (the far',

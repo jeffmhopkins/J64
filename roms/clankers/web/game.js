@@ -699,7 +699,8 @@ function shopScene(back) {
 // back to the map. Every baby bot you have rescued lives here.
 // The N64 has the same house (src/core/ck_house.c); these numbers match it.
 const HL = HOUSEART.LAYOUT, HT = HOUSETOP;
-const HOUSE_SPEED = 1.7, HOUSE_HOP = 3, HOUSE_GRAV = 0.26;
+// the heroes are HOUSETOP.BIG times their usual size in the house, so they walk and hop that much further
+const HOUSE_SPEED = 1.7 * 1.5, HOUSE_HOP = 3 * 1.5, HOUSE_GRAV = 0.26 * 1.5;
 // the garden, floors and walls never change: drawn once into a picture of the whole house
 let houseBg = null;
 function houseBgPicture() {
@@ -736,7 +737,7 @@ function houseBabies() {
 // a little rng the N64 copies exactly, so the babies start in the same places
 const hrng = s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x80000000;
 function houseScene(from) {
-  const S = { song: 'select', t: 0, cx: 0, cy: 0, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, fpick: [0, 2], cpick: [0, 2], pan: [], heat: 0, dish: 0, dishName: '', thrown: [] };
+  const S = { song: 'select', t: 0, cx: 0, cy: 0, z: 1, flushT: 0, flushAt: null, msg: null, mode: 'walk', pick: 0, sleepT: 0, letter: 0, fpick: [0, 2], cpick: [0, 2], pan: [], heat: 0, dish: 0, dishName: '', thrown: [] };
   const team = activeParty(), q = hrng(7);
   S.ps = team.map((m, i) => ({ m, x: HT.START[i][0], y: HT.START[i][1], z: 0, vz: 0, lx: 0, ly: 1, face: 1, moving: false, anim: 0, eatT: 0, hold: 0, food: 0 }));
   S.babies = houseBabies().map((hex, i) => {
@@ -745,14 +746,21 @@ function houseScene(from) {
   });
   const here = th => th.kind !== 'back' || worldNum > 1;   // the signpost is there from World 2 on
   const near = p => { const th = p.z > 0 ? null : HT.near(p.x, p.y, here); return th ? th.spot : -1; };
-  const view = () => { const n = S.ps.length; [S.cx, S.cy] = HT.camera(S.ps.reduce((a, p) => a + p.x, 0) / n, S.ps.reduce((a, p) => a + p.y, 0) / n, W, H); };
-  view();
+  // the camera: zooms out at once as the heroes part (so neither is ever off screen), back in gently
+  const view = (snap = false) => {
+    const xs = S.ps.map(p => p.x), ys = S.ps.map(p => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const tz = HT.fit(x0, y0, x1, y1, W, H);
+    S.z = snap || tz < S.z ? tz : Math.min(tz, S.z + (tz - S.z) * 0.06 + 0.0005);
+    [S.cx, S.cy] = HT.camera(x0, y0, x1, y1, S.z, W, H);
+  };
+  const sx = x => (x - S.cx) * S.z, sy = y => (y - S.cy) * S.z;   // a point in the house on the screen
+  view(true);
   const leave = () => { SND.fx.select(); saveProg(); go(mapScene); };
   function useSpot(k, p, i) {
     const kind = HL.spots[k][1];
     if (kind === 'back') { SND.fx.confirm(); saveProg(); enterWorld(worldNum - 1, 'exit'); }
     else if (kind === 'mail') { SND.fx.open(); S.letter = S.letter % HOUSEART.LETTERS.length + 1; S.mode = 'letter'; }
-    else if (kind === 'tree') { p.hold = 1; p.garnish = null; SND.fx.sprout(); sparks(p.x - S.cx, p.y - S.cy - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
+    else if (kind === 'tree') { p.hold = 1; p.garnish = null; SND.fx.sprout(); sparks(sx(p.x), sy(p.y - 50 * HT.BIG), 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
     else if (kind === 'snack') { SND.fx.open(); S.mode = 'fridge'; }
     else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.panNext = 0; S.heat = 0; S.dish = 0; }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
@@ -764,7 +772,9 @@ function houseScene(from) {
     else if (kind === 'blast') { SND.fx.open(); go(blastScene(S)); }
     else if (kind === 'bolt') { SND.fx.open(); go(boltScene(S)); }
     else if (kind === 'jetrun') { SND.fx.open(); go(runScene(S)); }
+    else if (kind === 'sand') { SND.fx.open(); go(sandScene(S)); }
     else if (kind === 'pond') { SND.fx.open(); go(fishScene(S)); }
+    else if (kind === 'flush') { if (S.flushT <= 0) { SND.fx.whoosh(); S.flushT = 90; S.flushAt = HT.near(p.x, p.y, here); } }
     else if (kind === 'bed') { SND.fx.select(); S.mode = 'slots'; S.pick = saveSlot - 1; }
   }
   S.resume = () => go(S);
@@ -830,21 +840,21 @@ function houseScene(from) {
       p.moving = false;
       if (p.eatT > 0) p.eatT--;
       else {
-        // walk every way, sliding along walls and furniture; two heroes stay near each other
+        // walk every way, sliding along walls and furniture
         const n = Math.hypot(dx, dy);
         if (n) {
-          const vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED, o = S.ps[1 - i];
-          const ok = (x, y) => !HT.solid(x, y) && (!o || (Math.abs(x - o.x) < HT.LEASH[0] && Math.abs(y - o.y) < HT.LEASH[1]));
+          const vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED;
+          const ok = (x, y) => !HT.solid(x, y);   // no leash: the camera zooms out to show both, however far apart
           if (ok(p.x + vx, p.y)) { p.x += vx; p.moving = true; }
           if (ok(p.x, p.y + vy)) { p.y += vy; p.moving = true; }
           if (dx) p.face = dx;
           p.lx = dx / n; p.ly = dy / n;
-          if (p.moving) p.anim += HOUSE_SPEED;
+          if (p.moving) p.anim += 1.7;   // a stride for every 1.7 steps, as on a level
         }
         // holding food: A eats it, B throws it the way you last walked
         const k = !p.hold ? near(p) : -1;
         if (p.hold && hit(sl, 'a')) {
-          p.food = p.hold - 1; p.hold = 0; p.eatT = 50; SND.fx.sprout(); sparks(p.x - S.cx, p.y - S.cy - 22, 8, '#ffd23f');
+          p.food = p.hold - 1; p.hold = 0; p.eatT = 50; SND.fx.sprout(); sparks(sx(p.x), sy(p.y - 22 * HT.BIG), 8, '#ffd23f');
           const full = (prog.lives ?? 3) >= 3; prog.lives = 3; saveProg();
           S.msg = { text: full ? 'Yum, ' + HOUSEART.FOODS[p.food].name + '!' : 'Yum! Batteries full!', t: 100 };
         } else if (p.hold && hit(sl, 'b')) {
@@ -859,14 +869,15 @@ function houseScene(from) {
       if (p.y > HT.GATE.y && Math.abs(p.x - HT.GATE.x) < HT.GATE.hw) { leave(); return; }   // out of the front gate
     }
     view();
+    if (S.flushT > 0) S.flushT--;
     for (const f of S.thrown) {   // thrown food bounces off the floor and the walls; a baby catches it and munches it
       f.vz -= 0.2; f.z += f.vz;
       if (f.z <= 0) { f.z = 0; f.vz *= -0.45; f.vx *= 0.75; f.vy *= 0.75; if (Math.abs(f.vz) < 0.6) f.vz = 0; }
       if (HT.solid(f.x + f.vx, f.y)) f.vx = -f.vx; else f.x += f.vx;
       if (HT.solid(f.x, f.y + f.vy)) f.vy = -f.vy; else f.y += f.vy;
-      if (--f.life <= 0) { f.gone = true; puff(f.x - S.cx, f.y - S.cy - f.z, 4, 'rgba(255,255,255,0.8)'); continue; }
+      if (--f.life <= 0) { f.gone = true; puff(sx(f.x), sy(f.y - f.z), 4, 'rgba(255,255,255,0.8)'); continue; }
       const b = S.babies.find(b => Math.abs(b.x - f.x) < 10 && Math.abs(b.y - f.y) < 8 && f.z < 20);
-      if (b) { b.vz = 2.2; b.z = 0.1; f.gone = true; SND.fx.hop(); sparks(f.x - S.cx, f.y - S.cy - f.z, 5, '#ff8fc7'); }
+      if (b) { b.vz = 2.2; b.z = 0.1; f.gone = true; SND.fx.hop(); sparks(sx(f.x), sy(f.y - f.z), 5, '#ff8fc7'); }
     }
     S.thrown = S.thrown.filter(f => !f.gone);
     for (const b of S.babies) {   // each baby toddles to a spot in its area, waits, picks another
@@ -883,28 +894,46 @@ function houseScene(from) {
   S.draw = function () {
     // the babies, the heroes and thrown food go in among the furniture, sorted by their feet
     const actors = [];
-    for (const b of S.babies) actors.push({ y: b.y, draw: () => { const hop = b.wait > 0 ? 0 : Math.abs(Math.sin(S.t * 8 + b.x)) * 2; houseShadow(b.x, b.y, 6); K.baby(b.x, b.y - hop - b.z, 0.05, b.hex, { t: S.t + b.x, armL: 30 + Math.sin(S.t * 5 + b.x) * 20, armR: -150, mouth: 'smile', eyes: { happy: 0.5 } }); } });
+    // heroes, babies and food are BIG times their usual size here: each is drawn about (x, y) scaled up
+    const B = HT.BIG, big = (x, y, f) => { g.save(); g.translate(x, y); g.scale(B, B); f(); g.restore(); };
+    for (const b of S.babies) actors.push({ y: b.y, draw: () => { const hop = b.wait > 0 ? 0 : Math.abs(Math.sin(S.t * 8 + b.x)) * 2; houseShadow(b.x, b.y, 6 * B); big(b.x, b.y - b.z, () => K.baby(0, -hop, 0.05, b.hex, { t: S.t + b.x, armL: 30 + Math.sin(S.t * 5 + b.x) * 20, armR: -150, mouth: 'smile', eyes: { happy: 0.5 } })); } });
     for (const p of S.ps) actors.push({ y: p.y, draw: () => {
       const t = S.t + p.m.slot * 0.7, y = p.y - p.z;
       // four ways: side on when walking more across than up or down, else toward us or away
       const vert = Math.abs(p.ly) > Math.abs(p.lx), away = vert && p.ly < 0;
       const st = p.eatT > 0 || S.mode === 'sleep' ? 'cheer' : p.z > 0 ? 'jump' : p.moving ? (vert ? (away ? 'walkBack' : 'walkFront') : 'run') : away ? 'back' : 'idle';
-      houseShadow(p.x, p.y, p.m.hero === 'robot' ? 10 : 9);
-      const held = () => { if (p.hold && p.eatT <= 0) { foodArt(p.hold - 1, p.x + p.face * 9, y - 20); garnishArt(p.garnish, p.x + p.face * 9, y - 20, 1); } };
-      if (away) held();   // from behind, what you hold is in front of you
-      drawHeroPose(p.m, p.x, y, st, st === 'run' || st === 'walkFront' || st === 'walkBack' ? p.anim / 11 : t, p.face);
-      if (p.eatT > 0) { const sc = 0.4 + 0.6 * p.eatT / 50; foodArt(p.food, p.x + 6, y - 24, sc); garnishArt(p.garnish, p.x + 6, y - 24, sc); }   // shrinking as it is eaten
-      else if (!away) held();
+      houseShadow(p.x, p.y, (p.m.hero === 'robot' ? 10 : 9) * B);
+      big(p.x, y, () => {
+        const held = () => { if (p.hold && p.eatT <= 0) { foodArt(p.hold - 1, p.face * 9, -20); garnishArt(p.garnish, p.face * 9, -20, 1); } };
+        if (away) held();   // from behind, what you hold is in front of you
+        drawHeroPose(p.m, 0, 0, st, st === 'run' || st === 'walkFront' || st === 'walkBack' ? p.anim / 11 : t, p.face);
+        if (p.eatT > 0) { const sc = 0.4 + 0.6 * p.eatT / 50; foodArt(p.food, 6, -24, sc); garnishArt(p.garnish, 6, -24, sc); }   // shrinking as it is eaten
+        else if (!away) held();
+      });
     } });
-    for (const f of S.thrown) actors.push({ y: f.y, draw: () => { houseShadow(f.x, f.y, 4); foodArt(f.kind, f.x, f.y - 4 - f.z); } });
-    HT.draw(g, S.cx, S.cy, S.t, actors, houseBgPicture(), here, W, H);
+    if (S.flushT > 0 && S.flushAt) {   // the toilet flushing: the water swirls round the bowl and down
+      const th = S.flushAt, sc = HT.SCALE[th.art] || 1, u = 1 - S.flushT / 90, bx = th.x, by = th.y - 18 * sc;
+      actors.push({ y: th.y + 0.01, draw: () => {
+        g.fillStyle = '#8fd3ff'; g.beginPath(); g.ellipse(bx, by, 5.2 * sc, 3.6 * sc, 0, 0, Math.PI * 2); g.fill();
+        for (let k = 0; k < 4; k++) {
+          const a = u * 26 + k * Math.PI / 2, r = 1 - u * 0.75;
+          K.circ(bx + Math.cos(a) * 4.4 * sc * r, by + Math.sin(a) * 3 * sc * r, (1.4 - u * 0.6) * sc, k % 2 ? '#ffffff' : '#3f8fd8');
+        }
+      } });
+      // and a splash of drops up out of the bowl, over whoever is standing there
+      if (u < 0.5) actors.push({ y: th.y + 60, draw: () => {
+        for (let k = 0; k < 6; k++) { const v = u * 2, dx = (k - 2.5) * 3.2 * v * 3, dy = -70 * v + 50 * v * v; K.circ(bx + dx, by + dy - 4, 1.4, k % 2 ? '#bfe9ff' : '#8fd3ff'); }
+      } });
+    }
+    for (const f of S.thrown) actors.push({ y: f.y, draw: () => { houseShadow(f.x, f.y, 4 * B); big(f.x, f.y - f.z, () => foodArt(f.kind, 0, -4)); } });
+    HT.draw(g, S.cx, S.cy, S.t, actors, houseBgPicture(), here, W, H, S.z);
     K.g = g;
     // what A does where you stand, over your head
     const shown = new Set();
     for (const p of S.ps) {
       const k = near(p); if (k < 0 || shown.has(k) || S.mode !== 'walk') continue; shown.add(k);
       const [, kind, label] = HL.spots[k], s = 'A  ' + (kind === 'back' ? 'Back to World ' + (worldNum - 1) : label), w = textW(s, 8) + 14;
-      const x = clamp(p.x - S.cx, w / 2 + 4, W - w / 2 - 4), y = Math.max(22, p.y - S.cy - 64);
+      const x = clamp(sx(p.x), w / 2 + 4, W - w / 2 - 4), y = Math.max(22, sy(p.y - 64 * HT.BIG));
       panel(x - w / 2, y, w, 15); text(s, x, y + 11, 8, '#fff6d8', 'center', null);
     }
     drawParticles(0);
@@ -913,7 +942,7 @@ function houseScene(from) {
     if (S.mode === 'sleep') {
       g.fillStyle = 'rgba(12,8,30,' + Math.min(0.75, S.sleepT * 0.6) + ')'; g.fillRect(0, 0, W, H);
       const bed = HT.things.find(th => th.kind === 'bed');
-      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', bed.x - S.cx + 10 + u * 20, bed.y - S.cy - 70 - u * 50, 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
+      for (let k = 0; k < 3; k++) { const u = (S.sleepT * 0.8 + k / 3) % 1; text('z', sx(bed.x + 10 + u * 20), sy(bed.y - 70 - u * 50), 8 + u * 8, 'rgba(255,246,216,' + (1 - u) + ')', 'center', null); }
     }
     if (S.mode === 'slots') drawSlotPicker('SLEEP AND SAVE', 'Which save slot?', S.pick);
     if (S.mode === 'fridge') {   // the fridge door open: three shelves of food, a cursor each

@@ -426,12 +426,12 @@ typedef struct {
 // The home node on every map is the heroes' house: a four-bedroom house with a garage and a
 // garden all round, seen from above (three-quarter view). The plan is web/lib/housetop.js, written
 // into ck_house_map.c by tools/bake_sprites.mjs. A at a thing uses it; some open a little game of
-// their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO and the arcade). Rescued baby bots wander about.
+// their own (SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SAND and the arcade). Rescued baby bots wander about.
 #define CK_HOUSE_ROOMS 8
-#define CK_HOUSE_SPOTS 16
+#define CK_HOUSE_SPOTS 18
 #define CK_HOUSE_BABIES 16
 enum { SPOT_SNACK, SPOT_PAINT, SPOT_PIANO, SPOT_AQUA, SPOT_BED, SPOT_CARS, SPOT_DRUMS, SPOT_MAIL, SPOT_TREE, SPOT_BACK, SPOT_STOVE,
-       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT, SPOT_JETRUN };
+       SPOT_PINBALL, SPOT_BLAST, SPOT_POND, SPOT_BOLT, SPOT_JETRUN, SPOT_SAND, SPOT_FLUSH };
 // the rooms of the old side-on house: the music room's colours still dress the piano and drums
 typedef struct { int x0, x1; const char *name; uint32_t wall, stripe, floor; } ck_room;
 typedef struct { int kind; const char *label; } ck_spot;   // what A does there
@@ -445,7 +445,7 @@ typedef struct { int x0, y0, x1, y1; } ck_trect;
 // back from there. art is its look (ck_tarts, and a baked sprite each); spot is SPOT_* or -1.
 typedef struct { short x, y, fw, fd, art, spot, flat; } ck_thing;
 typedef struct { float scale; int fw, fd; unsigned char tank, shade; } ck_tart;
-extern const int ck_td_world[2], ck_td_start[2][2], ck_td_gate[3], ck_td_leash[2];
+extern const int ck_td_world[2], ck_td_start[2][2], ck_td_gate[3];
 extern const ck_troom ck_trooms[];
 extern const ck_trect ck_twalk[], ck_tareas[];
 extern const ck_thing ck_things[];
@@ -453,7 +453,29 @@ extern const ck_tart ck_tarts[];
 extern const int ck_ntrooms, ck_ntwalk, ck_nthings, ck_ntarts, ck_ntareas;
 bool ck_house_solid(float x, float y);         // a wall, furniture or outside the house's ground
 int ck_house_room_at(float x, float y);       // the room (ck_trooms) a point is in, or -1
-void ck_house_camera(float mx, float my, float *cx, float *cy);   // the view for the party's middle
+// The view: the zoom that fits feet x0..x1, y0..y1 (all the heroes) on screen, CK_HOUSE_ZOOM
+// down to ck_house_zoom_min (the whole property), and the top-left corner of the view at zoom z
+// (the screen shows CK_W / z by CK_H / z of the world). Heroes, babies and food are drawn CK_HOUSE_BIG times their
+// usual size in the house, so at CK_HOUSE_ZOOM they are their usual size on screen and the house
+// round them is two thirds of its size in the plan.
+#define CK_HOUSE_BIG 1.5f
+#define CK_HOUSE_ZOOM (1 / CK_HOUSE_BIG)
+#define CK_FLUSH_T 90
+float ck_house_zoom_min(void);
+float ck_house_fit(float x0, float y0, float x1, float y1);
+// What the N64 keeps loaded for a view (tested against a memory budget on the host): the house
+// picture comes in tiles of CK_HBG_TW x CK_HBG_TH pixels, in three sets baked at CK_HOUSE_ZOOM, a
+// half and a quarter of it; ck_house_tier is the set for zoom z. A tile, or a thing's furniture
+// sprite, is kept while it is within margin screen pixels of the view, and let go further out.
+#define CK_HBG_TW 160
+#define CK_HBG_TH 120
+#define CK_HOUSE_TIERS 3
+#define CK_HOUSE_KEEP 8   // the margin
+int ck_house_tier(float z);
+void ck_house_tiles(int tier, int *cols, int *rows, float *ww, float *wh);   // the set's grid, and how much of the house a tile covers
+bool ck_house_tile_near(int tier, int tx, int ty, float cam, float camy, float z, float margin);
+bool ck_house_thing_near(int i, float cam, float camy, float z, float margin);
+void ck_house_camera(float x0, float y0, float x1, float y1, float z, float *cx, float *cy);
 // the paint studio's wall: 80 x 48 cells of 4 px from y 16; 0 is bare, else palette index + 1
 #define CK_MURAL_W 80
 #define CK_MURAL_H 48
@@ -677,6 +699,43 @@ float ck_run_gap_y(const ck_jetrun *J, const ck_runcol *c);   // a column's gap 
 float ck_run_gap(const ck_jetrun *J, const ck_runcol *c);     // its gap's height right now (crushers open and shut)
 float ck_run_mid(const ck_runcol *c);                         // its middle across
 float ck_run_safe_y(const ck_jetrun *J, const ck_runcol *c);  // where a hero's middle should be to get by it right now
+// ---- the back garden's sandbox (SC_SAND): a falling-sand toy. Each player has a cursor and pours
+// sand (falls and piles up), water (falls and levels out), acid (eats sand, clay and water) or clay
+// (stays just where it is put, so it makes shelves), or rubs out. Gravity leans slowly left and
+// right (CK_SAND_SWAY frames there and back) so loose sand and water slosh; the screen never turns.
+// The tank is CK_SAND_W x CK_SAND_H cells of CK_SAND_CELL px, its top-left at (CK_SAND_X, CK_SAND_Y).
+#define CK_SAND_W 156
+#define CK_SAND_H 100
+#define CK_SAND_CELL 2
+#define CK_SAND_X 4
+#define CK_SAND_Y 20
+#define CK_SAND_SWAY 600          // frames for gravity to lean left, right and back (10 seconds)
+#define CK_SAND_LEAN 0.11f        // the most it leans: the sideways part of gravity (a gentle slosh)
+// a cell: the material in the low 3 bits, a flag the step uses in bit 3, a shade 0..15 on top
+enum { SAND_EMPTY, SAND_SAND, SAND_WATER, SAND_ACID, SAND_CLAY, SAND_KINDS };
+#define SAND_MAT 7
+#define SAND_MOVED 8
+#define SAND_SHADE(c) ((c) >> 4)
+// what a cursor holds: the four materials, the rubber, the sway on or off, and wipe the lot
+enum { SANDTOOL_SAND, SANDTOOL_WATER, SANDTOOL_ACID, SANDTOOL_CLAY, SANDTOOL_ERASE, SANDTOOL_TILT, SANDTOOL_CLEAR, CK_SAND_TOOLS };
+#define CK_SAND_SIZES 3
+typedef struct { float x, y, lx, ly; int tool, size, rep; bool down, armed; } ck_sandcur;   // x, y on screen; lx, ly where it was last frame A was held; armed: A and B let go since coming in
+typedef struct {
+    uint8_t cell[CK_SAND_W * CK_SAND_H];
+    ck_sandcur cur[2];
+    float lean;               // gravity's sideways part now, -CK_SAND_LEAN (left) .. CK_SAND_LEAN (right)
+    int swayT;                // frames into the sway
+    bool still;               // the sway is off (SANDTOOL_TILT turns it off and on)
+    bool ready;               // the cursors have been given their first tools
+    uint32_t rng;
+    int tick, fizz, fx, fy;   // fizz: acid bites this tick, the last at cell (fx, fy)
+} ck_sandbox;
+extern const char *const ck_sand_tool_names[CK_SAND_TOOLS];
+uint32_t ck_sand_hex(int cell);                 // a cell's colour (0xRRGGBB); empty is the tank's back
+int ck_sand_radius(int size);                   // a brush size's radius in cells
+void ck_sand_step(ck_sandbox *S);               // one tick of the sand, water and acid (no input)
+void ck_sand_pour(ck_sandbox *S, int cx, int cy, int tool, int size);   // one dab of a tool at cell (cx, cy)
+void ck_sand_clear(ck_sandbox *S);
 // ---- the arcade's third cabinet (SC_BOLT): Bolt Ball. A paddle each side, a ball between: miss
 // it and the other side scores, first to CK_BOLT_WIN wins. Everyone playing presses A to say
 // ready; with two players, if only one says ready before the countdown ends, they play the
@@ -818,6 +877,8 @@ typedef struct {
     ck_hbaby babies[CK_HOUSE_BABIES];
     int nbabies;
     float cam, camy;           // the house's view: its top-left corner in the world
+    float zoom;                // and its zoom: 1, or less to fit two heroes far apart
+    int flushT, flushAt;       // a toilet flushing: ticks left (from CK_FLUSH_T), and which thing
     int mode, pick;
     float sleepT;
     char msg[56];
@@ -857,6 +918,7 @@ typedef struct {
     ck_boltball bolt;
     ck_jetrun run;
     ck_pond pond;
+    ck_sandbox sand;
 } ck_house;
 int ck_race_rank(const ck_house *H, const ck_hhero *me);   // a car's place in the race right now (1 is in front)
 #define CK_SLOTS 3
@@ -864,7 +926,7 @@ typedef struct { bool used; int world, bolts; } ck_slot_info;
 
 // ---------------------------------------------------------------------------- the whole game
 enum { SC_TITLE, SC_SELECT, SC_MAP, SC_SHOP, SC_LEVEL, SC_JET, SC_PAUSE, SC_INTRO, SC_CUT, SC_MENU,
-       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH, SC_BOLT, SC_JETRUN };
+       SC_HOUSE, SC_PAINT, SC_AQUA, SC_CARS, SC_PIANO, SC_SLOTS, SC_PINBALL, SC_BLAST, SC_FISH, SC_BOLT, SC_JETRUN, SC_SAND };
 enum { BS_MOVE, BS_WARN, BS_DROP, BS_DOWN, BS_RISE, BS_WAIT, BS_ROLL, BS_DIZZY, BS_FLY, BS_BEAM };
 
 // The little film between worlds (G->t is its clock): 1 into the Gear Factory, 2 up the mine

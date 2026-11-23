@@ -36,6 +36,8 @@ void ck_run_start(ck_game *G);
 void ck_run_update(ck_game *G);
 void ck_fish_start(ck_game *G);
 void ck_fish_update(ck_game *G);
+void ck_sand_start(ck_game *G);           // sand.c: the back garden's sandbox
+void ck_sand_update(ck_game *G);
 void ck_save(ck_game *G);
 
 // level.c

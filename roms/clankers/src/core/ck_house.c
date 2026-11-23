@@ -36,6 +36,8 @@ const ck_spot ck_spots[CK_HOUSE_SPOTS] = {
     { SPOT_POND, "Go fishing" },
     { SPOT_BOLT, "Play Bolt Ball" },
     { SPOT_JETRUN, "Play Jet Run" },
+    { SPOT_SAND, "Play in the sandbox" },
+    { SPOT_FLUSH, "Flush the toilet" },
 };
 #define C(x, y, r, c) { 0, x, y, r, 0, c }
 #define R(x, y, w, h, c) { 1, x, y, w, h, c }
@@ -236,9 +238,10 @@ const int ck_aqua_pop[CK_AQUA_SECTIONS][CK_AQUA_PER_SEC] = {
 };
 const uint32_t ck_mural_pal[CK_MURAL_PAL] = { 0xE04F4F, 0xFF8A3D, 0xFFD23F, 0x49D17A, 0x5AD1FF, 0x3A6FC0, 0xC28BFF, 0xFF8FC7, 0xFFFFFF, 0x2B2230 };
 
-#define HOUSE_SPEED 1.7f
-#define HOUSE_HOP 3.0f
-#define HOUSE_GRAV 0.26f
+// the heroes are CK_HOUSE_BIG times their usual size here, so they walk and hop that much further
+#define HOUSE_SPEED (1.7f * CK_HOUSE_BIG)
+#define HOUSE_HOP (3.0f * CK_HOUSE_BIG)
+#define HOUSE_GRAV (0.26f * CK_HOUSE_BIG)
 
 static int dir_x(const ck_game *G, int s) { return (HELD(G, s, CK_RIGHT) ? 1 : 0) - (HELD(G, s, CK_LEFT) ? 1 : 0); }
 static int dir_y(const ck_game *G, int s) { return (HELD(G, s, CK_DOWN) ? 1 : 0) - (HELD(G, s, CK_UP) ? 1 : 0); }
@@ -308,23 +311,62 @@ int ck_house_near(const ck_game *G, const ck_hhero *p) {
     int i = ck_house_thing_at(G, p->x, p->y);
     return i < 0 ? -1 : ck_things[i].spot;
 }
-// it follows the middle of the party (a little above the feet); indoors it stays inside the room
-static float fit(float c, float lo, float hi) { return hi < lo ? roundf((lo + hi) / 2) : ck_clampf(c, lo, hi); }
-void ck_house_camera(float mx, float my, float *cx, float *cy) {
-    float W = ck_td_world[0], H = ck_td_world[1];
-    *cx = ck_clampf(roundf(mx - CK_W / 2), 0, W - CK_W);
-    *cy = ck_clampf(roundf(my - 44 - CK_H / 2), 0, H - CK_H);
-    int k = ck_house_room_at(mx, my);
-    if (k < 0) return;
-    const ck_troom *r = &ck_trooms[k];
-    *cx = ck_clampf(fit(*cx, r->x - 8, r->x + r->w + 8 - CK_W), 0, W - CK_W);
-    if (r->h > 160) *cy = ck_clampf(fit(*cy, r->y - 8, r->y + r->h + 8 - CK_H), 0, H - CK_H);
+// The camera follows the heroes the same way everywhere: the box round them (36 px either side,
+// 70 above the feet for their heads and 24 below, at their size here) sits in the middle of the
+// screen, and when two heroes are too far apart for that box to fit it zooms out
+// (web/lib/housetop.js does the same).
+#define CAM_SIDE (36 * CK_HOUSE_BIG)
+#define CAM_UP (70 * CK_HOUSE_BIG)
+#define CAM_DOWN (24 * CK_HOUSE_BIG)
+float ck_house_zoom_min(void) {
+    return fminf(CK_HOUSE_ZOOM, fminf(CK_W / (ck_td_world[0] + 2 * CAM_SIDE), CK_H / (ck_td_world[1] + CAM_UP + CAM_DOWN)));
 }
-static void house_view(ck_house *H) {
-    float mx = 0, my = 0;
-    for (int i = 0; i < H->np; i++) { mx += H->ps[i].x; my += H->ps[i].y; }
-    if (H->np > 0) { mx /= H->np; my /= H->np; }
-    ck_house_camera(mx, my, &H->cam, &H->camy);
+float ck_house_fit(float x0, float y0, float x1, float y1) {
+    float z = fminf(CK_W / (x1 - x0 + 2 * CAM_SIDE), CK_H / (y1 - y0 + CAM_UP + CAM_DOWN));
+    return ck_clampf(z, ck_house_zoom_min(), CK_HOUSE_ZOOM);
+}
+// the view's corner along one axis: centred on the house when the view is bigger than it
+static float place(float mid, float v, float world) { return v >= world ? (world - v) / 2 : ck_clampf(mid - v / 2, 0, world - v); }
+void ck_house_camera(float x0, float y0, float x1, float y1, float z, float *cx, float *cy) {
+    float vw = CK_W / z, vh = CK_H / z;
+    *cx = place((x0 + x1) / 2, vw, ck_td_world[0]);
+    *cy = place((y0 - CAM_UP + y1 + CAM_DOWN) / 2, vh, ck_td_world[1]);
+    if (z >= CK_HOUSE_ZOOM) { *cx = roundf(*cx * z) / z; *cy = roundf(*cy * z) / z; }   // whole screen pixels when not zoomed out, so the picture stays crisp
+}
+// snap: straight to the right view (coming in); otherwise it zooms out at once as the heroes part
+// (so neither is ever off screen) and back in gently
+int ck_house_tier(float z) { return z >= 0.9f * CK_HOUSE_ZOOM ? 0 : z >= 0.45f * CK_HOUSE_ZOOM ? 1 : 2; }
+void ck_house_tiles(int tier, int *cols, int *rows, float *ww, float *wh) {
+    float k = (float)(1 << tier) / CK_HOUSE_ZOOM;   // house pixels per tile pixel
+    *ww = CK_HBG_TW * k; *wh = CK_HBG_TH * k;
+    *cols = (int)ceilf(ck_td_world[0] / *ww); *rows = (int)ceilf(ck_td_world[1] / *wh);
+}
+bool ck_house_tile_near(int tier, int tx, int ty, float cam, float camy, float z, float margin) {
+    int cols, rows; float ww, wh;
+    ck_house_tiles(tier, &cols, &rows, &ww, &wh);
+    float x = (tx * ww - cam) * z, y = (ty * wh - camy) * z;
+    return x + ww * z > -margin && x < CK_W + margin && y + wh * z > -margin && y < CK_H + margin;
+}
+// a thing's furniture reaches 120 px either side of it, 180 up and 20 down at most
+bool ck_house_thing_near(int i, float cam, float camy, float z, float margin) {
+    const ck_thing *t = &ck_things[i];
+    float x = (t->x - cam) * z, y = (t->y - camy) * z;
+    return x > -120 * z - margin && x < CK_W + 120 * z + margin && y > -20 * z - margin && y < CK_H + 180 * z + margin;
+}
+// a point in the house on the screen (sparks and puffs are drawn in screen pixels)
+#define SX(H, x) (((x) - (H)->cam) * (H)->zoom)
+#define SY(H, y) (((y) - (H)->camy) * (H)->zoom)
+static void house_view(ck_house *H, bool snap) {
+    if (H->np <= 0) return;
+    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+    for (int i = 0; i < H->np; i++) {
+        x0 = fminf(x0, H->ps[i].x); x1 = fmaxf(x1, H->ps[i].x);
+        y0 = fminf(y0, H->ps[i].y); y1 = fmaxf(y1, H->ps[i].y);
+    }
+    float tz = ck_house_fit(x0, y0, x1, y1);
+    if (snap || tz < H->zoom || H->zoom <= 0) H->zoom = tz;
+    else H->zoom = fminf(tz, H->zoom + (tz - H->zoom) * 0.06f + 0.0005f);
+    ck_house_camera(x0, y0, x1, y1, H->zoom, &H->cam, &H->camy);
 }
 
 void ck_house_enter(ck_game *G, bool fromShop) {
@@ -356,7 +398,8 @@ void ck_house_enter(ck_game *G, bool fromShop) {
     H->nthrown = 0;
     H->fpick[0] = 0; H->fpick[1] = 2;
     H->cpick[0] = 0; H->cpick[1] = 2;
-    house_view(H);
+    H->flushT = 0;
+    house_view(H, true);
     ck_go(G, SC_HOUSE);
 }
 
@@ -393,7 +436,7 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
     case SPOT_TREE:
         p->hold = FOOD_APPLE + 1; p->garnish = (ck_garnish){ 0 };
         ck_sfx(G, SFX_SPROUT);
-        ck_sparks(G, p->x - H->cam, p->y - H->camy - 50, 6, 0x49D17A);
+        ck_sparks(G, SX(H, p->x), SY(H, p->y - 50 * CK_HOUSE_BIG), 6, 0x49D17A);
         say(H, "You picked an apple!");
         break;
     case SPOT_PAINT: ck_sfx(G, SFX_OPEN); paint_start(G); break;
@@ -406,7 +449,14 @@ static void use_spot(ck_game *G, int k, ck_hhero *p) {
     case SPOT_POND: ck_sfx(G, SFX_OPEN); ck_fish_start(G); break;
     case SPOT_BOLT: ck_sfx(G, SFX_OPEN); ck_bolt_start(G); break;
     case SPOT_JETRUN: ck_sfx(G, SFX_OPEN); ck_run_start(G); break;
+    case SPOT_SAND: ck_sfx(G, SFX_OPEN); ck_sand_start(G); break;
     case SPOT_BED: ck_sfx(G, SFX_SELECT); H->mode = HM_SLOTS; H->pick = G->slot; break;
+    case SPOT_FLUSH:   // whoosh: the water swirls round the bowl and away
+        if (H->flushT > 0) break;
+        ck_sfx(G, SFX_WHOOSH);
+        H->flushT = CK_FLUSH_T;
+        H->flushAt = ck_house_thing_at(G, p->x, p->y);
+        break;
     }
 }
 
@@ -686,24 +736,22 @@ void ck_house_update(ck_game *G) {
         p->moving = false;
         if (p->eat > 0) p->eat--;
         else {
-            // walk every way, sliding along walls and furniture; two heroes stay near each other
+            // walk every way, sliding along walls and furniture (no leash: the camera zooms out
+            // to show both heroes however far apart they go)
             if (dx || dy) {
                 float n = sqrtf((float)(dx * dx + dy * dy)), vx = dx / n * HOUSE_SPEED, vy = dy / n * HOUSE_SPEED;
-                const ck_hhero *o = H->np > 1 ? &H->ps[1 - i] : NULL;
-                #define OK(X, Y) (!ck_house_solid(X, Y) && (!o || (fabsf((X) - o->x) < ck_td_leash[0] && fabsf((Y) - o->y) < ck_td_leash[1])))
-                if (OK(p->x + vx, p->y)) { p->x += vx; p->moving = true; }
-                if (OK(p->x, p->y + vy)) { p->y += vy; p->moving = true; }
-                #undef OK
+                if (!ck_house_solid(p->x + vx, p->y)) { p->x += vx; p->moving = true; }
+                if (!ck_house_solid(p->x, p->y + vy)) { p->y += vy; p->moving = true; }
                 if (dx) p->face = dx;
                 p->lx = dx / n; p->ly = dy / n;
-                if (p->moving) p->anim += HOUSE_SPEED;
+                if (p->moving) p->anim += 1.7f;   // a stride for every 1.7 steps, as on a level
             }
             // holding food: A eats it, B throws it the way you last walked
             int k = !p->hold ? ck_house_near(G, p) : -1;
             if (p->hold && HIT(G, s, CK_A)) {
                 p->col = p->hold - 1; p->hold = 0; p->eat = 50;
                 ck_sfx(G, SFX_SPROUT);
-                ck_sparks(G, p->x - H->cam, p->y - H->camy - 22, 8, 0xFFD23F);
+                ck_sparks(G, SX(H, p->x), SY(H, p->y - 22 * CK_HOUSE_BIG), 8, 0xFFD23F);
                 bool full = G->prog.lives >= 3;
                 G->prog.lives = 3;
                 ck_save(G);
@@ -723,7 +771,8 @@ void ck_house_update(ck_game *G) {
         p->ground = p->jz == 0;
         if (p->y > ck_td_gate[2] && fabsf(p->x - ck_td_gate[0]) < ck_td_gate[1]) { ck_sfx(G, SFX_SELECT); ck_save(G); ck_go_map(G); return; }   // out of the front gate
     }
-    house_view(H);
+    house_view(H, false);
+    if (H->flushT > 0) H->flushT--;
     int nt = 0;
     for (int i = 0; i < H->nthrown; i++) {   // thrown food bounces off the floor and the walls
         ck_thrown *f = &H->thrown[i];
@@ -734,9 +783,9 @@ void ck_house_update(ck_game *G) {
         bool gone = --f->life <= 0;
         for (int k = 0; k < H->nbabies && !gone; k++) {   // a baby catches it and munches it
             ck_hbaby *b = &H->babies[k];
-            if (fabsf(b->x - f->x) < 10 && fabsf(b->y - f->y) < 8 && f->z < 20) { b->vz = 2.2f; b->z = 0.1f; gone = true; ck_sfx(G, SFX_HOP); ck_sparks(G, f->x - H->cam, f->y - H->camy - f->z, 5, 0xFF8FC7); }
+            if (fabsf(b->x - f->x) < 10 && fabsf(b->y - f->y) < 8 && f->z < 20) { b->vz = 2.2f; b->z = 0.1f; gone = true; ck_sfx(G, SFX_HOP); ck_sparks(G, SX(H, f->x), SY(H, f->y - f->z), 5, 0xFF8FC7); }
         }
-        if (gone) { if (f->life <= 0) ck_puff(G, f->x - H->cam, f->y - H->camy - f->z, 4, 0xFFFFFF, 200); }
+        if (gone) { if (f->life <= 0) ck_puff(G, SX(H, f->x), SY(H, f->y - f->z), 4, 0xFFFFFF, 200); }
         else H->thrown[nt++] = *f;
     }
     H->nthrown = nt;
@@ -1375,5 +1424,6 @@ void ck_house_step(ck_game *G) {
     case SC_FISH: ck_fish_update(G); break;
     case SC_BOLT: ck_bolt_update(G); break;
     case SC_JETRUN: ck_run_update(G); break;
+    case SC_SAND: ck_sand_update(G); break;
     }
 }

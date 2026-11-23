@@ -5,7 +5,6 @@
 const int ck_td_world[2] = { 2160, 1400 };
 const int ck_td_start[2][2] = { { 1238, 1120 }, { 1262, 1134 } };
 const int ck_td_gate[3] = { 1250, 30, 1386 };
-const int ck_td_leash[2] = { 280, 140 };
 const ck_troom ck_trooms[14] = {
     { 560, 300, 300, 280, "Kitchen" },
     { 860, 300, 420, 280, "Family room" },
@@ -66,7 +65,7 @@ const ck_trect ck_twalk[39] = {
 };
 const int ck_ntwalk = 39;
 // x, y (the front edge on the floor), footprint half width and depth, look (HOUSETOP.ARTS), spot (SPOT_*, -1 none), flat on the ground
-const ck_thing ck_things[90] = {
+const ck_thing ck_things[91] = {
     { 596, 382, 16, 16, 0, 0, 0 },
     { 676, 382, 38, 16, 1, -1, 0 },
     { 758, 382, 22, 16, 2, 10, 0 },
@@ -104,7 +103,7 @@ const ck_thing ck_things[90] = {
     { 1550, 524, 25, 16, 31, -1, 0 },
     { 1904, 386, 38, 20, 32, -1, 0 },
     { 1828, 382, 21, 14, 33, -1, 0 },
-    { 1910, 534, 11, 22, 34, -1, 0 },
+    { 1910, 534, 11, 22, 34, 17, 0 },
     { 1150, 656, 30, 10, 35, -1, 0 },
     { 1480, 656, 10, 8, 3, -1, 0 },
     { 1700, 656, 10, 8, 3, -1, 0 },
@@ -114,11 +113,11 @@ const ck_thing ck_things[90] = {
     { 1000, 1004, 44, 40, 38, -1, 0 },
     { 1000, 934, 23, 16, 39, -1, 0 },
     { 1120, 954, 22, 30, 40, -1, 0 },
-    { 1156, 894, 10, 8, 3, -1, 0 },
+    { 884, 1006, 10, 8, 3, -1, 0 },
     { 1200, 764, 9, 8, 11, -1, 0 },
     { 1294, 874, 20, 10, 10, -1, 0 },
     { 1200, 994, 10, 8, 3, -1, 0 },
-    { 1346, 774, 11, 22, 34, -1, 0 },
+    { 1346, 774, 11, 22, 34, 17, 0 },
     { 1432, 762, 21, 14, 33, -1, 0 },
     { 1390, 994, 38, 20, 32, -1, 0 },
     { 1664, 826, 28, 84, 41, -1, 0 },
@@ -157,10 +156,11 @@ const ck_thing ck_things[90] = {
     { 1820, 1110, 0, 0, 59, -1, 1 },
     { 1480, 250, 0, 0, 59, -1, 1 },
     { 1980, 250, 0, 0, 59, -1, 1 },
+    { 440, 236, 36, 26, 60, 16, 0 },
 };
-const int ck_nthings = 90;
+const int ck_nthings = 91;
 // the looks: how much smaller they are drawn (tall things by a back wall), the footprint, fish in it, a soft shadow under it
-const ck_tart ck_tarts[60] = {
+const ck_tart ck_tarts[61] = {
     { 0.82f, 16, 16, 0, 1 },   // fridge
     { 1.00f, 38, 16, 0, 1 },   // counter
     { 1.00f, 22, 16, 0, 1 },   // stove
@@ -221,8 +221,9 @@ const ck_tart ck_tarts[60] = {
     { 1.00f, 24, 6, 0, 1 },   // sign
     { 1.00f, 16, 10, 0, 1 },   // bush
     { 1.00f, 0, 0, 0, 0 },   // flowers
+    { 1.00f, 36, 26, 0, 1 },   // sandbox
 };
-const int ck_ntarts = 60;
+const int ck_ntarts = 61;
 const ck_trect ck_tareas[8] = {
     { 700, 100, 1500, 280 },
     { 1730, 774, 1940, 1008 },

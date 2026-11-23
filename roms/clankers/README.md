@@ -88,7 +88,7 @@ CRT scanlines on or off. A second controller plays the ostrich.
 Each world's map starts at the heroes' house: a four-bedroom family house with a garage and a
 garden all round, seen from above. You come in at the front gate and walk every way with the
 stick; your hero turns to face the way you walk (sideways, toward you, or away with their back to
-you, outfits and all). The camera follows you, and indoors it keeps the room you are in on screen. A uses the thing
+you, outfits and all). The camera follows you smoothly everywhere, indoors and out. A uses the thing
 you stand at, and A anywhere else hops. START leaves any game or screen. Walk back out of the front
 gate, or press START, to go back to the map.
 
@@ -99,7 +99,7 @@ gate, or press START, to go back to the map.
 
 | Room | What A does there |
 | --- | --- |
-| Gardens | Out the back, pick an apple off the tree or go fishing at the pond (hold A and let go to cast, up and down move the hook, A when a fish bites, then hold A to reel and let go when the line goes red). Out the front, open the mailbox for a big letter; from World 2 on, the signpost by the gate goes back a world |
+| Gardens | Out the back, pick an apple off the tree or go fishing at the pond (hold A and let go to cast, up and down move the hook, A when a fish bites, then hold A to reel and let go when the line goes red). Beside the pond is the sandbox, a falling-sand toy: each player moves a cursor and holds A to pour sand (falls and piles up), water (falls and lies flat), acid (eats sand, clay and water) or clay (stays just where you put it, so you can build shelves). Sand and clay take over whatever is under the brush; water and acid land on top and run round. L and R pick, C changes the brush size, B rubs out; Sway turns gravity's gentle lean left and right (every ten seconds) off and on, and ALL wipes the tank. Out the front, open the mailbox for a big letter; from World 2 on, the signpost by the gate goes back a world |
 | Main bedroom | Sleep in the big bed, and save the game to a slot |
 | Kitchen | The fridge: pick one of nine foods. The stove: 66 ingredients in eight groups (fruit, veggies, meat, fish, eggs and dairy, bread and grains, sauces and spreads, sweets). Up and down change the group, left and right pick in it, A adds up to four, and once the pan is full each new one swaps out the oldest in turn. Stir with B till the bar fills and take the dish. The main ingredients pick one of 90 dishes, each with its own look, and the rest change its name and go on top. Everyone playing gets one |
 | Bedroom 3 | The easel: fly on the jetpack with no gravity (up rises, down sinks, let go to hover) and paint the wall (hold A); L and R change colour, C changes the brush size (one, two or three cells), and the last colour choice, ALL, wipes the wall with A. B swaps the brush for a sticker: eight of them (C picks), stamped with A in shades of your colour with an outline. Turning round keeps the brush where it was |
@@ -112,8 +112,9 @@ Food you hold (from the tree, the fridge or the stove) goes in your hand: A eats
 batteries, B throws it the way you last walked, and a baby that gets to it first munches it.
 
 The babies you have rescued wander about the house and the back garden. Two players share the
-screen and can play every room together; they can't walk more than a screen apart. The dining
-room, laundry, bathrooms, ensuite, hallway, foyer and nursery are there to explore.
+screen and can play every room together; they can go anywhere, apart or together: the camera zooms
+out as far as it takes to keep both on screen, down to the whole property. The dining room, laundry,
+ensuite, hallway, foyer and nursery are there to explore, and A at either toilet flushes it.
 
 <a id="shop"></a>
 ## The parts shop
@@ -152,7 +153,9 @@ node roms/clankers/tools/bake_sprites.mjs
 ```
 
 It needs Node and Playwright with Chromium. It writes `assets/*.png`, `assets/rgba16/*.png`
-(full-screen pictures, kept at 16 bits to save memory) and `src/n64/sprites.h`.
+(full-screen pictures, kept at 16 bits to save memory), `assets/ci8/*.png` (hero sheets,
+accessories and the house, packed with a 256-colour palette at half that again) and
+`src/n64/sprites.h`.
 
 > [!IMPORTANT]
 > The baked strips are checked in, so a ROM build does not need a browser. Bake again whenever

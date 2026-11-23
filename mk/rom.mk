@@ -11,6 +11,7 @@
 #          packed into a DFS image (the ROM reads them as rom:/<name>):
 #            assets/*.png         -> <name>.sprite (mksprite picks the pixel format)
 #            assets/rgba16/*.png  -> <name>.sprite packed as RGBA16 (big pictures, less memory)
+#            assets/ci8/*.png     -> <name>.sprite with a 256-colour palette (half of RGBA16)
 #          Optional, set before the include:
 #            ROM_DATA    := data       folders copied as they are (rom:/data/...)
 #            ASSET_EXTRA := filesystem/x.font64 ...   more outputs, with rules in the ROM's Makefile
@@ -41,9 +42,11 @@ OBJS := $(addprefix $(BUILD_DIR)/,$(SRC_FILES:.c=.o)) \
 # Assets (optional), packed into the ROM's filesystem.
 ASSET_PNGS   := $(wildcard assets/*.png)
 ASSET_PNGS16 := $(wildcard assets/rgba16/*.png)
+ASSET_PNGS8  := $(wildcard assets/ci8/*.png)
 DATA_FILES   := $(foreach d,$(ROM_DATA),$(shell find $(d) -type f ! -name '*.md'))
 ASSET_OUT    := $(patsubst assets/%.png,filesystem/%.sprite,$(ASSET_PNGS)) \
                 $(patsubst assets/rgba16/%.png,filesystem/%.sprite,$(ASSET_PNGS16)) \
+                $(patsubst assets/ci8/%.png,filesystem/%.sprite,$(ASSET_PNGS8)) \
                 $(addprefix filesystem/,$(DATA_FILES)) $(ASSET_EXTRA)
 
 all: $(ROMNAME).z64
@@ -66,6 +69,11 @@ filesystem/%.sprite: assets/rgba16/%.png
 	@mkdir -p $(dir $@)
 	@echo "    [SPRITE] $@ (RGBA16)"
 	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) --format RGBA16 -o $(dir $@) "$<"
+
+filesystem/%.sprite: assets/ci8/%.png
+	@mkdir -p $(dir $@)
+	@echo "    [SPRITE] $@ (CI8)"
+	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) --format CI8 -o $(dir $@) "$<"
 
 $(addprefix filesystem/,$(DATA_FILES)): filesystem/%: %
 	@mkdir -p $(dir $@)

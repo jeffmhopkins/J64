@@ -94,7 +94,7 @@ const HOUSETOP = (() => {
   put('dresser', 1762, wall('Main bedroom', 16), [27, 14]);
   put('wardrobe', 1550, wall('Main bedroom', 160), [25, 16]);
   // ensuite
-  put('tub', 1904, wall('Ensuite', 22), [38, 20]); put('vanity', 1828, wall('Ensuite', 18), [21, 14]); put('toilet', 1910, wall('Ensuite', 170), [11, 22]);
+  put('tub', 1904, wall('Ensuite', 22), [38, 20]); put('vanity', 1828, wall('Ensuite', 18), [21, 14]); put('toilet', 1910, wall('Ensuite', 170), [11, 22], use('flush'));
   // hallway
   put('console', 1150, wall('Hallway', 12), [30, 10]); put('plant', 1480, wall('Hallway', 12), [10, 8]); put('plant', 1700, wall('Hallway', 12), [10, 8]); put('plant', 1920, wall('Hallway', 12), [10, 8]);
   // living room: the piano and the big fish tank
@@ -103,11 +103,11 @@ const HOUSETOP = (() => {
   put('sofa', 1000, wall('Living room', 260), [44, 40], { arg: '#3a6fc0' });
   put('coffee', 1000, wall('Living room', 190), [23, 16]);
   put('armchair', 1120, wall('Living room', 210), [22, 30], { arg: '#49a07a' });
-  put('plant', 1156, wall('Living room', 150), [10, 8]);
+  put('plant', 884, wall('Living room', 262), [10, 8]);   // in the front corner, clear of both doors
   // foyer
   put('coatRack', 1200, wall('Foyer', 20), [9, 8]); put('shoeRack', 1294, wall('Foyer', 130), [20, 10]); put('plant', 1200, wall('Foyer', 250), [10, 8]);
   // bathroom
-  put('toilet', 1346, wall('Bathroom', 30), [11, 22]); put('vanity', 1432, wall('Bathroom', 18), [21, 14]); put('tub', 1390, wall('Bathroom', 250), [38, 20]);
+  put('toilet', 1346, wall('Bathroom', 30), [11, 22], use('flush')); put('vanity', 1432, wall('Bathroom', 18), [21, 14]); put('tub', 1390, wall('Bathroom', 250), [38, 20]);
   // bedroom 3: the painter's room, with the easel
   put('bed', 1664, wall('Bedroom 3', 82), [28, 84], { arg: ['#ff8fc7', '#ffc1d6', '#e06a9a'] });
   put('paintShelf', 1576, wall('Bedroom 3', 14), [24, 12]);
@@ -128,6 +128,8 @@ const HOUSETOP = (() => {
   put('tree', 1720, 1220, [8, 6]); put('tree', 760, 1220, [8, 6]);
   for (const [x, y] of [[90, 200], [2070, 200], [2070, 560], [100, 860], [2060, 960], [560, 1300], [1900, 1320], [400, 360], [1500, 1300]]) put('bush', x, y, [16, 10]);
   for (const [x, y] of [[620, 1110], [900, 1110], [1060, 1110], [1420, 1110], [1600, 1110], [1820, 1110], [1480, 250], [1980, 250]]) put('flowers', x, y, [0, 0], { flat: true });
+  // the sandbox in the back garden, by the pond (last, so the other looks keep their numbers)
+  put('sandbox', 440, 236, [36, 26], use('sand'));
 
   // every different look (art and colours) once: the N64 bakes a sprite for each
   const ARTS = [];
@@ -168,20 +170,22 @@ const HOUSETOP = (() => {
   // where the heroes come in from the map, the gate back out, and the most two heroes can be apart
   const START = [[1238, 1120], [1262, 1134]];
   const GATE = { x: 1250, hw: 30, y: H - 14 };
-  const LEASH = [280, 140];
   // where the babies wander: the back garden, then a room each (more babies go round again)
   const AREAS = [[700, 100, 1500, 280], ...['Nursery', 'Nursery', 'Family room', 'Bedroom 2', 'Bedroom 3', 'Living room', 'Kitchen'].map(n => room(n)).map(r => [r.x + 20, r.fy + 30, r.x + r.w - 20, r.y + r.h - 12])];
-  // The camera for a w x h screen, given the middle of the party: it follows (a little above the
-  // feet, so you see where you are going), but indoors it stays inside the room you are in.
-  function camera(mx, my, w, h) {
-    const cl = (v, a, b) => Math.max(a, Math.min(b, v));
-    let cx = cl(Math.round(mx - w / 2), 0, W - w), cy = cl(Math.round(my - 44 - h / 2), 0, H - h);
-    const rm = roomAt(mx, my);
-    if (rm) {
-      const fit = (c, lo, hi) => hi < lo ? Math.round((lo + hi) / 2) : cl(c, lo, hi);
-      cx = cl(fit(cx, rm.x - 8, rm.x + rm.w + 8 - w), 0, W - w);
-      if (rm.h > 160) cy = cl(fit(cy, rm.y - 8, rm.y + rm.h + 8 - h), 0, H - h);
-    }
+  // The camera follows the heroes the same way everywhere: the box round their feet x0..x1,
+  // y0..y1 (36 px either side, 70 above for their heads, 24 below, at their size here) sits in the
+  // middle of a w x h screen, and when two heroes are too far apart for it to fit, fit() zooms out
+  // as far as it takes, down to the whole property (zoomMin). camera() is the view's top-left
+  // corner at zoom z, centred on the house when the view is bigger than it. Heroes, babies and
+  // food are drawn BIG times their usual size, so at ZOOM they are their usual size on screen.
+  // ck_house.c does the same.
+  const BIG = 1.5, ZOOM = 1 / BIG, CAM = [36 * BIG, 70 * BIG, 24 * BIG];
+  const zoomMin = (w, h) => Math.min(ZOOM, w / (W + 2 * CAM[0]), h / (H + CAM[1] + CAM[2]));
+  const fit = (x0, y0, x1, y1, w, h) => Math.max(zoomMin(w, h), Math.min(ZOOM, w / (x1 - x0 + 2 * CAM[0]), h / (y1 - y0 + CAM[1] + CAM[2])));
+  function camera(x0, y0, x1, y1, z, w, h) {
+    const vw = w / z, vh = h / z, place = (mid, v, world) => v >= world ? (world - v) / 2 : Math.max(0, Math.min(world - v, mid - v / 2));
+    let cx = place((x0 + x1) / 2, vw, W), cy = place((y0 - CAM[1] + y1 + CAM[2]) / 2, vh, H);
+    if (z >= ZOOM) { cx = Math.round(cx * z) / z; cy = Math.round(cy * z) / z; }
     return [cx, cy];
   }
 
@@ -372,10 +376,13 @@ const HOUSETOP = (() => {
   }
   // The house as the camera at (cx, cy) sees it, with actors ({ y, draw(g) }) sorted in among the
   // furniture by where their feet are. bg is drawStatic's picture made once (or it is drawn
-  // here); show(th) can hide a thing.
-  function draw(g, cx, cy, t, actors = [], bg = null, show = null, w = 320, h = 240) {
-    K.g = g; g.save(); g.translate(-cx, -cy);
-    if (bg) g.drawImage(bg, cx, cy, w, h, cx, cy, w, h); else drawStatic(g);
+  // here); show(th) can hide a thing. z is the zoom: the screen shows w / z by h / z of the house.
+  function draw(g, cx, cy, t, actors = [], bg = null, show = null, w = 320, h = 240, z = 1) {
+    K.g = g; g.save();
+    if (cx < 0 || cy < 0 || cx + w / z > W || cy + h / z > H) { g.fillStyle = hx(GRASS); g.fillRect(0, 0, w, h); }   // zoomed out past the property: grass round it
+    g.scale(z, z); g.translate(-cx, -cy);
+    const sx = Math.max(0, cx), sy = Math.max(0, cy), vw = Math.min(W - sx, w / z), vh = Math.min(H - sy, h / z);
+    if (bg) g.drawImage(bg, sx, sy, vw, vh, sx, sy, vw, vh); else drawStatic(g);
     K.g = g;
     const list = [];
     for (const th of things) if (!show || show(th)) list.push({ y: th.flat ? -1e4 + th.y : th.y, draw: () => drawThing(g, th, t) });
@@ -387,6 +394,6 @@ const HOUSETOP = (() => {
   }
   function prompt(g, label, x, y) { const s = 'A  ' + label, w = textW(g, s, 8) + 14; K.rr(x - w / 2, y, w, 15, 5, 'rgba(27,20,38,0.86)'); text(g, s, x, y + 11, 8, '#fff6d8', 'center', null); }
 
-  return { WORLD, FACE, CAP, WT, rooms, ACROSS, DOWN, OUT, FACADE, walk, things, ARTS, SCALE, START, GATE, LEASH, AREAS, PLATE,
-           draw, drawStatic, drawArt, drawThing, plate, hero, solid, near, roomAt, camera, prompt, text, textW, shadow };
+  return { WORLD, FACE, CAP, WT, rooms, ACROSS, DOWN, OUT, FACADE, walk, things, ARTS, SCALE, START, GATE, AREAS, PLATE,
+           draw, drawStatic, drawArt, drawThing, plate, hero, solid, near, roomAt, camera, fit, zoomMin, BIG, ZOOM, prompt, text, textW, shadow };
 })();

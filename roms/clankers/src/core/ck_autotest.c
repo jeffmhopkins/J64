@@ -1,4 +1,5 @@
 #include "ck_autotest.h"
+#include "ck_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -28,7 +29,7 @@ uint16_t ck_bot(const ck_level *lv) {
 
 const char *ck_scene_name(int scene) {
     static const char *names[] = { "title", "select", "map", "shop", "level", "jet", "pause", "intro", "cut", "menu",
-                                    "house", "paint", "aqua", "cars", "piano", "slots" };
+                                    "house", "paint", "aqua", "cars", "piano", "slots", "pinball", "blast", "fish", "bolt", "jetrun", "sand" };
     return scene >= 0 && scene < (int)(sizeof names / sizeof *names) ? names[scene] : "?";
 }
 
@@ -40,7 +41,7 @@ void ck_autotest_init(ck_autotest *A, const ck_game *G) {
 // The tour, one step at a time.
 enum {
     T_INTRO_NIGHT, T_INTRO_STORM, T_INTRO_BLOW, T_SKIP_INTRO, T_TITLE, T_SELECT, T_MAP, T_WALK,
-    T_AT_L1, T_LEVEL, T_PAUSE, T_RESUME, T_PLAY, T_FILM, T_FILM_ON, T_WORLD2, T_W2_WALK, T_W2_GO,
+    T_AT_L1, T_LEVEL, T_PAUSE, T_RESUME, T_PLAY, T_SAND, T_SAND_PLAY, T_SAND_BACK, T_FILM, T_FILM_ON, T_WORLD2, T_W2_WALK, T_W2_GO,
     T_W2_LEVEL, T_PARADE, T_PARADE_ON, T_THE_END, T_BACK, T_DONE,
 };
 
@@ -68,6 +69,7 @@ int ck_autotest_step(ck_autotest *A, ck_game *G) {
     else if (A->step == T_PLAY && G->scene == SC_LEVEL && G->lv.nplayers) pad = ck_bot(&G->lv);
     else if (A->step == T_PLAY && G->scene == SC_JET) pad = CK_RIGHT | ((A->frames / 20) % 2 ? CK_A : 0);
     else if (A->step == T_PLAY && G->scene == SC_PAUSE) pad = CK_START;
+    else if (A->step == T_SAND_PLAY) pad = CK_A | ((A->stepFrames / 70) % 2 ? CK_LEFT : CK_RIGHT) | (A->stepFrames % 90 == 0 ? CK_R : 0);
     ck_game_step(G, pad, 0);
     A->frames++;
     A->stepFrames++;
@@ -134,6 +136,26 @@ int ck_autotest_step(ck_autotest *A, ck_game *G) {
             next(A);
             return AT_CHECK;
         }
+        break;
+    // the back garden's sandbox, half full, sloshing while sand, water, acid and clay pour in:
+    // the CHECK line's slowest frame says whether it keeps up on the console
+    case T_SAND:
+        ck_house_enter(G, false);
+        ck_sand_start(G);
+        if (G->scene != SC_SAND) return fail(A, G, "the sandbox did not open");
+        for (int y = CK_SAND_H / 2; y < CK_SAND_H; y++)
+            for (int x = 0; x < CK_SAND_W; x++) G->house.sand.cell[y * CK_SAND_W + x] = (uint8_t)(x < CK_SAND_W / 3 ? SAND_SAND : SAND_WATER);
+        for (int x = 20; x < 120; x++) G->house.sand.cell[30 * CK_SAND_W + x] = SAND_CLAY;
+        next(A);
+        break;
+    case T_SAND_PLAY:
+        if (G->scene != SC_SAND) return fail(A, G, "left the sandbox");
+        if (A->stepFrames == 60 * 12) return check(A, "sandbox: pouring and sloshing");
+        break;
+    case T_SAND_BACK:
+        if (G->scene == SC_HOUSE) { next(A); break; }
+        if (A->stepFrames == 2) A->pressed = CK_START;
+        if (A->stepFrames > 10) return fail(A, G, "START did not leave the sandbox");
         break;
     // the film into World 2, then World 2's map and first level
     case T_FILM:

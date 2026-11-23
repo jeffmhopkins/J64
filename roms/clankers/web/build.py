@@ -26,10 +26,10 @@ def engine():
                       read('lib/bossart.js'), read('lib/cutart.js'), read('lib/houseart.js'), read('lib/furn34.js'), read('lib/housetop.js'), read('lib/title.js'), read('lib/glitchies.js')])
 
 def game_js():
-    """game.js, with arcade.js inside its closure (just before the closing `})();`) so it shares the helpers."""
+    """game.js, with arcade.js and sand.js inside its closure (just before the closing `})();`) so they share the helpers."""
     game = read('game.js').rstrip()
     end = game.rfind('})();')
-    return game[:end] + read('arcade.js') + '\n' + game[end:] + '\n'
+    return game[:end] + read('arcade.js') + '\n' + read('sand.js') + '\n' + game[end:] + '\n'
 
 def game_html():
     return read('index.src.html').replace('/*@GAME*/', '\n'.join([engine(), data_js(), game_js()]))
