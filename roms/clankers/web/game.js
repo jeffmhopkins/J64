@@ -300,6 +300,8 @@ function garnishArt(ex, x, y, sc) {
   const n = ex.length;
   ex.forEach((i, j) => foodArt(HOUSEART.COOK_INGR[i], x + (j - (n - 1) / 2) * 4.5 * sc, y - 3.5 * sc + (j % 2) * 1.5 * sc, 0.4 * sc));
 }
+// the shelf group (HOUSEART.COOK_GROUPS) that shelf item i is in; ck_cook_group_of
+function cookGroupOf(i) { const GS = HOUSEART.COOK_GROUP; let gi = 0; while (gi < GS.length - 2 && i >= GS[gi + 1]) gi++; return gi; }
 function foodArt(k, x, y, sc = 1) { for (const [kind, fx, fy, w, h, c] of HOUSEART.FOODS[k].s) { if (kind === 0) K.circ(x + fx * sc, y + fy * sc, w * sc, hexStr(c)); else { g.fillStyle = hexStr(c); g.fillRect(x + fx * sc, y + fy * sc, w * sc, h * sc); } } }
 
 // ----------------------------------------------------------------------------- TITLE
@@ -752,7 +754,7 @@ function houseScene(from) {
     else if (kind === 'mail') { SND.fx.open(); S.letter = S.letter % HOUSEART.LETTERS.length + 1; S.mode = 'letter'; }
     else if (kind === 'tree') { p.hold = 1; p.garnish = null; SND.fx.sprout(); sparks(p.x - S.cx, p.y - S.cy - 50, 6, '#49d17a'); S.msg = { text: 'You picked an apple!', t: 100 }; }
     else if (kind === 'snack') { SND.fx.open(); S.mode = 'fridge'; }
-    else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.heat = 0; S.dish = 0; }
+    else if (kind === 'stove') { SND.fx.open(); S.mode = 'cook'; S.pan = []; S.panNext = 0; S.heat = 0; S.dish = 0; }
     else if (kind === 'paint') { SND.fx.open(); go(paintScene(S)); }
     else if (kind === 'piano') { SND.fx.open(); go(pianoScene(S)); }
     else if (kind === 'drums') { SND.fx.open(); go(drumScene(S)); }
@@ -784,11 +786,20 @@ function houseScene(from) {
       const ING = HOUSEART.COOK_INGR;
       for (const [i, p] of S.ps.entries()) {
         const sl = p.m.slot;
-        // each player scrolls their own row: left and right one at a time, up and down six
-        const d = (hit(sl, 'right') ? 1 : 0) - (hit(sl, 'left') ? 1 : 0) + ((hit(sl, 'down') ? 1 : 0) - (hit(sl, 'up') ? 1 : 0)) * 6;
-        if (d && !S.dish) { S.cpick[i] = ((S.cpick[i] + d) % ING.length + ING.length) % ING.length; SND.fx.select(); }
+        // each player has their own row: up and down change its group (to the group's first), left and right go round it
+        const dx = (hit(sl, 'right') ? 1 : 0) - (hit(sl, 'left') ? 1 : 0), dy = (hit(sl, 'down') ? 1 : 0) - (hit(sl, 'up') ? 1 : 0);
+        if ((dx || dy) && !S.dish) {
+          const GS = HOUSEART.COOK_GROUP, NG = GS.length - 1;
+          let gi = cookGroupOf(S.cpick[i]);
+          if (dy) { gi = ((gi + dy) % NG + NG) % NG; S.cpick[i] = GS[gi]; }
+          else { const a = GS[gi], len = GS[gi + 1] - a; S.cpick[i] = a + ((S.cpick[i] - a + dx) % len + len) % len; }
+          SND.fx.select();
+        }
         if (S.dish) { if (hit(sl, 'a') || hit(sl, 'start')) { for (const q of S.ps) { q.hold = S.dish; q.garnish = S.dishExtra; } S.msg = { text: S.dishName + (S.ps.length > 1 ? ' for two!' : '!'), t: 100 }; SND.fx.buy(); S.mode = 'walk'; return; } continue; }
-        if (hit(sl, 'a')) { if (S.pan.length < 4) S.pan.push(ING[S.cpick[i]]); else S.pan[3] = ING[S.cpick[i]]; SND.fx.hop(); }   // a full pan swaps its last one
+        if (hit(sl, 'a')) {   // a full pan swaps out its oldest, going round
+          if (S.pan.length < 4) { S.pan.push(ING[S.cpick[i]]); S.panNext = 0; } else { S.pan[S.panNext] = ING[S.cpick[i]]; S.panNext = (S.panNext + 1) % 4; }
+          SND.fx.hop();
+        }
         if (hit(sl, 'b') && S.pan.length) {
           S.heat += 9; SND.fx.hover(); for (let k = 0; k < 2; k++) puff(150 + Math.random() * 20, 120, 1, 'rgba(255,255,255,0.63)');
           if (S.heat >= 100) {
@@ -924,16 +935,18 @@ function houseScene(from) {
       // a shelf row for each player, six on show, scrolled to keep their pick in view
       g.fillStyle = '#8a5a3c'; g.fillRect(30, 22, 260, 4 + 31 * S.ps.length);
       S.ps.forEach((p, j) => {
-        const c = S.cpick[j], first = Math.max(0, Math.min(ING.length - 6, c - 2)), fy = 39 + j * 31, col = p.m.slot ? '#8fd3ff' : '#ffd23f';
+        // the row shows the pick's group, scrolled to keep the pick in view
+        const c = S.cpick[j], gi = cookGroupOf(c), a = HOUSEART.COOK_GROUP[gi], len = HOUSEART.COOK_GROUP[gi + 1] - a, show = Math.min(6, len);
+        const first = Math.max(a, Math.min(a + len - show, c - 2)), fy = 39 + j * 31, col = p.m.slot ? '#8fd3ff' : '#ffd23f';
         g.fillStyle = '#c98a4b'; g.fillRect(34, 26 + j * 31, 252, 27);
-        for (let k = 0; k < 6; k++) {
+        for (let k = 0; k < show; k++) {
           const fx = 56 + k * 42;
           if (first + k === c && !S.dish) { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 13, 0, P * 2); g.stroke(); }
           foodArt(ING[first + k], fx, fy, 2.0);
         }
-        if (first > 0) text('<', 26, fy + 3, 8, '#fff6d8');
-        if (first < ING.length - 6) text('>', 294, fy + 3, 8, '#fff6d8');
-        if (!S.dish) text(HOUSEART.FOODS[ING[c]].name, j ? 310 : 10, 222, 8, col, j ? 'right' : 'left');
+        if (first > a) text('<', 26, fy + 3, 8, '#fff6d8');
+        if (first < a + len - show) text('>', 294, fy + 3, 8, '#fff6d8');
+        if (!S.dish) { text(HOUSEART.COOK_GROUPS[gi][0], j ? 310 : 10, 211, 8, '#fff6d8', j ? 'right' : 'left'); text(HOUSEART.FOODS[ING[c]].name, j ? 310 : 10, 222, 8, col, j ? 'right' : 'left'); }
       });
       g.fillStyle = '#3a3f4a'; g.fillRect(50, 150, 220, 80); g.fillStyle = '#5a5e6a'; g.fillRect(56, 156, 208, 6);
       K.circ(160, 160, 34, S.heat > 0 && !S.dish ? '#ff8a3d' : '#2b2833');
@@ -942,7 +955,7 @@ function houseScene(from) {
       else S.pan.forEach((f, i) => { const a = i * 1.57 + S.t * (S.heat > 0 ? 1.5 : 0); foodArt(f, 160 + Math.cos(a) * 18, 140 + Math.sin(a) * 14, 2.2); });
       g.fillStyle = '#1b1426'; g.fillRect(60, 196, 200, 10); g.fillStyle = S.dish ? '#49d17a' : '#ff8a3d'; g.fillRect(62, 198, 196 * S.heat / 100, 6);
       if (S.dish) { rimBanner(S.dishName, 10, 80, 22); hint(S.ps.length > 1 ? 'A take one each' : 'A take it', 226); }
-      else hint(S.pan.length ? 'Stick scroll   A add   B stir   START leave' : 'Stick scroll   A add to the pan   START leave', 14);
+      else hint(S.pan.length ? 'Up/down group   A add   B stir   START leave' : 'Up/down group   Left/right pick   A add to the pan', 14);
     }
     if (S.mode === 'letter') {   // a big letter to read
       const L = HOUSEART.LETTERS[(S.letter + HOUSEART.LETTERS.length - 1) % HOUSEART.LETTERS.length];

@@ -764,6 +764,7 @@ typedef struct { int state, fish, t, nibble; float power, x, y, vx, vy, tension,
 typedef struct { ck_pfish fish[CK_POND_FISH]; ck_rod rod[2]; int caught, got[CATCH_COUNT], last, level, levelT, fished; } ck_pond;   // fished: this visit, not counting boots
 void ck_rod_tip(int i, float *x, float *y);   // player i's rod tip (they stand on the bank)
 // One hero in the house or one of its games (not every game uses every field).
+typedef struct { uint8_t n, i[4]; } ck_garnish;   // a cooked dish's extras on top: shelf indices (ck_cook_ingr), lowest first
 typedef struct {
     int slot;                  // player slot 0 or 1
     float x, y, vx, vy, anim;
@@ -781,7 +782,7 @@ typedef struct {
     int place;                 // cars: where you finished (1 first), 0 still racing
     bool half;
     int hold;                  // house: the food in your hand, FOOD_* + 1 (0: nothing)
-    uint64_t garnish;          // a cooked dish's extras on top (bits of ck_cook_ingr)
+    ck_garnish garnish;        // a cooked dish's extras on top
     uint64_t hit;              // cars: the obstacles you have bumped, one bit each
     int size;                  // paint: the brush size, 0 (one cell) to 2 (three cells across)
     bool stick;                // paint: holding a sticker instead of the brush
@@ -799,6 +800,7 @@ enum { HM_WALK, HM_SLOTS, HM_SLEEP, HM_FRIDGE, HM_LETTER, HM_COOK };
 enum { FOOD_APPLE, FOOD_BANANA, FOOD_CHEESE, FOOD_CARROT, FOOD_CAKE, FOOD_ICECREAM, FOOD_MILK, FOOD_PIZZA, FOOD_COOKIE,   // the fridge
        FOOD_EGG, FOOD_TOMATO, FOOD_MUSHROOM, FOOD_BREAD, FOOD_POTATO, FOOD_RICE, FOOD_SAUSAGE, FOOD_PASTA,                 // stove ingredients
        FOOD_STRAWBERRY, FOOD_ORANGE, FOOD_LEMON, FOOD_GRAPES, FOOD_CHERRY, FOOD_PEAR, FOOD_PINEAPPLE, FOOD_BLUEBERRY, FOOD_WATERMELON, FOOD_ONION, FOOD_PEPPER, FOOD_BROCCOLI, FOOD_PEAS, FOOD_CORN, FOOD_LETTUCE, FOOD_CUCUMBER, FOOD_PUMPKIN, FOOD_BEANS, FOOD_CHICKEN, FOOD_FISH, FOOD_SHRIMP, FOOD_BACON, FOOD_HAM, FOOD_TOFU, FOOD_CHOCOLATE, FOOD_HONEY, FOOD_YOGURT, FOOD_CREAM, FOOD_BUTTER, FOOD_JAM, FOOD_FLOUR, FOOD_NOODLES, FOOD_TORTILLA, FOOD_OATS, FOOD_NUTS, FOOD_SPRINKLES,
+       FOOD_RASPBERRY, FOOD_HOTDOG, FOOD_STEAK, FOOD_TURKEY, FOOD_MARSHMALLOW, FOOD_SUGAR, FOOD_CHOCCHIPS, FOOD_NACHO, FOOD_PEANUTBUTTER, FOOD_PORKCHOP, FOOD_LAMB, FOOD_CELERY, FOOD_GRAVY, FOOD_SALMON, FOOD_WHITEFISH, FOOD_TCHIPS, FOOD_CHILI, FOOD_SOURCREAM,   // the kids' list
        FOOD_DISH0 };   // then every dish the stove cooks, in DISH_* order
 // what the stove cooks: food FOOD_DISH0 + DISH_*, each its own name and look
 enum {
@@ -811,22 +813,31 @@ enum {
     DISH_CHIPS, DISH_CHEESY_CHIPS, DISH_SAUSAGE_CHIPS, DISH_BANANA_BREAD, DISH_CARROT_CAKE,
     DISH_CHEESE_PLATE,
     DISH_CURRY, DISH_ROAST, DISH_FISH_SUPPER, DISH_SKEWERS, DISH_TACOS, DISH_PORRIDGE, DISH_CHOC_CAKE, DISH_SUNDAE, DISH_SMOOTHIE, DISH_PUMPKIN_PIE, DISH_FRUIT_SALAD, DISH_SALAD, DISH_STIR_FRY, DISH_COOKIES,
+    DISH_CHILI_DOG, DISH_BLT, DISH_STEAK_EGGS, DISH_STEAK_POTATOES, DISH_STEAK_DINNER, DISH_PORK_APPLE, DISH_PORK_DINNER, DISH_SHEPHERDS_PIE, DISH_LAMB_STEW, DISH_ROAST_LAMB, DISH_TURKEY_DINNER, DISH_TURKEY_BURGER, DISH_BURRITO, DISH_SUSHI, DISH_BACON_EGGS, DISH_PLAIN_PANCAKES, DISH_ANTS_LOG, DISH_PB_TOAST, DISH_PBJ, DISH_MASH_GRAVY, DISH_BAKED_POTATO, DISH_FISH_CHIPS, DISH_MASHED, DISH_BISCUITS_GRAVY, DISH_NUGGETS, DISH_CHICKEN_SOUP, DISH_GRILLED_SALMON, DISH_CHILI_BOWL, DISH_QUESADILLA, DISH_NACHOS, DISH_CHIPS_DIP, DISH_HOMEMADE_PIZZA, DISH_BERRY_CRUMBLE, DISH_SMORES, DISH_CHOCCHIP_COOKIES, DISH_CUPCAKES, DISH_LEMONADE, DISH_POPCORN,
     CK_DISHES
 };
 #define FOOD_COUNT (FOOD_DISH0 + CK_DISHES)
 #define CK_FRIDGE_FOODS 9
-// The stove: 48 ingredients (ck_cook_ingr) on a shelf with a row for each player, six on show at a
-// time; the stick scrolls along your row (up and down jump six). Up to four in the pan, B stirs it
-// till the heat bar fills, and out comes a dish named by what went in. Everyone playing gets one.
-#define CK_COOK_INGR 48
+// The stove: 66 ingredients (ck_cook_ingr) in 8 groups on a shelf with a row for each player, six
+// on show at a time; up and down change your row's group, left and right go through it. Up to four
+// in the pan (a full pan swaps out the oldest, round and round), B stirs it till the heat bar
+// fills, and out comes a dish named by what went in. Everyone playing gets one.
+#define CK_COOK_INGR 66
+#define CK_COOK_GROUPS 8
 #define CK_COOK_ROW 6
 #define CK_COOK_PAN 4
+_Static_assert(CK_COOK_PAN <= (int)sizeof ((ck_garnish *)0)->i, "a garnish holds a full pan");
+_Static_assert(CK_COOK_INGR <= 255, "shelf indices fit a byte");
 extern const int ck_cook_ingr[CK_COOK_INGR];
+// the shelf in groups: group g is ck_cook_ingr[ck_cook_group[g] .. ck_cook_group[g + 1] - 1]
+extern const int ck_cook_group[CK_COOK_GROUPS + 1];
+extern const char *const ck_cook_group_name[CK_COOK_GROUPS];
+int ck_cook_group_of(int i);   // the group shelf item i is in
 // what a pan of n ingredients cooks into: *dish is FOOD_* + 1, name its name
 // The stove's dish: its kind (FOOD_* + 1) from the main ingredients, then a name built from
-// everything in the pan ("Double meaty cheesy omelette with carrots"), and *extra: a bit per
-// ck_cook_ingr that is in the pan but not in the dish's name already, drawn on top as garnish.
-void ck_cook_dish(const int *pan, int n, int *dish, uint64_t *extra, char *name, int size);
+// everything in the pan ("Double meaty cheesy omelette with carrots"), and *extra: the shelf
+// items in the pan that are not in the dish's name already, drawn on top as garnish.
+void ck_cook_dish(const int *pan, int n, int *dish, ck_garnish *extra, char *name, int size);
 typedef struct { const char *name; int n; ck_fshape s[6]; } ck_foodart;
 extern const ck_foodart ck_foods[FOOD_COUNT];
 typedef struct { float x, y, z, vx, vy, vz; int kind, life; } ck_thrown;   // z: height off the floor
@@ -868,10 +879,11 @@ typedef struct {
     int fpick[2];              // HM_FRIDGE: each player's cursor
     int cpick[2];              // HM_COOK: each player's cursor on the shelf
     int pan[CK_COOK_PAN], npan;   // HM_COOK: what is in the pan (FOOD_*)
+    int panNext;               // HM_COOK: the pan slot a full pan swaps next (the oldest one in it)
     float heat;                // HM_COOK: 0..100, the dish is done at 100
     int dish;                  // HM_COOK: the cooked dish, FOOD_* + 1 (0: still cooking)
     char dishName[40];
-    uint64_t dishExtra;
+    ck_garnish dishExtra;
     ck_thrown thrown[CK_THROWN];
     int nthrown;
     int chestT[CK_AQUA_CHESTS];   // aquarium: frames a chest stays open
